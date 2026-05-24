@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Build products
+build/
+DerivedData/
+*.ipa
+*.xcarchive
+
+# Claude Code
+.claude/
+
+# Swift Package Manager
+.build/
+*.resolved
+
+# CocoaPods (not used, but just in case)
+Pods/
+Podfile.lock
