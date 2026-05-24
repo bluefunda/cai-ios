@@ -1,0 +1,1584 @@
+{
+  "info": {
+    "_postman_id": "0cc14d27-6ee3-4036-b1ee-b858834f538a",
+    "name": "CAI Gateway - BFF APIs",
+    "description": "API collection for CAI BFF endpoints exposed via KrakenD gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "14826088",
+    "_collection_link": "https://go.postman.co/collection/14826088-0cc14d27-6ee3-4036-b1ee-b858834f538a?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get User Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/userinfo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "userinfo"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get User Info",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/userinfo",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "userinfo"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:54:21 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "222"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "false"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"sub\": \"be6381aa-c9a2-4458-9585-2c83f2242076\",\n    \"email_verified\": true,\n    \"name\": \"Phani Puttabakula\",\n    \"preferred_username\": \"phani.p@bluefunda.com\",\n    \"given_name\": \"Phani\",\n    \"family_name\": \"Puttabakula\",\n    \"email\": \"phani.p@bluefunda.com\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Models",
+      "item": [
+        {
+          "name": "Get LLM Models",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/models",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "models"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get LLM Models",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/models",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "models"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:54:27 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "212"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "false"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"llmInfo\": [\n        {\n            \"name\": \"openai\",\n            \"modelId\": 1,\n            \"object\": \"model\",\n            \"ownedBy\": \"OpenAI\"\n        },\n        {\n            \"name\": \"deepseek\",\n            \"modelId\": 4,\n            \"object\": \"model\",\n            \"ownedBy\": \"DeepSeek\"\n        },\n        {\n            \"name\": \"groq\",\n            \"modelId\": 3,\n            \"object\": \"model\",\n            \"ownedBy\": \"groq\"\n        }\n    ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Chats",
+      "item": [
+        {
+          "name": "Get Chat List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chats"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Chat List",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/chats",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "chats"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:54:33 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                },
+                {
+                  "key": "Content-Encoding",
+                  "value": "gzip"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"chats\": [\n        {\n            \"chatId\": \"aeaf826b-fb24-48a0-9754-627ddacdcb54\",\n            \"chatTitle\": \"Python Csv Processing Script\",\n            \"createdAt\": \"2026-01-14T23:04:25.73813421Z\",\n            \"firstPrompt\": \"Provide daily routine for a brand manager for an IT product company\",\n            \"lastUpdatedAt\": \"2026-01-15T01:01:40.538857477Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"aeaf826b-fb24-48a0-9754-627ddacdcb53\",\n            \"chatTitle\": \"IT Sales Distinctiveness\",\n            \"createdAt\": \"2026-01-13T00:48:26.296244632Z\",\n            \"firstPrompt\": \"How is IT sales different from others?\",\n            \"lastUpdatedAt\": \"2026-01-14T22:58:20.29599254Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"4c2a7210-3bee-4cf7-aa4c-3e27be2d8412\",\n            \"chatTitle\": \"India's National Bird\",\n            \"createdAt\": \"2026-01-12T15:49:28.741470359Z\",\n            \"firstPrompt\": \"State national bird for India\",\n            \"lastUpdatedAt\": \"2026-01-12T15:50:12.042443799Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"9c570d05-eab4-40af-bfd8-bacdd6facb54\",\n            \"chatTitle\": \"Source Code Zcurl Demo\",\n            \"createdAt\": \"2026-01-12T15:47:10.686016304Z\",\n            \"firstPrompt\": \"can you provide source code of program ZCURL_DEMO?\",\n            \"lastUpdatedAt\": \"2026-01-12T15:47:50.584678741Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"5d45443a-50cf-47ae-89ae-fa5b1f7b08c0\",\n            \"chatTitle\": \"Zcurl Demo Program Source Code\",\n            \"createdAt\": \"2026-01-11T07:19:02.535081248Z\",\n            \"firstPrompt\": \"Can you provide source code of zcurl_demo program\",\n            \"lastUpdatedAt\": \"2026-01-11T07:24:04.394959823Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"a63007b3-0fdf-41ea-bf97-5274ca940881\",\n            \"chatTitle\": \"Invoice List\",\n            \"createdAt\": \"2026-01-11T07:18:41.215235317Z\",\n            \"firstPrompt\": \"List all invoices\",\n            \"lastUpdatedAt\": \"2026-01-11T07:18:42.752107262Z\",\n            \"mcpServerName\": \"SAP Conversation Analytics\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"5990cc5d-dff0-400b-9cd7-32d685bac763\",\n            \"chatTitle\": \"Invoice Listing\",\n            \"createdAt\": \"2026-01-09T15:51:10.437066276Z\",\n            \"firstPrompt\": \"List all invoices\",\n            \"lastUpdatedAt\": \"2026-01-11T07:18:26.856200877Z\",\n            \"mcpServerName\": \"SAP Conversation Analytics\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"a05ca96f-9392-470e-be71-43d9a96591ba\",\n            \"chatTitle\": \"Zcurl Demo Code Request\",\n            \"createdAt\": \"2026-01-09T16:34:20.001433999Z\",\n            \"firstPrompt\": \"Provide code for program ZCURL_DEMO\",\n            \"lastUpdatedAt\": \"2026-01-09T16:34:33.712242093Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"30047935-dfd9-4592-9595-da114e6fa299\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2026-01-09T06:02:59.063842579Z\",\n            \"firstPrompt\": \"List countries in North American continent\",\n            \"lastUpdatedAt\": \"2026-01-09T06:03:00.415469351Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"b5aee4d5-ee8d-41a4-9b48-7a65ef117a69\",\n            \"chatTitle\": \"Geographic Nginx Server Configuration\",\n            \"createdAt\": \"2026-01-09T05:43:47.860915194Z\",\n            \"firstPrompt\": \"Provide steps to configure nginx where location based app servers need to be configured. For example, for users using web app from Asia need to get routed to Singapore's server and users from US need to get routed to US server.\",\n            \"lastUpdatedAt\": \"2026-01-09T05:43:54.147194747Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"f34d8f97-6db1-452f-b83b-39cca3d32168\",\n            \"chatTitle\": \"Countries In Australian Continent\",\n            \"createdAt\": \"2026-01-09T05:29:39.220271416Z\",\n            \"firstPrompt\": \"List all countries in Australian continent\",\n            \"lastUpdatedAt\": \"2026-01-09T05:29:43.298421211Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"226f1a16-80e8-4cd7-b6c2-401868dbf72c\",\n            \"chatTitle\": \"South Asian National Anthems\",\n            \"createdAt\": \"2026-01-09T05:23:16.008678912Z\",\n            \"firstPrompt\": \"List national anthems for all south asian countries\",\n            \"lastUpdatedAt\": \"2026-01-09T05:23:20.416250114Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"c2f97602-732e-450e-9411-ed7f452fdc81\",\n            \"chatTitle\": \"South Asian National Anthems\",\n            \"createdAt\": \"2026-01-08T05:36:40.863280475Z\",\n            \"firstPrompt\": \"List national anthems for all south asian countries\",\n            \"lastUpdatedAt\": \"2026-01-08T05:36:42.856056267Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"eef9ed1c-42cf-47cc-9d29-a2540a8e3bc6\",\n            \"chatTitle\": \"Krakend Gateway Docker Configuration\",\n            \"createdAt\": \"2026-01-05T01:34:01.648902734Z\",\n            \"firstPrompt\": \"Prepare a prompt for claude that does this:\\n\\n1. Refer to ~/src/cai-gw for building/configuring krakend gateway. Take similar approaches where it integrates with keycloak.\\n2. Backend is cai-bff docker container running on local network ip 10.0.1.8 port 8082 (http). \\n3. Build krakend config files, and then prepare for docker container (Dockerfile, github release yml). \\nFinal objective is to push to docker hub for image. \",\n            \"lastUpdatedAt\": \"2026-01-05T01:37:06.250974361Z\",\n            \"model\": \"deepseek\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"0f5c463b-cf1e-4d27-84e9-81b088e58463\",\n            \"chatTitle\": \"Claude Prompt For Krakend Gateway\",\n            \"createdAt\": \"2026-01-05T01:33:29.38953336Z\",\n            \"firstPrompt\": \"Prepare a prompt for claude that does this:\\n\\n1. Refer to ~/src/cai-gw for building/configuring krakend gateway. Take similar approaches where it integrates with keycloak.\\n2. Backend is cai-bff docker container running on local network ip 10.0.1.8 port 8082 (http). \\n3. Build krakend config files, and then prepare for docker container (Dockerfile, github release yml). \\n4. Final objective is to push to docker hub for image. \\n\\nI need prompt to give it to claude code. \",\n            \"lastUpdatedAt\": \"2026-01-05T01:33:34.492694725Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"b47da5f9-b593-4525-8183-298415629a90\",\n            \"chatTitle\": \"Krakend Gateway Integration Guide\",\n            \"createdAt\": \"2026-01-05T01:32:02.009866685Z\",\n            \"firstPrompt\": \"Provide a prompt for claude that does this:\\n\\n1. Refer to ~/src/cai-gw for building/configuring krakend gateway. Take similar approaches where it integrates with keycloak.\\n2. Backend is cai-bff docker container running on local network ip 10.0.1.8 port 8082 (http). \\n3. Build krakend config files, and then prepare for docker container (Dockerfile, github release yml). \\nFinal objective is to push to docker hub for image. \",\n            \"lastUpdatedAt\": \"2026-01-05T01:32:33.634867217Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"5ad0430b-ab9c-4a13-b95a-8683e062975c\",\n            \"chatTitle\": \"South Asian National Anthems\",\n            \"createdAt\": \"2025-12-29T21:38:10.38780715Z\",\n            \"firstPrompt\": \"List national anthems for all south asian countries\",\n            \"lastUpdatedAt\": \"2025-12-29T21:38:15.672168258Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"66513fb8-fb82-4058-aff1-5a1ad79c3250\",\n            \"chatTitle\": \"Keycloak Azure SSO Configuration\",\n            \"createdAt\": \"2025-12-26T18:43:14.79492123Z\",\n            \"firstPrompt\": \"Current web app has keycloak idp. Realm \\\"trm\\\" is configured to provide \\\"microsoft\\\" as login provider. Upon cliking it, it logs in successfully. This is working. However, I would like to configure this such that upon visiting web app URL, it performs SSO (Azure + Keycloak config) so that I dont need to click on \\\"microsoft\\\" button to login. Provide steps to do this.\",\n            \"lastUpdatedAt\": \"2025-12-26T18:43:20.230535559Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"84b3a3fe-c390-4848-aa62-885afdab7607\",\n            \"chatTitle\": \"Keycloak Azure SSO Configuration\",\n            \"createdAt\": \"2025-12-26T18:41:56.974285563Z\",\n            \"firstPrompt\": \"Current web app has keycloak idp. Realm \\\"trm\\\" is configured to provide \\\"microsoft\\\" as login provider. Upon cliking it, it logs in successfully. This is working. However, I would like to configure this such that upon visiting web app URL, it performs SSO (Azure + Keycloak config) so that I dont need to click on \\\"microsoft\\\" button to login. Provide steps to do this.\",\n            \"lastUpdatedAt\": \"2025-12-26T18:42:38.486262355Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"c6594a03-dae8-44ad-a1c1-663862fd36be\",\n            \"chatTitle\": \"Mobile App Development Strategies\",\n            \"createdAt\": \"2025-12-19T04:24:27.897569786Z\",\n            \"firstPrompt\": \"Suggest concrete ways to build mobile (iOS and Android) applications. \",\n            \"lastUpdatedAt\": \"2025-12-19T04:24:43.025561333Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"6c28134b-de27-44a3-ab49-fa65ecec30d0\",\n            \"chatTitle\": \"ZCURL Demo Program Fetch\",\n            \"createdAt\": \"2025-12-16T22:26:06.467778617Z\",\n            \"firstPrompt\": \"Fetch ZCURL_DEMO program\",\n            \"lastUpdatedAt\": \"2025-12-16T22:27:47.393595031Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"54af3539-a06d-463f-b59c-010fdeba978f\",\n            \"chatTitle\": \"Http Client Functionality Summary\",\n            \"createdAt\": \"2025-12-16T21:46:00.148681876Z\",\n            \"firstPrompt\": \"Provide summary of what CL_HTTP_CLIENT does\",\n            \"lastUpdatedAt\": \"2025-12-16T21:57:55.687381489Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"test-26\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T02:31:54.900541469Z\",\n            \"lastUpdatedAt\": \"2025-12-13T02:06:10.537912958Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"quiet-test-3\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T03:25:22.903226535Z\",\n            \"lastUpdatedAt\": \"2025-12-11T03:25:25.885916214Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"quiet-test-2\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T03:25:16.617287879Z\",\n            \"lastUpdatedAt\": \"2025-12-11T03:25:19.617892231Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"quiet-test-1\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T03:24:15.974094953Z\",\n            \"lastUpdatedAt\": \"2025-12-11T03:24:18.94468965Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"test-25\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T01:46:35.22018471Z\",\n            \"lastUpdatedAt\": \"2025-12-11T01:46:38.197834656Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"test-23\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T01:45:39.655205272Z\",\n            \"lastUpdatedAt\": \"2025-12-11T01:45:47.468152352Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"test-22\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T01:36:21.367784614Z\",\n            \"lastUpdatedAt\": \"2025-12-11T01:36:24.340919154Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"test-2\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T01:30:22.901167787Z\",\n            \"lastUpdatedAt\": \"2025-12-11T01:30:25.900591443Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"my-chat-id\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T01:25:39.062649424Z\",\n            \"lastUpdatedAt\": \"2025-12-11T01:25:42.034379506Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"test-cli-123\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-11T01:22:53.884580793Z\",\n            \"lastUpdatedAt\": \"2025-12-11T01:22:56.85215816Z\",\n            \"userEmail\": \"unknown@example.com\"\n        },\n        {\n            \"chatId\": \"9699ab4a-2a1f-478c-9a73-277f461849f7\",\n            \"chatTitle\": \"How Can I Help\",\n            \"createdAt\": \"2025-12-11T00:17:58.321400803Z\",\n            \"firstPrompt\": \"Hello, how can you help?\",\n            \"lastUpdatedAt\": \"2025-12-11T00:29:38.084922164Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"87177f97-4d1d-43cd-975d-cd2cd2ff28dc\",\n            \"chatTitle\": \"S4 Remediation Analysis In JSON\",\n            \"createdAt\": \"2025-12-08T03:14:09.403558919Z\",\n            \"firstPrompt\": \"For a program:\\nanalyze ZCURL_DEMO for s4 remediation in json format\",\n            \"lastUpdatedAt\": \"2025-12-08T03:14:20.381486917Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"91ea7d9b-4c4c-4030-b604-c79ac5540b3e\",\n            \"chatTitle\": \"Http Client Code\",\n            \"createdAt\": \"2025-12-05T03:34:13.009297197Z\",\n            \"firstPrompt\": \"Provide code for CL_HTTP_CLIENT\",\n            \"lastUpdatedAt\": \"2025-12-05T03:35:27.616327432Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"ebd5210b-59c9-4d6d-a334-94f304de038a\",\n            \"chatTitle\": \"Zcurl Demo Source Code\",\n            \"createdAt\": \"2025-12-04T04:07:49.543777378Z\",\n            \"firstPrompt\": \"Provide source code for report zcurl_demo\",\n            \"lastUpdatedAt\": \"2025-12-04T04:11:01.52367056Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"c9ec98d0-a0ad-4eab-918c-1e541c2aab2f\",\n            \"chatTitle\": \"New Chat\",\n            \"createdAt\": \"2025-12-04T00:14:39.608433811Z\",\n            \"firstPrompt\": \"Provide the code written in class zcl_curl_abap\",\n            \"lastUpdatedAt\": \"2025-12-04T00:15:08.880617524Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"5cf70ce3-70ff-4d9d-bfe7-302fbc0dd6cd\",\n            \"chatTitle\": \"List All Z Programs\",\n            \"createdAt\": \"2025-12-03T20:57:29.854569973Z\",\n            \"firstPrompt\": \"List all Z programs\",\n            \"lastUpdatedAt\": \"2025-12-03T23:24:46.872585894Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"f8c3757a-e377-487f-a0b4-70379c22282b\",\n            \"chatTitle\": \"Z Programs List\",\n            \"createdAt\": \"2025-12-03T20:57:14.431409232Z\",\n            \"firstPrompt\": \"List all Z programs\",\n            \"lastUpdatedAt\": \"2025-12-03T20:57:26.375999629Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"8e028c34-ebbd-4aa2-b506-a57bdd0b1832\",\n            \"chatTitle\": \"Z Classes Or Programs\",\n            \"createdAt\": \"2025-12-03T20:42:18.444771874Z\",\n            \"firstPrompt\": \"List all Z classes or programs\",\n            \"lastUpdatedAt\": \"2025-12-03T20:42:28.994393671Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"79e51c0b-d6bc-4ff5-b6e3-32d8dbc49c69\",\n            \"chatTitle\": \"Retrieve All Z Programs\",\n            \"createdAt\": \"2025-12-03T20:16:42.615669841Z\",\n            \"firstPrompt\": \"List all Z programs. Also check if you are able to connect to ABAP system to get all Z programs\",\n            \"lastUpdatedAt\": \"2025-12-03T20:17:28.312797593Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"2db57e6f-1fdb-4867-9b1a-53d469643ddb\",\n            \"chatTitle\": \"List All Z Programs\",\n            \"createdAt\": \"2025-12-03T18:33:53.287552652Z\",\n            \"firstPrompt\": \"List all Z programs\",\n            \"lastUpdatedAt\": \"2025-12-03T18:34:33.072740434Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"e08f8869-f4f3-43ba-b73d-63f028528363\",\n            \"chatTitle\": \"Top Ten Global Economies\",\n            \"createdAt\": \"2025-12-03T18:31:36.386876869Z\",\n            \"firstPrompt\": \"List top 10 world economies\",\n            \"lastUpdatedAt\": \"2025-12-03T18:31:48.418330212Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"367afce6-12bd-435a-b404-8c97f73aabb7\",\n            \"chatTitle\": \"Leading Global And Emerging Economies\",\n            \"createdAt\": \"2025-12-03T18:18:46.895263363Z\",\n            \"firstPrompt\": \"List top 10 economies. Also list top 10 emerging economies (rate of growth)\",\n            \"lastUpdatedAt\": \"2025-12-03T18:18:55.892563826Z\",\n            \"model\": \"groq\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"c9cfa150-2f63-4695-998a-9a4c77e81117\",\n            \"chatTitle\": \"Temporary Artifact List\",\n            \"createdAt\": \"2025-11-26T19:09:47.450572759Z\",\n            \"firstPrompt\": \"List all $TMP artifacts\",\n            \"lastUpdatedAt\": \"2025-11-26T19:12:22.671253033Z\",\n            \"mcpServerName\": \"SAP ABAPer\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"7a0cceed-af84-46fc-9c50-11b965383f45\",\n            \"chatTitle\": \"Enhanced Answer Generation\",\n            \"createdAt\": \"2025-11-26T17:58:49.100653859Z\",\n            \"firstPrompt\": \"make a better response for any question\",\n            \"lastUpdatedAt\": \"2025-11-26T17:58:56.984172595Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"50e58baf-b9bc-44b2-aaab-996647e5d3c9\",\n            \"chatTitle\": \"Multiplication Of Five By Five\",\n            \"createdAt\": \"2025-11-26T17:55:34.572806366Z\",\n            \"firstPrompt\": \"What is 5 times 5\",\n            \"lastUpdatedAt\": \"2025-11-26T17:56:10.904848555Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"0683687f-59f2-4b18-8df4-8c43d94c064d\",\n            \"chatTitle\": \"Get Weather Data ABAP\",\n            \"createdAt\": \"2025-11-26T06:22:36.968855932Z\",\n            \"firstPrompt\": \"Write ABAP code to get weather data for an input city\",\n            \"lastUpdatedAt\": \"2025-11-26T06:24:52.497793027Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"febfc4dd-4422-4bd3-96fe-249de159fb4c\",\n            \"chatTitle\": \"Naruto Poem In English\",\n            \"createdAt\": \"2025-11-14T00:33:26.710623728Z\",\n            \"firstPrompt\": \"Write a poem in English about Naruto\",\n            \"lastUpdatedAt\": \"2025-11-14T00:33:30.334103473Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"d2aaba34-bd6b-46c3-b3cb-2bfa3f12cc54\",\n            \"chatTitle\": \"Writing MCP Server In Go\",\n            \"createdAt\": \"2025-11-10T03:24:13.723580043Z\",\n            \"firstPrompt\": \"Can I write MCP server in Go? I have an orchestrator written in Python/docker\",\n            \"lastUpdatedAt\": \"2025-11-10T03:24:52.996173864Z\",\n            \"model\": \"deepseek\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"6a080843-6f32-4f8a-8916-5f8945e42ab2\",\n            \"chatTitle\": \"Invoice List Request\",\n            \"createdAt\": \"2025-11-10T03:11:53.052845025Z\",\n            \"firstPrompt\": \"Provide me all invoices\",\n            \"lastUpdatedAt\": \"2025-11-10T03:12:28.595652117Z\",\n            \"mcpServerName\": \"SAP Conversation Analytics\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"c89e4844-91be-475e-b784-f31405199825\",\n            \"chatTitle\": \"Greeting\",\n            \"createdAt\": \"2025-11-10T03:09:38.785098937Z\",\n            \"firstPrompt\": \"Hello\",\n            \"lastUpdatedAt\": \"2025-11-10T03:10:19.532098704Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        },\n        {\n            \"chatId\": \"aaceb74e-c350-4ec1-8918-c5ac70e330d5\",\n            \"chatTitle\": \"Greeting\",\n            \"createdAt\": \"2025-11-04T13:39:34.445251585Z\",\n            \"firstPrompt\": \"Hello\",\n            \"lastUpdatedAt\": \"2025-11-07T03:56:38.664070469Z\",\n            \"model\": \"openai\",\n            \"userEmail\": \"phani.p@bluefunda.com\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Chat Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chats/{{chat_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chats",
+                "{{chat_id}}",
+                "messages"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Chat Context",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chats/{{chat_id}}/context",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chats",
+                "{{chat_id}}",
+                "context"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Chat Context",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/chats/{{chat_id}}/context",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "chats",
+                    "{{chat_id}}",
+                    "context"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:55:24 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                },
+                {
+                  "key": "Content-Encoding",
+                  "value": "gzip"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"chatContext\": [\n        {\n            \"content\": \"How is IT sales different from others?\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"user\"\n        },\n        {\n            \"content\": \"Excellent question. IT sales is fundamentally different from most other types of sales due to the **complexity of the product, the sophistication of the buyer, and the nature of the sales cycle.** It's less about selling a \\\"thing\\\" and more about selling a business outcome or a solution to a complex\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"assistant\"\n        },\n        {\n            \"content\": \"Short answer: IT sales is generally more technical, consultative, and relationship-driven than many other types of sales. It often involves longer cycles, multiple stakeholders, custom solutions, and ongoing service/renewal management rather than a one-time product transaction.\\n\\nKey differences (with what that means in practice)\\n\\n- Product complexity and technical knowledge\\n  - IT: Solutions are often complex (software, cloud, integrations, security). Salespeople must understand architecture, integrations, APIs, and be able to coordinate technical demos and proofs-of-concept.\\n  - Other: Many industries sell simpler, commodity products that need less technical explanation (e.g., FMCG, retail).\\n\\n- Sales process and cycle length\\n  - IT: Longer sales cycles (weeks to years). Requires education, pilots, POCs, and procurement/legal review.\\n  - Other: Shorter, transactional cycles (days to weeks), especially retail or low-cost B2C goods.\\n\\n- Decision-making and stakeholders\\n  - IT: Multiple buyers—CIO/CTO, security, finance, end-user managers—each with different criteria. Consensus-driven buying.\\n  - Other: Fewer decision-makers for many B2C or SMB purchases.\\n\\n- Selling style: consultative/solution vs transactional\\n  - IT: Solution selling — diagnose business problems, tailor architecture, build ROI/business case.\\n  - Other: Many sales are product-feature or price-driven.\\n\\n- Role specialization and team selling\\n  - IT: Cross-functional teams: SDR/BDR, Account Executive, Sales Engineer (pre-sales), Customer Success/Implementation. Sales often needs technical enablement and professional services.\\n  - Other: Simpler role structure; one seller may handle end-to-end.\\n\\n- Pricing, contracts, and legal\\n  - IT: Complex pricing models (per-seat, usage-based, tiered, enterprise licensing, subscriptions) and lengthy contract/negotiation cycles with SLAs and compliance clauses.\\n  - Other: Simpler price lists and standard T&Cs.\\n\\n- Revenue model and post-sale focus\\n  - IT: Recurring revenue (SaaS) dominates; renewals, upsells, expansion, and churn management are critical metrics.\\n  - Other: One-time sales or repeat purchase behavior without the same emphasis on subscription metrics.\\n\\n- Proof, risk mitigation, and trust\\n  - IT: Buyers are risk-averse—need demos, security assessments, references, pilot projects, proof of ROI, and compliance assurances.\\n  - Other: Lower perceived technical risk often requires less formal validation.\\n\\n- Implementation and delivery\\n  - IT: Implementation can be a major project (integration, data migration, training). Post-sale success teams are essential\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"assistant\"\n        },\n        {\n            \"content\": \"Here’s a practical, role-aware view of what an IT salesperson does day-to-day — actionable tasks, a typical daily timeline, metrics to watch, tools used, and productivity tips.\\n\\nCore daily tasks (common across IT sales roles)\\n- Review pipeline and priorities: Check open opportunities, next actions, deal stages, and risk areas.  \\n- Email and inbox triage: Respond to prospects/customers, send follow-ups, and clear urgent requests.  \\n- Prospecting/outbound outreach: Cold calls, warm follow-ups, LinkedIn messages, personalized emails to create meetings.  \\n- Qualifying leads: Discover pain, budget, authority, timeline, and technical requirements (BANT/CHAMP/GPCT).  \\n- Demos & technical presentations: Run or prep product demos and tailored walkthroughs (often with a Sales Engineer).  \\n- Discovery calls / solution design: Deep-dive calls to map solution to business outcomes and capture requirements.  \\n- Coordinate POCs/Trials: Set scope, success criteria, timelines, resources; liaise with delivery or engineering.  \\n- Proposal and pricing work: Prepare quotes, configure deals (often using CPQ), and draft SOWs and contracts.  \\n- Internal alignment & handoffs: Sync with Sales Engineers, Customer Success, Legal, Finance, and Delivery teams.  \\n- Meetings & account management: Execute scheduled meetings — status updates, executive briefings, renewal/expansion conversations.  \\n- CRM & activity logging: Update opportunity stage, next steps, meeting notes, and forecast data in CRM.  \\n- Learning and enablement: Product updates, competitor intel, pricing changes, and upskilling on features/security/compliance.  \\n- Admin & reporting: Update dashboards, respond to RFPs/RFIs, and prepare materials for weekly reviews.\\n\\nTypical daily schedule (example)\\n- 08:30–09:00 — Morning pipeline review, CRM cleanup, prioritize top 3 deals for the day.  \\n- 09:00–10:30 — Prospecting block (calls, LinkedIn, outreach sequences), send 10–20 personalized emails/messages.  \\n- 10:30–11:30 — Internal run-through / prep with SE for a demo or POC kickoff.  \\n- 11:30–12:30 — Discovery call / demo with prospect. Capture requirements and next steps.  \\n- 12:30–13:15 — Lunch + quick inbox check.  \\n- 13:15–14:30 — Proposal/quote creation or contract negotiation work.  \\n- 14:30–15:30 — Customer/account meeting (renewal or expansion discussion).  \\n- 15:30–16:00 — CRM updates, log calls, update forecast.  \\n- 16:00–17:00 — Follow-up emails, send proposal, coordinate delivery resources, book next meetings.  \\n- 17:00–17:30 — End-of-day review: plan follow-ups for next day, block prospecting time, quick learning module.\\n\\nRole-specific emphasis\\n- SDR/BDR (early funnel): Heavy focus on outbound calls/emails, lead qualification, booking meetings. Targets = meetings/day, response rates, conversion to SQL.  \\n- Account Executive (AE): Run demos, manage opportunities, negotiate contracts, close deals. Targets = closed-won value, avg deal size, sales cycle length.  \\n- Sales Engineer (SE): Technical demos, POC architecture, solution design, security/compliance responses. Heavy prep and customer technical calls.  \\n- Account Manager / Customer Success: Renewal management, expansion/\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"assistant\"\n        },\n        {\n            \"content\": \"Explain the daily tasks for an IT sales person.\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"user\"\n        },\n        {\n            \"content\": \"Of course. The daily tasks of an IT salesperson blend strategic planning, relationship building, technical knowledge, and relentless execution. Their role is to sell complex technology solutions (like software, cloud services, hardware, cybersecurity, or IT services) to businesses.\\n\\nHere’s a breakdown of their core daily\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"assistant\"\n        },\n        {\n            \"content\": \"Of course. The daily tasks of an IT salesperson blend strategic planning, relationship building, technical knowledge, and relentless execution. Their role is to sell complex technology solutions (like software, cloud services, hardware, cybersecurity, or IT services) to businesses.\\n\\nHere’s a breakdown of their core daily\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"assistant\"\n        },\n        {\n            \"content\": \"Short answer: an IT salesperson’s day mixes prospecting, qualification, demos/technical conversations, deal execution (quotes/contracts), and lots of coordination — with constant CRM updates and learning. Below is a practical breakdown you can use as a checklist or to plan a typical day.\\n\\nCore daily tasks (what you’ll do most days)\\n- Morning pipeline review and prioritization\\n  - Scan open opportunities, identify top 2–5 deals at risk, and set the day’s top priorities.\\n- Inbox triage and urgent responses\\n  - Answer time-sensitive customer/partner emails; confirm next steps from previous meetings.\\n- Prospecting / outbound outreach\\n  - Cold calls, personalized emails, LinkedIn messages, sequence follow-ups to fill the top of the funnel.\\n- Qualifying leads\\n  - Use frameworks (BANT, MEDDIC, CHAMP) to confirm pain, budget, authority, timeline, and technical fit.\\n- Discovery calls\\n  - Ask business-focused questions to understand outcomes required and map to your solution.\\n- Demos & technical walkthroughs\\n  - Run or co-run tailored demos (often with a Sales Engineer); focus on business use cases and success criteria.\\n- Proof-of-Concept / Trial management\\n  - Define scope, success metrics, milestones; coordinate internal delivery and customer resources.\\n- Proposal, pricing, and contract work\\n  - Build quotes (CPQ if available), prepare SOWs, negotiate terms with procurement/legal involvement.\\n- Internal alignment and handoffs\\n  - Sync with SEs, implementation, customer success, finance and legal to remove blockers and prepare for delivery.\\n- CRM and activity logging\\n  - Update opportunity stage, log calls/emails, set next actions, and update forecasts.\\n- Customer/account management (for renewals/expansions)\\n  - Renewal conversations, identify upsell opportunities, health checks with Customer Success.\\n- Learning and competitive/market intel\\n  - Review product updates, new features, compliance/security changes, and competitor moves.\\n- Admin and reporting\\n  - Weekly/quarterly reports, RFP/RFI responses, and prep for leadership reviews.\\n\\nTypical time allocation (rough guideline)\\n- 20–30% prospecting/outbound\\n- 20–30% demos/discovery & POC work\\n- 15–25% proposal/contract work & negotiation\\n- 10–15% internal alignment and handoffs\\n- 5–10% CRM updates, learning, and reporting\\n\\nExample daily schedule\\n- 08:30–09:00 — Pipeline review, prioritize top deals, quick inbox triage  \\n- 09:00–11:00 — Prospecting block (calls, sequences, LinkedIn outreach)  \\n- 11:00–12:00 — Demo / Discovery call with prospect (prep beforehand)  \\n- 12:00–13:00 — Lunch + follow-up emails  \\n- 13:00–15:00 — Proposal/pricing work, POC planning, contract reviews  \\n- 15:00–16:00 — Internal sync with SE/CS/Delivery to resolve blockers  \\n- 16:00–17:00 — CRM updates, forecast updates, schedule next meetings, learning\\n\\nRole-specific emphasis\\n- SDR/BDR: Heavy outbound + qualifying. Metrics: meetings booked, contact rate, conversion to SQL.  \\n- Account Executive: Close deals, demos, negotiation. Metrics: closed-won value, conversion rate, sales cycle.  \\n- Sales Engineer: Technical demos, architecture, POC scope. Metrics: demo-to-opportunity conversion, POC success.  \\n- Customer Success / Account Manager: Renewals and expansion, onboarding. Metrics: churn, expansion ARR, NPS/CSAT.\\n\\nKey tools you’ll use daily\\n- CRM (Salesforce\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"assistant\"\n        },\n        {\n            \"content\": \"Provide costing (perpetual) for an IT product from lower end of spectrum to higher end of spectrum. Include details on the product, its features, and the cost implications for the customer.\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"user\"\n        },\n        {\n            \"content\": \"# IT Product Costing Overview\\nThe IT product in question is a comprehensive software solution designed to cater to the diverse needs of businesses, from small-scale operations to large enterprises. The product's features and pricing are tailored to accommodate various requirements, making it an attractive option for a wide range of customers.\\n\\n## Lower End of the Spectrum: Basic Package\\n### Product Features:\\n- Core functionality with limited customization options\\n- Basic reporting and analytics\\n- Essential security features\\n- Limited scalability\\n- Standard support (email and online resources)\\n\\n### Cost Implications:\\n- Initial licensing fee: $5,000\\n- Annual maintenance and support: $1,000\\n- Total cost of ownership (first year): $6,000\\n- Total cost of ownership (subsequent years): $1,000 (annual maintenance and support)\\n\\n## Mid-Range: Standard Package\\n### Product Features:\\n- Enhanced core functionality with moderate customization options\\n- Advanced reporting and analytics\\n- Robust security features\\n- Moderate scalability\\n- Priority support (phone, email, and online resources)\\n\\n### Cost Implications:\\n- Initial licensing fee: $15,000\\n- Annual maintenance and support: $3,000\\n- Total cost of ownership (first year): $18,000\\n- Total cost of ownership (subsequent years): $3,000 (annual maintenance and support)\\n\\n## Higher End of the Spectrum: Enterprise Package\\n### Product Features:\\n- Comprehensive core functionality with extensive customization options\\n- Advanced reporting and analytics with real-time insights\\n- High-end security features with dedicated support\\n- High scalability\\n- Premium support (dedicated account manager, phone, email, and online resources)\\n\\n### Cost Implications:\\n- Initial licensing fee: $50,000\\n- Annual maintenance and support: $10,000\\n- Total cost of ownership (first year): $60,000\\n- Total cost of ownership (subsequent years): $10,000 (annual maintenance and support)\\n\\n## Additional Costs and Considerations\\n- Customization and implementation services: $5,000 to $20,000 (depending on the scope of work)\\n- Training and support services: $1,000 to $5,000 (depending on the level of training required)\\n- Hardware and infrastructure costs: variable (depending on the customer's existing infrastructure and requirements)\\n\\n## Comparison of Packages\\n| Package | Initial Licensing Fee | Annual Maintenance and Support | Total Cost of Ownership (First Year) |\\n| --- | --- | --- | --- |\\n| Basic | $5,000 | $1,000 | $6,000 |\\n| Standard | $15,000 | $3,000 | $18,000 |\\n| Enterprise | $50,000 | $10,000 | $60,000 |\\n\\nAs the customer's requirements move from the lower end to the higher end of the spectrum, the cost implications increase significantly. However, the higher-end packages offer more comprehensive features, advanced security, and premium support, making them more suitable for large enterprises with complex IT needs.\\n\\nSince you have not explicitly requested a downloadable file, no download link will be provided.\",\n            \"createdAt\": \"0001-01-01T00:00:00Z\",\n            \"role\": \"assistant\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Chat Stream (SSE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "  {\n    \"type\": \"Human\",\n    \"model\": \"openai\",\n    \"prompt\": \"Hello, how are you?\"\n  }"
+            },
+            "url": {
+              "raw": "{{base_url}}/chats/{{chat_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chats",
+                "{{chat_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Persist Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"user\",\n  \"content\": \"Test message\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/chats/{{chat_id}}/persist",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chats",
+                "{{chat_id}}",
+                "persist"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"Test message for title generation\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/chats/{{chat_id}}/title",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chats",
+                "{{chat_id}}",
+                "title"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stop Stream",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/chats/{{chat_id}}/stop",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chats",
+                "{{chat_id}}",
+                "stop"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "item": [
+        {
+          "name": "Get User Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "settings"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get User Settings",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/settings",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "settings"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:56:08 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                },
+                {
+                  "key": "Content-Encoding",
+                  "value": "gzip"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"llmModels\": [\n        {\n            \"modelId\": 1,\n            \"name\": \"openai\",\n            \"object\": \"model\",\n            \"ownedBy\": \"OpenAI\"\n        },\n        {\n            \"modelId\": 4,\n            \"name\": \"deepseek\",\n            \"object\": \"model\",\n            \"ownedBy\": \"DeepSeek\"\n        },\n        {\n            \"modelId\": 3,\n            \"name\": \"groq\",\n            \"object\": \"model\",\n            \"ownedBy\": \"groq\"\n        }\n    ],\n    \"mcpForUser\": [\n        {\n            \"mcp_server_url\": \"http://cai-odata-cache:8008/sse/\",\n            \"name\": \"SAP Conversation Analytics\",\n            \"server_id\": 12,\n            \"subscribe\": true\n        }\n    ],\n    \"mcpInfo\": [\n        {\n            \"mcp_server_url\": \"http://ai.bluefunda.com:8001/sse/\",\n            \"name\": \"Cloud Files\",\n            \"server_id\": 2,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"http://ai.bluefunda.com:8006/sse/\",\n            \"name\": \"GitHub\",\n            \"server_id\": 7,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"http://ai.bluefunda.com:8004/sse/\",\n            \"name\": \"AWS Manager\",\n            \"server_id\": 5,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"\",\n            \"name\": \"\",\n            \"server_id\": 0\n        },\n        {\n            \"mcp_server_url\": \"\",\n            \"name\": \"\",\n            \"server_id\": 0\n        },\n        {\n            \"mcp_server_url\": \"http://cai-odata-cache:8008/sse/\",\n            \"name\": \"\",\n            \"server_id\": 0\n        },\n        {\n            \"mcp_server_url\": \"http://cai-odata-cache:8008/sse/\",\n            \"name\": \"SAP Conversation Analytics\",\n            \"server_id\": 12,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"http://abaper-mcp:8015/sse/\",\n            \"name\": \"SAP ABAPer\",\n            \"server_id\": 14,\n            \"transport\": [\n                \"sse\"\n            ]\n        }\n    ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MCP",
+      "item": [
+        {
+          "name": "Get MCP Servers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/mcp",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mcp"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get MCP Servers",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/mcp",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "mcp"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:56:25 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                },
+                {
+                  "key": "Content-Encoding",
+                  "value": "gzip"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"mcpInfo\": [\n        {\n            \"mcp_server_url\": \"http://ai.bluefunda.com:8001/sse/\",\n            \"name\": \"Cloud Files\",\n            \"server_id\": 2,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"http://ai.bluefunda.com:8006/sse/\",\n            \"name\": \"GitHub\",\n            \"server_id\": 7,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"http://ai.bluefunda.com:8004/sse/\",\n            \"name\": \"AWS Manager\",\n            \"server_id\": 5,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"\",\n            \"name\": \"\",\n            \"server_id\": 0\n        },\n        {\n            \"mcp_server_url\": \"\",\n            \"name\": \"\",\n            \"server_id\": 0\n        },\n        {\n            \"mcp_server_url\": \"http://cai-odata-cache:8008/sse/\",\n            \"name\": \"\",\n            \"server_id\": 0\n        },\n        {\n            \"mcp_server_url\": \"http://cai-odata-cache:8008/sse/\",\n            \"name\": \"SAP Conversation Analytics\",\n            \"server_id\": 12,\n            \"transport\": [\n                \"sse\"\n            ]\n        },\n        {\n            \"mcp_server_url\": \"http://abaper-mcp:8015/sse/\",\n            \"name\": \"SAP ABAPer\",\n            \"server_id\": 14,\n            \"transport\": [\n                \"sse\"\n            ]\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get User MCP Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/mcp/user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mcp",
+                "user"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get User MCP Subscriptions",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/mcp/user",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "mcp",
+                    "user"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:57:08 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "135"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"mcpInfo\": [\n        {\n            \"mcp_server_url\": \"http://cai-odata-cache:8008/sse/\",\n            \"name\": \"SAP Conversation Analytics\",\n            \"server_id\": 12,\n            \"subscribe\": true\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Select MCP Server",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"server_id\": \"test-server\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/mcp/select",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mcp",
+                "select"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update MCP Config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"config\": {}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/mcp/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "mcp",
+                "config"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Rate Limit",
+      "item": [
+        {
+          "name": "Get Rate Limit Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/rate-limit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Rate Limit Status",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/rate-limit",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "rate-limit"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:57:20 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "44"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"allowed\": false,\n    \"remaining\": 0,\n    \"reset_at\": 0\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Rate Limit",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"limit\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/rate-limit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Block Rate Limit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blocked\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/rate-limit/block",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "rate-limit",
+                "block"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stripe",
+      "item": [
+        {
+          "name": "Get Stripe Subscription",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/stripe/subscription",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "stripe",
+                "subscription"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Stripe Subscription",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/stripe/subscription",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "stripe",
+                    "subscription"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:57:35 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                },
+                {
+                  "key": "Content-Encoding",
+                  "value": "gzip"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"subscription_info\": {\n        \"customer_id\": \"\",\n        \"daily_tokens_limit\": 0,\n        \"description\": \"Free plan with 10k tokens per hour\",\n        \"expires_at\": \"0001-01-01T00:00:00Z\",\n        \"has_subscription\": false,\n        \"monthly_tokens_limit\": 0,\n        \"plan_name\": \"free\",\n        \"status\": \"free\",\n        \"subscription_id\": \"\"\n    },\n    \"timestamp\": \"2026-01-19T01:57:35Z\",\n    \"type\": \"stripe_subscription\",\n    \"user_id\": \"be6381aa-c9a2-4458-9585-2c83f2242076\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Stripe Plans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/stripe/plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "stripe",
+                "plans"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Stripe Plans",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/stripe/plans",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "stripe",
+                    "plans"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": null,
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 19 Jan 2026 01:58:01 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=5"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "X-Krakend",
+                  "value": "Version 2.8.0"
+                },
+                {
+                  "key": "X-Krakend-Completed",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET,POST,PUT,DELETE,OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "Authorization,Content-Type,X-CSRF-Token,X-Timestamp,access-token"
+                },
+                {
+                  "key": "Content-Encoding",
+                  "value": "gzip"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n    \"plans\": {\n        \"enterprise\": {\n            \"features\": [\n                \"10M tokens/month\"\n            ],\n            \"id\": \"price_enterprise\",\n            \"name\": \"Enterprise\"\n        },\n        \"free\": {\n            \"features\": [\n                \"50K tokens/month\"\n            ],\n            \"id\": \"price_free\",\n            \"name\": \"Free\"\n        },\n        \"premium\": {\n            \"features\": [\n                \"2M tokens/month\"\n            ],\n            \"id\": \"price_premium\",\n            \"name\": \"Premium\"\n        }\n    },\n    \"product_id\": \"prod_cai\",\n    \"timestamp\": \"2026-01-19T01:58:01Z\",\n    \"type\": \"stripe_plans\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Storage (No Prefix)",
+      "item": [
+        {
+          "name": "List Storage Items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/storage/list?bucket=test-bucket&prefix=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "storage",
+                "list"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "test-bucket"
+                },
+                {
+                  "key": "prefix",
+                  "value": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bucket\": \"test-bucket\",\n  \"key\": \"test-file.txt\",\n  \"content\": \"base64-encoded-content\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/storage/upload?bucket=test-bucket",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "storage",
+                "upload"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "test-bucket"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/storage/download?bucket=test-bucket&key=test-file.txt",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "storage",
+                "download"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "test-bucket"
+                },
+                {
+                  "key": "key",
+                  "value": "test-file.txt"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete File",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/storage/delete?bucket=test-bucket&key=test-file.txt",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "storage",
+                "delete"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "test-bucket"
+                },
+                {
+                  "key": "key",
+                  "value": "test-file.txt"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Folder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bucket\": \"test-bucket\",\n  \"folder\": \"new-folder\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/storage/folder",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "storage",
+                "folder"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Presigned URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/storage/presigned-url?bucket=test-bucket&key=test-file.txt&action=get",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "storage",
+                "presigned-url"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "test-bucket"
+                },
+                {
+                  "key": "key",
+                  "value": "test-file.txt"
+                },
+                {
+                  "key": "action",
+                  "value": "get"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Storage Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/storage/stats?bucket=test-bucket",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "storage",
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "test-bucket"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "scope",
+        "value": "openid profile email",
+        "type": "string"
+      },
+      {
+        "key": "accessTokenUrl",
+        "value": "{{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/token",
+        "type": "string"
+      },
+      {
+        "key": "authUrl",
+        "value": "{{keycloak_url}}/realms/{{realm}}/protocol/openid-connect/auth",
+        "type": "string"
+      },
+      {
+        "key": "useBrowser",
+        "value": true,
+        "type": "boolean"
+      },
+      {
+        "key": "grant_type",
+        "value": "authorization_code",
+        "type": "string"
+      },
+      {
+        "key": "tokenName",
+        "value": "CAI Token",
+        "type": "string"
+      },
+      {
+        "key": "username",
+        "value": "{{username}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{password}}",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{client_id}}",
+        "type": "string"
+      },
+      {
+        "key": "clientSecret",
+        "value": "{{client_secret}}",
+        "type": "string"
+      },
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.bluefunda.com/ai"
+    },
+    {
+      "key": "idp",
+      "value": "https://auth.bluefunda.com"
+    },
+    {
+      "key": "client_id",
+      "value": "your-client-id"
+    },
+    {
+      "key": "client_secret",
+      "value": "your-client-secret"
+    },
+    {
+      "key": "username",
+      "value": "your-username"
+    },
+    {
+      "key": "password",
+      "value": "your-password"
+    },
+    {
+      "key": "chat_id",
+      "value": "test-chat-001"
+    }
+  ]
+}

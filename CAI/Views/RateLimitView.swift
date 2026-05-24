@@ -1,0 +1,188 @@
+import SwiftUI
+
+struct RateLimitView: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @State private var isRefreshing = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let info = chatManager.rateLimit {
+                    rateContent(info: info)
+                } else {
+                    LoadingRateLimitView()
+                }
+            }
+            .navigationTitle("Usage & Limits")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        refresh()
+                    } label: {
+                        if isRefreshing {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isRefreshing)
+                }
+            }
+            .task {
+                await chatManager.loadRateLimit()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rateContent(info: RateLimitInfo) -> some View {
+        List {
+            // Plan Badge
+            Section {
+                HStack {
+                    Label("Plan", systemImage: "creditcard")
+                    Spacer()
+                    Text(info.planName.uppercased())
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(planColor(info.planName).opacity(0.15))
+                        .foregroundColor(planColor(info.planName))
+                        .cornerRadius(6)
+                }
+
+                if info.isBlocked {
+                    HStack {
+                        Image(systemName: "exclamationmark.octagon.fill")
+                            .foregroundColor(.red)
+                        Text(info.blockReason ?? "Account is blocked")
+                            .foregroundColor(.red)
+                            .font(.subheadline)
+                    }
+                }
+            } header: {
+                Text("Subscription")
+            }
+
+            // Daily Usage
+            if info.dailyLimit > 0 {
+                Section {
+                    UsageRow(
+                        label: "Daily Tokens",
+                        used: info.dailyUsed,
+                        limit: info.dailyLimit,
+                        percent: info.dailyPercent
+                    )
+                } header: {
+                    Text("Daily Usage")
+                }
+            }
+
+            // Monthly Usage
+            if info.monthlyLimit > 0 {
+                Section {
+                    UsageRow(
+                        label: "Monthly Tokens",
+                        used: info.monthlyUsed,
+                        limit: info.monthlyLimit,
+                        percent: info.monthlyPercent
+                    )
+                } header: {
+                    Text("Monthly Usage")
+                }
+            }
+        }
+    }
+
+    private func refresh() {
+        isRefreshing = true
+        Task {
+            await chatManager.loadRateLimit()
+            isRefreshing = false
+        }
+    }
+
+    private func planColor(_ plan: String) -> Color {
+        switch plan.lowercased() {
+        case "enterprise": return .purple
+        case "premium": return .blue
+        case "trial": return .orange
+        default: return .gray
+        }
+    }
+}
+
+// MARK: - Usage Row
+
+struct UsageRow: View {
+    let label: String
+    let used: Int
+    let limit: Int
+    let percent: Double
+
+    private var progressColor: Color {
+        if percent > 0.9 { return .red }
+        if percent > 0.7 { return .orange }
+        return .blue
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(label)
+                    .font(.subheadline)
+                Spacer()
+                Text("\(used.formatted()) / \(limit.formatted())")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            ProgressView(value: percent)
+                .tint(progressColor)
+                .animation(.easeInOut, value: percent)
+
+            HStack {
+                Text("\(Int(percent * 100))% used")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("\((limit - used).formatted()) remaining")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Loading State
+
+struct LoadingRateLimitView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+            Text("Loading usage data…")
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+#Preview {
+    RateLimitView()
+        .environmentObject({
+            let m = ChatManager(service: BFFChatService())
+            m.rateLimit = RateLimitInfo(
+                planName: "premium",
+                dailyUsed: 7_500,
+                dailyLimit: 10_000,
+                monthlyUsed: 45_000,
+                monthlyLimit: 100_000,
+                isBlocked: false,
+                blockReason: nil
+            )
+            return m
+        }())
+}
