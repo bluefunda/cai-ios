@@ -24,6 +24,7 @@
 		B1000014201BCDEF /* BFFAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004201BCDEF /* BFFAPIService.swift */; };
 		B1000015201BCDEF /* RateLimitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000005201BCDEF /* RateLimitView.swift */; };
 		B1000016201BCDEF /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006201BCDEF /* StorageView.swift */; };
+		C1000017201BCDEF /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDEF /* MarkdownView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +47,7 @@
 		B1000004201BCDEF /* BFFAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFAPIService.swift; sourceTree = "<group>"; };
 		B1000005201BCDEF /* RateLimitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitView.swift; sourceTree = "<group>"; };
 		B1000006201BCDEF /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
+		C1000007201BCDEF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +93,7 @@
 				A1000015201BCDEF /* SettingsView.swift */,
 				B1000005201BCDEF /* RateLimitView.swift */,
 				B1000006201BCDEF /* StorageView.swift */,
+				C1000007201BCDEF /* MarkdownView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -225,6 +228,7 @@
 				B1000014201BCDEF /* BFFAPIService.swift in Sources */,
 				B1000015201BCDEF /* RateLimitView.swift in Sources */,
 				B1000016201BCDEF /* StorageView.swift in Sources */,
+				C1000017201BCDEF /* MarkdownView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

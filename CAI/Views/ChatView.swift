@@ -180,8 +180,12 @@ struct MessageView: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.secondary)
 
-                Text(message.content)
-                    .textSelection(.enabled)
+                if message.role == .user {
+                    Text(message.content)
+                        .textSelection(.enabled)
+                } else {
+                    MarkdownView(content: message.content)
+                }
 
                 Text(message.timestamp, style: .time)
                     .font(.caption2)
