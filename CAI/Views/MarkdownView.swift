@@ -1,0 +1,543 @@
+import SwiftUI
+
+// MARK: - Block types
+
+private enum MarkdownBlock {
+    case paragraph(String)
+    case heading(level: Int, text: String)
+    case codeBlock(language: String?, code: String)
+    case unorderedList(items: [String])
+    case orderedList(items: [String])
+    case blockquote(text: String)
+    case horizontalRule
+    case table(headers: [String], rows: [[String]])
+}
+
+// MARK: - Parser
+
+private enum MarkdownParser {
+    static func parse(_ input: String) -> [MarkdownBlock] {
+        let normalized = input.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = normalized.components(separatedBy: "\n")
+        var blocks: [MarkdownBlock] = []
+        var i = 0
+
+        while i < lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Blank line — block separator
+            if trimmed.isEmpty {
+                i += 1
+                continue
+            }
+
+            // Fenced code block (``` or ~~~)
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                let fence = trimmed.hasPrefix("```") ? "```" : "~~~"
+                let lang = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                var codeLines: [String] = []
+                i += 1
+                while i < lines.count &&
+                      !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix(fence) {
+                    codeLines.append(lines[i])
+                    i += 1
+                }
+                if i < lines.count { i += 1 } // consume closing fence
+                blocks.append(.codeBlock(
+                    language: lang.isEmpty ? nil : lang,
+                    code: codeLines.joined(separator: "\n")
+                ))
+                continue
+            }
+
+            // ATX Heading (# through ######)
+            if trimmed.hasPrefix("#") {
+                let level = min(trimmed.prefix(while: { $0 == "#" }).count, 6)
+                let afterHashes = trimmed.dropFirst(level)
+                if afterHashes.isEmpty || afterHashes.hasPrefix(" ") {
+                    let text = afterHashes.hasPrefix(" ")
+                        ? String(afterHashes.dropFirst()).trimmingCharacters(in: .whitespaces)
+                        : ""
+                    blocks.append(.heading(level: level, text: text))
+                    i += 1
+                    continue
+                }
+            }
+
+            // Horizontal rule (--- *** ___  with optional spaces)
+            let noSpaces = trimmed.replacingOccurrences(of: " ", with: "")
+            if trimmed.count >= 3 && (noSpaces == "---" || noSpaces == "***" || noSpaces == "___") {
+                blocks.append(.horizontalRule)
+                i += 1
+                continue
+            }
+
+            // Blockquote (>)
+            if trimmed.hasPrefix(">") {
+                var quoteLines: [String] = []
+                while i < lines.count {
+                    let l = lines[i].trimmingCharacters(in: .whitespaces)
+                    if l.hasPrefix("> ") {
+                        quoteLines.append(String(l.dropFirst(2)))
+                    } else if l == ">" {
+                        quoteLines.append("")
+                    } else {
+                        break
+                    }
+                    i += 1
+                }
+                blocks.append(.blockquote(text: quoteLines.joined(separator: "\n")))
+                continue
+            }
+
+            // Table (rows start with |)
+            if trimmed.hasPrefix("|") {
+                var tableLines: [String] = []
+                while i < lines.count &&
+                      lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("|") {
+                    tableLines.append(lines[i])
+                    i += 1
+                }
+                if tableLines.count >= 2 {
+                    let headers = parseTableRow(tableLines[0])
+                    // tableLines[1] is the separator (| --- | --- |) — skip it
+                    var rows: [[String]] = []
+                    for j in 2..<tableLines.count {
+                        let row = parseTableRow(tableLines[j])
+                        if !row.isEmpty { rows.append(row) }
+                    }
+                    if !headers.isEmpty {
+                        blocks.append(.table(headers: headers, rows: rows))
+                        continue
+                    }
+                }
+                // Not a real table — treat as paragraphs
+                for l in tableLines { blocks.append(.paragraph(l)) }
+                continue
+            }
+
+            // Unordered list (- * +)
+            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
+                var items: [String] = []
+                while i < lines.count {
+                    let l = lines[i].trimmingCharacters(in: .whitespaces)
+                    if l.hasPrefix("- ") || l.hasPrefix("* ") || l.hasPrefix("+ ") {
+                        items.append(String(l.dropFirst(2)))
+                        i += 1
+                    } else if l.isEmpty {
+                        break
+                    } else if l.hasPrefix("  ") || l.hasPrefix("\t") {
+                        // Continuation line — append to last item
+                        if !items.isEmpty {
+                            items[items.count - 1] += " " + l.trimmingCharacters(in: .whitespaces)
+                        }
+                        i += 1
+                    } else {
+                        break
+                    }
+                }
+                if !items.isEmpty { blocks.append(.unorderedList(items: items)) }
+                continue
+            }
+
+            // Ordered list (1. 2. 3.)
+            if trimmed.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                var items: [String] = []
+                while i < lines.count {
+                    let l = lines[i].trimmingCharacters(in: .whitespaces)
+                    if l.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                        let text = l.replacingOccurrences(
+                            of: #"^\d+\.\s+"#, with: "",
+                            options: .regularExpression
+                        )
+                        items.append(text)
+                        i += 1
+                    } else if l.isEmpty {
+                        break
+                    } else if l.hasPrefix("  ") || l.hasPrefix("\t") {
+                        if !items.isEmpty {
+                            items[items.count - 1] += " " + l.trimmingCharacters(in: .whitespaces)
+                        }
+                        i += 1
+                    } else {
+                        break
+                    }
+                }
+                if !items.isEmpty { blocks.append(.orderedList(items: items)) }
+                continue
+            }
+
+            // Paragraph — accumulate until a block-level element or blank line
+            var paraLines: [String] = []
+            while i < lines.count {
+                let l = lines[i]
+                let lt = l.trimmingCharacters(in: .whitespaces)
+
+                if lt.isEmpty { break }
+                if lt.hasPrefix("```") || lt.hasPrefix("~~~") { break }
+                if lt.hasPrefix("#") {
+                    let lvl = lt.prefix(while: { $0 == "#" }).count
+                    if lvl >= 1 && lvl <= 6 { break }
+                }
+                let ns = lt.replacingOccurrences(of: " ", with: "")
+                if lt.count >= 3 && (ns == "---" || ns == "***" || ns == "___") { break }
+                if lt.hasPrefix(">") { break }
+                if lt.hasPrefix("|") { break }
+                if lt.hasPrefix("- ") || lt.hasPrefix("* ") || lt.hasPrefix("+ ") { break }
+                if lt.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil { break }
+
+                paraLines.append(l)
+                i += 1
+            }
+
+            if !paraLines.isEmpty {
+                // Join with \n; AttributedString(inlineOnly) collapses \n → space,
+                // matching standard Markdown paragraph behaviour.
+                blocks.append(.paragraph(paraLines.joined(separator: "\n")))
+            }
+        }
+
+        return blocks
+    }
+
+    private static func parseTableRow(_ row: String) -> [String] {
+        row.components(separatedBy: "|")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { cell in
+                !cell.isEmpty &&
+                !cell.allSatisfy({ $0 == "-" || $0 == ":" || $0 == " " })
+            }
+    }
+}
+
+// MARK: - MarkdownView
+
+struct MarkdownView: View {
+    let content: String
+
+    private var blocks: [MarkdownBlock] {
+        MarkdownParser.parse(content)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                MarkdownBlockView(block: block)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Block Dispatcher
+
+private struct MarkdownBlockView: View {
+    let block: MarkdownBlock
+
+    var body: some View {
+        switch block {
+        case .paragraph(let text):
+            InlineMarkdownText(text: text)
+        case .heading(let level, let text):
+            HeadingView(level: level, text: text)
+        case .codeBlock(let language, let code):
+            CodeBlockView(language: language, code: code)
+        case .unorderedList(let items):
+            UnorderedListView(items: items)
+        case .orderedList(let items):
+            OrderedListView(items: items)
+        case .blockquote(let text):
+            BlockquoteView(text: text)
+        case .horizontalRule:
+            Divider()
+        case .table(let headers, let rows):
+            TableBlockView(headers: headers, rows: rows)
+        }
+    }
+}
+
+// MARK: - Inline Markdown Text
+
+private struct InlineMarkdownText: View {
+    let text: String
+
+    var body: some View {
+        Group {
+            if let attr = try? AttributedString(
+                markdown: text,
+                options: .init(interpretedSyntax: .inlineOnly)
+            ) {
+                Text(attr)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+// MARK: - Heading
+
+private struct HeadingView: View {
+    let level: Int
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(headingFont)
+            .fontWeight(.semibold)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, level == 1 ? 6 : 2)
+    }
+
+    private var headingFont: Font {
+        switch level {
+        case 1: return .title2
+        case 2: return .title3
+        case 3: return .headline
+        default: return .subheadline
+        }
+    }
+}
+
+// MARK: - Code Block
+
+private struct CodeBlockView: View {
+    let language: String?
+    let code: String
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isCopied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header bar: language label + copy button
+            HStack {
+                if let lang = language, !lang.isEmpty {
+                    Text(lang)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+
+                Spacer()
+
+                Button(action: copyCode) {
+                    HStack(spacing: 4) {
+                        Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                        Text(isCopied ? "Copied!" : "Copy")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(headerBackground)
+
+            // Code content — horizontal scroll for long lines
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code.isEmpty ? " " : code)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(codeBackground)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private var codeBackground: Color {
+        colorScheme == .dark ? Color(white: 0.11) : Color(white: 0.94)
+    }
+
+    private var headerBackground: Color {
+        colorScheme == .dark ? Color(white: 0.08) : Color(white: 0.87)
+    }
+
+    private func copyCode() {
+        UIPasteboard.general.string = code
+        isCopied = true
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            isCopied = false
+        }
+    }
+}
+
+// MARK: - Unordered List
+
+private struct UnorderedListView: View {
+    let items: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("•")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12, alignment: .center)
+                    InlineMarkdownText(text: item)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Ordered List
+
+private struct OrderedListView: View {
+    let items: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(idx + 1).")
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 24, alignment: .trailing)
+                        .monospacedDigit()
+                    InlineMarkdownText(text: item)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Blockquote
+
+private struct BlockquoteView: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.secondary.opacity(0.4))
+                .frame(width: 3)
+            InlineMarkdownText(text: text)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Table
+
+private struct TableBlockView: View {
+    let headers: [String]
+    let rows: [[String]]
+
+    private let minColWidth: CGFloat = 80
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header row
+                HStack(spacing: 0) {
+                    ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
+                        Text(header)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .frame(minWidth: minColWidth, alignment: .leading)
+                    }
+                }
+                .background(Color.secondary.opacity(0.12))
+
+                Divider()
+
+                // Data rows
+                ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
+                    HStack(spacing: 0) {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                            Text(cell)
+                                .font(.caption)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .frame(minWidth: minColWidth, alignment: .leading)
+                        }
+                        // Pad missing columns
+                        if row.count < headers.count {
+                            ForEach(row.count..<headers.count, id: \.self) { _ in
+                                Text("—")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .frame(minWidth: minColWidth, alignment: .leading)
+                            }
+                        }
+                    }
+                    .background(rowIdx % 2 == 1 ? Color.secondary.opacity(0.05) : .clear)
+
+                    if rowIdx < rows.count - 1 { Divider() }
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    ScrollView {
+        MarkdownView(content: """
+        # Heading 1
+
+        This is **bold**, *italic*, and `inline code` in one paragraph.
+
+        ## Heading 2
+
+        ```swift
+        func greet(name: String) -> String {
+            return "Hello, \\(name)!"
+        }
+        ```
+
+        ### Lists
+
+        - Item one
+        - Item two with **bold** text
+        - Item three
+
+        1. First step
+        2. Second step
+        3. Third step
+
+        > This is a blockquote with *italic* emphasis.
+
+        ### Table
+
+        | Name     | Value | Status |
+        |----------|-------|--------|
+        | Alpha    | 42    | Active |
+        | Beta     | 7     | Idle   |
+
+        ---
+
+        Plain paragraph at the end.
+        """)
+        .padding()
+    }
+}
