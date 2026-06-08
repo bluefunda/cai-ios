@@ -24,18 +24,43 @@ jobs:
           sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer
           xcodebuild -version
 
+      - name: Resolve simulator destination
+        run: |
+          # Pick the highest-versioned iOS runtime available on this runner
+          DEST=$(xcrun simctl list runtimes --json \
+            | python3 -c "
+import sys, json
+runtimes = [r for r in json.load(sys.stdin)['runtimes']
+            if r.get('isAvailable') and 'iOS' in r.get('name','')]
+runtimes.sort(key=lambda r: r.get('version','0'), reverse=True)
+rt = runtimes[0] if runtimes else None
+if rt:
+    print(f\"platform=iOS Simulator,OS={rt['version']},name=iPhone 16\")
+else:
+    print('platform=iOS Simulator,name=iPhone 16,OS=latest')
+")
+          echo "SIMULATOR_DEST=$DEST" >> $GITHUB_ENV
+          echo "Using destination: $DEST"
+
       - name: Build (simulator)
         run: |
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination "$SIMULATOR_DEST" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             build > /tmp/build.log 2>&1
           BUILD_EXIT=$?
-          grep -E "^(error:|warning:|note:|Build succeeded|BUILD SUCCEEDED|BUILD FAILED)" /tmp/build.log || true
+          # Always show errors; show summary on success
+          grep -E "^error:" /tmp/build.log || true
+          if [ $BUILD_EXIT -eq 0 ]; then
+            echo "Build succeeded."
+          else
+            echo "Build FAILED (exit $BUILD_EXIT). Full log:"
+            cat /tmp/build.log
+          fi
           exit $BUILD_EXIT
 
       - name: Test
@@ -43,11 +68,16 @@ jobs:
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination "$SIMULATOR_DEST" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             test > /tmp/test.log 2>&1
           TEST_EXIT=$?
-          grep -E "^(Test Suite|Test Case|error:|Executed|FAILED|PASSED)" /tmp/test.log || true
+          # Always show test results; show full log on failure
+          grep -E "^(Test Suite|Test Case|error:|Executed)" /tmp/test.log || true
+          if [ $TEST_EXIT -ne 0 ]; then
+            echo "Tests FAILED (exit $TEST_EXIT). Full log:"
+            cat /tmp/test.log
+          fi
           exit $TEST_EXIT
