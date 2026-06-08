@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Root
+
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
@@ -9,18 +11,384 @@ struct ContentView: View {
             if authManager.isLoading {
                 LoadingView()
             } else if authManager.isAuthenticated {
-                MainTabView()
+                AppShell()
             } else {
                 LoginView()
             }
         }
         .alert("Error", isPresented: .constant(authManager.error != nil)) {
-            Button("OK") {
-                authManager.error = nil
-            }
+            Button("OK") { authManager.error = nil }
         } message: {
             Text(authManager.error?.localizedDescription ?? "")
         }
+    }
+}
+
+// MARK: - App Shell (replaces MainTabView)
+
+struct AppShell: View {
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var chatManager: ChatManager
+
+    @State private var sidebarOpen = false
+    @State private var activeSheet: AppSheet?
+
+    enum AppSheet: String, Identifiable {
+        case storage, settings
+        var id: String { rawValue }
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // ── Main content ──────────────────────────────
+            VStack(spacing: 0) {
+                AppTopBar(
+                    sidebarOpen: $sidebarOpen,
+                    onNewChat: { chatManager.newConversation() },
+                    onShowSettings: { activeSheet = .settings }
+                )
+
+                ChatView()
+            }
+            .zIndex(0)
+
+            // ── Dim overlay ───────────────────────────────
+            if sidebarOpen {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.spring(duration: 0.25)) { sidebarOpen = false }
+                    }
+                    .zIndex(1)
+                    .transition(.opacity)
+            }
+
+            // ── Sidebar drawer ────────────────────────────
+            SidebarDrawer(
+                isOpen: $sidebarOpen,
+                onOpenStorage: { activeSheet = .storage },
+                onOpenSettings: { activeSheet = .settings }
+            )
+            .frame(width: 300)
+            .offset(x: sidebarOpen ? 0 : -310)
+            .animation(.spring(duration: 0.3, bounce: 0.1), value: sidebarOpen)
+            .zIndex(2)
+        }
+        .animation(.default, value: sidebarOpen)
+        .sheet(item: $activeSheet) { sheet in
+            sheetView(sheet)
+        }
+    }
+
+    @ViewBuilder
+    private func sheetView(_ sheet: AppSheet) -> some View {
+        switch sheet {
+        case .storage: StorageView()
+        case .settings: SettingsView()
+        }
+    }
+}
+
+// MARK: - Top Bar
+
+struct AppTopBar: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
+    @Binding var sidebarOpen: Bool
+    let onNewChat: () -> Void
+    let onShowSettings: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Two-bar hamburger
+            Button {
+                withAnimation(.spring(duration: 0.25)) {
+                    sidebarOpen.toggle()
+                }
+            } label: {
+                VStack(spacing: 5) {
+                    Capsule().frame(width: 22, height: 2)
+                    Capsule().frame(width: 22, height: 2)
+                }
+                .foregroundStyle(.primary)
+            }
+
+            // New chat
+            Button(action: onNewChat) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 18))
+            }
+
+            Spacer()
+
+            // Model picker
+            ModelPicker(selectedModel: $chatManager.selectedModel)
+
+            // User avatar → settings
+            Button(action: onShowSettings) {
+                Circle()
+                    .fill(Color.brandBlue.gradient)
+                    .frame(width: 32, height: 32)
+                    .overlay {
+                        Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                    }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+        .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+// MARK: - Sidebar Drawer
+
+struct SidebarDrawer: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
+    @Binding var isOpen: Bool
+    let onOpenStorage: () -> Void
+    let onOpenSettings: () -> Void
+
+    @State private var searchText = ""
+
+    private var filteredConversations: [Conversation] {
+        guard !searchText.isEmpty else { return chatManager.conversations }
+        return chatManager.conversations.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // ── Header ────────────────────────────────────
+            HStack {
+                Text("Conversations")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    withAnimation { isOpen = false }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .padding(6)
+                        .background(Color(.systemGray5), in: Circle())
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
+            // New chat row
+            Button {
+                chatManager.newConversation()
+                withAnimation { isOpen = false }
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.pencil")
+                    Text("New Chat")
+                    Spacer()
+                }
+                .font(.subheadline)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 8)
+
+            // Search
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search conversations", text: $searchText)
+                    .font(.subheadline)
+            }
+            .padding(8)
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+
+            // ── Conversation list ─────────────────────────
+            if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredConversations.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "bubble.left")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                    Text(searchText.isEmpty ? "No conversations yet" : "No results")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(groupedConversations, id: \.0) { section, convos in
+                            Text(section)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                                .padding(.bottom, 2)
+
+                            ForEach(convos) { convo in
+                                SidebarConversationRow(
+                                    conversation: convo,
+                                    isSelected: chatManager.currentConversation?.id == convo.id
+                                )
+                                .onTapGesture {
+                                    chatManager.selectConversation(convo)
+                                    withAnimation { isOpen = false }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+            }
+
+            Divider()
+
+            // ── Bottom nav ────────────────────────────────
+            VStack(spacing: 0) {
+                SidebarNavButton(icon: "externaldrive", label: "Cloud Storage") {
+                    withAnimation { isOpen = false }
+                    onOpenStorage()
+                }
+
+                SidebarNavButton(icon: "gear", label: "Settings") {
+                    withAnimation { isOpen = false }
+                    onOpenSettings()
+                }
+
+                Divider()
+
+                // User info
+                Button(action: {
+                    withAnimation { isOpen = false }
+                    onOpenSettings()
+                }) {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(Color.brandBlue.gradient)
+                            .frame(width: 36, height: 36)
+                            .overlay {
+                                Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.white)
+                            }
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(authManager.currentUser?.name ?? "User")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text(authManager.realm.uppercased())
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Color(.systemBackground))
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 4, y: 0)
+    }
+
+    // Group conversations by recency
+    private var groupedConversations: [(String, [Conversation])] {
+        let now = Date()
+        let cal = Calendar.current
+
+        var today: [Conversation] = []
+        var yesterday: [Conversation] = []
+        var thisWeek: [Conversation] = []
+        var older: [Conversation] = []
+
+        for c in filteredConversations {
+            let days = cal.dateComponents([.day], from: c.createdAt, to: now).day ?? 0
+            if days == 0 { today.append(c) }
+            else if days == 1 { yesterday.append(c) }
+            else if days < 7 { thisWeek.append(c) }
+            else { older.append(c) }
+        }
+
+        var result: [(String, [Conversation])] = []
+        if !today.isEmpty    { result.append(("Today", today)) }
+        if !yesterday.isEmpty { result.append(("Yesterday", yesterday)) }
+        if !thisWeek.isEmpty { result.append(("This Week", thisWeek)) }
+        if !older.isEmpty    { result.append(("Older", older)) }
+        return result
+    }
+}
+
+// MARK: - Sidebar Row
+
+private struct SidebarConversationRow: View {
+    let conversation: Conversation
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bubble.left")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text(conversation.title)
+                .font(.subheadline)
+                .lineLimit(1)
+                .foregroundStyle(.primary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            isSelected
+                ? Color.blue.opacity(0.12)
+                : Color.clear,
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Sidebar Nav Button
+
+private struct SidebarNavButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .frame(width: 20)
+                Text(label)
+                    .font(.subheadline)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
     }
 }
 
@@ -29,10 +397,8 @@ struct ContentView: View {
 struct LoadingView: View {
     var body: some View {
         VStack(spacing: 20) {
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("Loading...")
-                .foregroundColor(.secondary)
+            ProgressView().scaleEffect(1.5)
+            Text("Loading…").foregroundStyle(.secondary)
         }
     }
 }
@@ -42,7 +408,6 @@ struct LoadingView: View {
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var selectedRealm = "individual"
-
     let realms = ["individual", "trm"]
 
     var body: some View {
@@ -50,37 +415,26 @@ struct LoginView: View {
             VStack(spacing: 40) {
                 Spacer()
 
-                // Logo
                 VStack(spacing: 16) {
                     Image(systemName: "brain.head.profile")
                         .font(.system(size: 80))
                         .foregroundStyle(.blue.gradient)
-
                     Text("CAI")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-
+                        .font(.largeTitle).fontWeight(.bold)
                     Text("Cognitive AI Interface")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
 
-                // Realm Picker
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Select Realm")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
+                        .font(.caption).foregroundStyle(.secondary)
                     Picker("Realm", selection: $selectedRealm) {
-                        ForEach(realms, id: \.self) { realm in
-                            Text(realm.uppercased()).tag(realm)
-                        }
+                        ForEach(realms, id: \.self) { Text($0.uppercased()).tag($0) }
                     }
                     .pickerStyle(.segmented)
                 }
                 .padding(.horizontal, 40)
 
-                // Login Button
                 Button {
                     authManager.login(realm: selectedRealm)
                 } label: {
@@ -91,56 +445,17 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(Color.blue)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .cornerRadius(12)
                 }
                 .padding(.horizontal, 40)
 
                 Spacer()
 
-                // Footer
                 Text("Powered by BlueFunda")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.bottom)
+                    .font(.caption).foregroundStyle(.secondary).padding(.bottom)
             }
             .toolbar(.hidden, for: .navigationBar)
-        }
-    }
-}
-
-// MARK: - Main Tab View
-
-struct MainTabView: View {
-    @EnvironmentObject var authManager: AuthManager
-    @EnvironmentObject var chatManager: ChatManager
-    @State private var selectedTab = 0
-
-    var body: some View {
-        TabView(selection: $selectedTab) {
-            ChatView()
-                .tabItem {
-                    Label("Chat", systemImage: "bubble.left.and.bubble.right")
-                }
-                .tag(0)
-
-            ConversationsView(selectedTab: $selectedTab)
-                .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
-                }
-                .tag(1)
-
-            StorageView()
-                .tabItem {
-                    Label("Storage", systemImage: "externaldrive")
-                }
-                .tag(2)
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-                .tag(3)
         }
     }
 }
