@@ -46,11 +46,12 @@ jobs:
           fi
           echo "SIM_UDID=$SIM_UDID" >> $GITHUB_ENV
           echo "Using simulator: $(xcrun simctl list devices available | grep $SIM_UDID)"
-          # Boot it so the first test run doesn't time out on simulator startup
           xcrun simctl boot $SIM_UDID 2>/dev/null || true
 
-      - name: Build (simulator)
+      - name: Build & Test
         run: |
+          # Pipe through tee so xcodebuild output is visible in the CI log in real-time.
+          # PIPESTATUS[0] gives xcodebuild's exit code (not tee's).
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
@@ -58,31 +59,9 @@ jobs:
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            build > /tmp/build.log 2>&1
-          BUILD_EXIT=$?
-          grep -E "^error:" /tmp/build.log || true
-          if [ $BUILD_EXIT -eq 0 ]; then
-            echo "Build succeeded."
-          else
-            echo "Build FAILED (exit $BUILD_EXIT). Full log:"
-            cat /tmp/build.log
-          fi
-          exit $BUILD_EXIT
-
-      - name: Test
-        run: |
-          xcodebuild \
-            -project CAI.xcodeproj \
-            -scheme CAI \
-            -destination "id=$SIM_UDID" \
-            -configuration Debug \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            test > /tmp/test.log 2>&1
-          TEST_EXIT=$?
-          grep -E "^(Test Suite|Test Case|error:|Executed)" /tmp/test.log || true
-          if [ $TEST_EXIT -ne 0 ]; then
-            echo "Tests FAILED (exit $TEST_EXIT). Full log:"
-            cat /tmp/test.log
-          fi
-          exit $TEST_EXIT
+            test 2>&1 | tee /tmp/xcode.log
+          XCODE_EXIT=${PIPESTATUS[0]}
+          # Print a compact summary at the end
+          echo "--- Test summary ---"
+          grep -E "^(Test Suite|Test Case|error:|Executed|FAILED|PASSED)" /tmp/xcode.log || true
+          exit $XCODE_EXIT
