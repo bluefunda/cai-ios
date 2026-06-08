@@ -26,19 +26,16 @@ jobs:
 
       - name: Resolve simulator destination
         run: |
-          # Pick the highest-versioned iOS runtime available on this runner
-          DEST=$(xcrun simctl list runtimes --json \
-            | python3 -c "
-import sys, json
-runtimes = [r for r in json.load(sys.stdin)['runtimes']
-            if r.get('isAvailable') and 'iOS' in r.get('name','')]
-runtimes.sort(key=lambda r: r.get('version','0'), reverse=True)
-rt = runtimes[0] if runtimes else None
-if rt:
-    print(f\"platform=iOS Simulator,OS={rt['version']},name=iPhone 16\")
-else:
-    print('platform=iOS Simulator,name=iPhone 16,OS=latest')
-")
+          # Use the iOS version that matches the latest installed SDK
+          IOS_VER=$(xcodebuild -showsdks 2>/dev/null \
+            | grep -oE 'iphonesimulator[0-9.]+' \
+            | sort -V | tail -1 \
+            | sed 's/iphonesimulator//')
+          if [ -n "$IOS_VER" ]; then
+            DEST="platform=iOS Simulator,OS=${IOS_VER},name=iPhone 16"
+          else
+            DEST="platform=iOS Simulator,name=iPhone 16,OS=latest"
+          fi
           echo "SIMULATOR_DEST=$DEST" >> $GITHUB_ENV
           echo "Using destination: $DEST"
 
