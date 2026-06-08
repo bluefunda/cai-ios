@@ -20,37 +20,46 @@ jobs:
 
       - name: Select Xcode
         run: |
-          # Use latest available Xcode on the runner
-          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer
+          # Prefer the latest stable Xcode 16.x; fall back to whatever is newest
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
 
-      - name: Resolve simulator destination
+      - name: Prepare simulator
         run: |
-          # Use the iOS version that matches the latest installed SDK
-          IOS_VER=$(xcodebuild -showsdks 2>/dev/null \
-            | grep -oE 'iphonesimulator[0-9.]+' \
-            | sort -V | tail -1 \
-            | sed 's/iphonesimulator//')
-          if [ -n "$IOS_VER" ]; then
-            DEST="platform=iOS Simulator,OS=${IOS_VER},name=iPhone 16"
-          else
-            DEST="platform=iOS Simulator,name=iPhone 16,OS=latest"
+          # Find the UDID of any available iPhone 16 (or fall back to any iPhone)
+          SIM_UDID=$(xcrun simctl list devices available | \
+            grep -E "iPhone 16[^P]" | head -1 | \
+            grep -oE '[A-F0-9]{8}-([A-F0-9]{4}-){3}[A-F0-9]{12}')
+          if [ -z "$SIM_UDID" ]; then
+            SIM_UDID=$(xcrun simctl list devices available | \
+              grep -E "iPhone" | head -1 | \
+              grep -oE '[A-F0-9]{8}-([A-F0-9]{4}-){3}[A-F0-9]{12}')
           fi
-          echo "SIMULATOR_DEST=$DEST" >> $GITHUB_ENV
-          echo "Using destination: $DEST"
+          if [ -z "$SIM_UDID" ]; then
+            echo "No available simulator found. Available devices:"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "SIM_UDID=$SIM_UDID" >> $GITHUB_ENV
+          echo "Using simulator: $(xcrun simctl list devices available | grep $SIM_UDID)"
+          # Boot it so the first test run doesn't time out on simulator startup
+          xcrun simctl boot $SIM_UDID 2>/dev/null || true
 
       - name: Build (simulator)
         run: |
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
-            -destination "$SIMULATOR_DEST" \
+            -destination "id=$SIM_UDID" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             build > /tmp/build.log 2>&1
           BUILD_EXIT=$?
-          # Always show errors; show summary on success
           grep -E "^error:" /tmp/build.log || true
           if [ $BUILD_EXIT -eq 0 ]; then
             echo "Build succeeded."
@@ -65,13 +74,12 @@ jobs:
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
-            -destination "$SIMULATOR_DEST" \
+            -destination "id=$SIM_UDID" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             test > /tmp/test.log 2>&1
           TEST_EXIT=$?
-          # Always show test results; show full log on failure
           grep -E "^(Test Suite|Test Case|error:|Executed)" /tmp/test.log || true
           if [ $TEST_EXIT -ne 0 ]; then
             echo "Tests FAILED (exit $TEST_EXIT). Full log:"
