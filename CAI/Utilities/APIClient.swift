@@ -80,6 +80,44 @@ struct APIClient {
         try validateStatus(response, data: data)
     }
 
+    // MARK: - Multipart Upload
+
+    func uploadMultipart(
+        _ path: String,
+        data fileData: Data,
+        filename: String,
+        mimeType: String,
+        queryItems: [URLQueryItem] = []
+    ) async throws -> Data {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let token = try await tokenProvider()
+
+        var components = URLComponents(string: baseURL + path)
+        if !queryItems.isEmpty { components?.queryItems = queryItems }
+        guard let url = components?.url else { throw APIError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 60
+
+        var body = Data()
+        let append: (String) -> Void = { body.append($0.data(using: .utf8)!) }
+
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(fileData)
+        append("\r\n--\(boundary)--\r\n")
+
+        request.httpBody = body
+
+        let (responseData, response) = try await session.data(for: request)
+        try validateStatus(response, data: responseData)
+        return responseData
+    }
+
     // MARK: - Private
 
     private func buildRequest(

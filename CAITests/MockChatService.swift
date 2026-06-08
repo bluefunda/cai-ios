@@ -35,7 +35,7 @@ final class MockChatService: ChatServiceProtocol {
         let error = mockError
 
         return AsyncThrowingStream { continuation in
-            Task {
+            let innerTask = Task {
                 if let error = error {
                     continuation.finish(throwing: error)
                     return
@@ -43,8 +43,18 @@ final class MockChatService: ChatServiceProtocol {
                 for event in events {
                     continuation.yield(event)
                 }
+                // With no events the test wants to simulate an open stream that
+                // stays alive until stopStreaming / cancellation arrives.
+                if events.isEmpty {
+                    do {
+                        try await Task.sleep(nanoseconds: 30_000_000_000) // 30 s
+                    } catch {
+                        // Cancelled by stopStreaming or task cancellation — expected.
+                    }
+                }
                 continuation.finish()
             }
+            continuation.onTermination = { _ in innerTask.cancel() }
         }
     }
 

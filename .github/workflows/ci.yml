@@ -20,28 +20,48 @@ jobs:
 
       - name: Select Xcode
         run: |
-          # Use latest available Xcode on the runner
-          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer
+          # Prefer the latest stable Xcode 16.x; fall back to whatever is newest
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
 
-      - name: Build (simulator)
+      - name: Prepare simulator
         run: |
-          xcodebuild \
-            -project CAI.xcodeproj \
-            -scheme CAI \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -configuration Debug \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | grep -E '^(Build|error:|warning:|note:)' || true
+          # Find the UDID of any available iPhone 16 (or fall back to any iPhone)
+          SIM_UDID=$(xcrun simctl list devices available | \
+            grep -E "iPhone 16[^P]" | head -1 | \
+            grep -oE '[A-F0-9]{8}-([A-F0-9]{4}-){3}[A-F0-9]{12}')
+          if [ -z "$SIM_UDID" ]; then
+            SIM_UDID=$(xcrun simctl list devices available | \
+              grep -E "iPhone" | head -1 | \
+              grep -oE '[A-F0-9]{8}-([A-F0-9]{4}-){3}[A-F0-9]{12}')
+          fi
+          if [ -z "$SIM_UDID" ]; then
+            echo "No available simulator found. Available devices:"
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "SIM_UDID=$SIM_UDID" >> $GITHUB_ENV
+          echo "Using simulator: $(xcrun simctl list devices available | grep $SIM_UDID)"
+          xcrun simctl boot $SIM_UDID 2>/dev/null || true
 
-      - name: Test
+      - name: Build & Test
         run: |
+          # Pipe through tee so xcodebuild output is visible in the CI log in real-time.
+          # PIPESTATUS[0] gives xcodebuild's exit code (not tee's).
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination "id=$SIM_UDID" \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            test 2>&1 | grep -E '^(Test|error:|warning:|Executed)' || true
+            test 2>&1 | tee /tmp/xcode.log
+          XCODE_EXIT=${PIPESTATUS[0]}
+          # Print a compact summary at the end
+          echo "--- Test summary ---"
+          grep -E "^(Test Suite|Test Case|error:|Executed|FAILED|PASSED)" /tmp/xcode.log || true
+          exit $XCODE_EXIT

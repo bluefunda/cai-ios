@@ -1,9 +1,16 @@
 import SwiftUI
+import PhotosUI
 
 struct ChatView: View {
     @EnvironmentObject var chatManager: ChatManager
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
+
+    // Attachment state
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var attachmentData: Data?
+    @State private var attachmentFilename: String?
+    @State private var attachmentMIME: String?
 
     var body: some View {
         NavigationStack {
@@ -62,10 +69,16 @@ struct ChatView: View {
                 ChatInputView(
                     text: $inputText,
                     isStreaming: chatManager.isStreaming,
+                    attachmentFilename: attachmentFilename,
+                    selectedPhotoItem: $selectedPhotoItem,
                     onSend: sendMessage,
-                    onStop: stopStreaming
+                    onStop: stopStreaming,
+                    onClearAttachment: clearAttachment
                 )
                 .focused($isInputFocused)
+                .onChange(of: selectedPhotoItem) { _, item in
+                    Task { await loadAttachment(from: item) }
+                }
             }
             .navigationTitle(chatManager.currentConversation?.title ?? "New Chat")
             .navigationBarTitleDisplayMode(.inline)
@@ -93,19 +106,51 @@ struct ChatView: View {
     }
 
     private func sendMessage() {
-        guard !inputText.isEmpty else { return }
-        let message = inputText
+        guard !inputText.isEmpty || attachmentData != nil else { return }
+        let text = inputText
         inputText = ""
 
-        Task {
-            await chatManager.sendMessage(message)
+        if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
+            let capturedData = data
+            let capturedFilename = filename
+            let capturedMIME = mime
+            clearAttachment()
+            Task {
+                let prompt: String
+                if let url = try? await chatManager.uploadAttachment(
+                    data: capturedData, filename: capturedFilename, mimeType: capturedMIME
+                ) {
+                    prompt = text.isEmpty
+                        ? "I've attached a file: \(url)"
+                        : "\(text)\n\n[Attached: \(url)]"
+                } else {
+                    prompt = text.isEmpty ? "I've attached a file." : text
+                }
+                await chatManager.sendMessage(prompt)
+            }
+        } else {
+            Task { await chatManager.sendMessage(text) }
         }
     }
 
     private func stopStreaming() {
-        Task {
-            await chatManager.stopStreaming()
+        Task { await chatManager.stopStreaming() }
+    }
+
+    private func loadAttachment(from item: PhotosPickerItem?) async {
+        guard let item else { return }
+        if let data = try? await item.loadTransferable(type: Data.self) {
+            attachmentData = data
+            attachmentMIME = "image/jpeg"
+            attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
         }
+    }
+
+    private func clearAttachment() {
+        attachmentData = nil
+        attachmentFilename = nil
+        attachmentMIME = nil
+        selectedPhotoItem = nil
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
@@ -259,36 +304,67 @@ struct EmptyStateView: View {
 struct ChatInputView: View {
     @Binding var text: String
     let isStreaming: Bool
+    let attachmentFilename: String?
+    @Binding var selectedPhotoItem: PhotosPickerItem?
     let onSend: () -> Void
     let onStop: () -> Void
+    let onClearAttachment: () -> Void
+
+    private var canSend: Bool { !text.isEmpty || attachmentFilename != nil }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            // Text Field
-            TextField("Message...", text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .padding(12)
-                .background(Color(.systemGray6))
-                .cornerRadius(20)
-                .lineLimit(1...5)
-
-            // Send/Stop Button
-            Button {
-                if isStreaming {
-                    onStop()
-                } else {
-                    onSend()
+        VStack(spacing: 0) {
+            // Attachment preview strip
+            if let filename = attachmentFilename {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo")
+                        .foregroundStyle(.blue)
+                    Text(filename)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(action: onClearAttachment) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            } label: {
-                Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundColor(isStreaming ? .red : (text.isEmpty ? .gray : .blue))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
             }
-            .disabled(!isStreaming && text.isEmpty)
+
+            HStack(alignment: .bottom, spacing: 8) {
+                // Photo picker button
+                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                    Image(systemName: attachmentFilename != nil ? "photo.fill" : "photo")
+                        .font(.system(size: 22))
+                        .foregroundStyle(attachmentFilename != nil ? .blue : .secondary)
+                        .frame(width: 36, height: 36)
+                }
+
+                // Text Field
+                TextField("Message...", text: $text, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(20)
+                    .lineLimit(1...5)
+
+                // Send / Stop button
+                Button {
+                    isStreaming ? onStop() : onSend()
+                } label: {
+                    Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(isStreaming ? .red : (canSend ? .blue : .secondary))
+                }
+                .disabled(!isStreaming && !canSend)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(.systemBackground))
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color(.systemBackground))
     }
 }
 
@@ -331,4 +407,19 @@ struct ModelPicker: View {
 #Preview {
     ChatView()
         .environmentObject(ChatManager(service: BFFChatService()))
+}
+
+// Preview helper — keeps ChatInputView preview compiling with the updated signature
+#Preview("Input") {
+    @Previewable @State var text = ""
+    @Previewable @State var photo: PhotosPickerItem? = nil
+    ChatInputView(
+        text: $text,
+        isStreaming: false,
+        attachmentFilename: "photo_123.jpg",
+        selectedPhotoItem: $photo,
+        onSend: {},
+        onStop: {},
+        onClearAttachment: {}
+    )
 }

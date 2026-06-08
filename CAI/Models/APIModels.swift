@@ -373,6 +373,15 @@ struct StorageObjectDTO: Codable, Identifiable {
     }
 }
 
+struct FileUploadResultDTO: Codable {
+    let url: String?
+    let key: String?
+    let path: String?
+    let message: String?
+
+    var resolvedURL: String? { url ?? key ?? path }
+}
+
 struct StorageStatsDTO: Codable {
     let totalSize: Int64?
     let fileCount: Int?

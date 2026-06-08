@@ -163,19 +163,14 @@ final class ChatManagerTests: XCTestCase {
         XCTAssertEqual(chatManager.currentConversation?.id, first.id)
     }
 
-    func test_sendMessage_addsUserAndAssistantMessages() async {
+    func test_sendMessage_addsUserAndAssistantMessages() async throws {
         mockService.mockEvents = [
             .streamEnd(totalChunks: 1, fullContent: "Hello!", stopped: false)
         ]
 
         chatManager.newConversation()
         await chatManager.sendMessage("Hi there")
-
-        // Wait for streaming to complete
-        let deadline = Date().addingTimeInterval(2)
-        while chatManager.isStreaming && Date() < deadline {
-            await Task.yield()
-        }
+        try await waitForStreamingToFinish()
 
         XCTAssertEqual(chatManager.currentConversation?.messages.count, 2)
         XCTAssertEqual(chatManager.currentConversation?.messages[0].role, .user)
@@ -184,13 +179,15 @@ final class ChatManagerTests: XCTestCase {
         XCTAssertEqual(chatManager.currentConversation?.messages[1].content, "Hello!")
     }
 
-    func test_sendMessage_createsConversationIfNone() async {
+    func test_sendMessage_createsConversationIfNone() async throws {
         mockService.mockEvents = [
             .streamEnd(totalChunks: 1, fullContent: "Hi!", stopped: false)
         ]
 
         XCTAssertNil(chatManager.currentConversation)
         await chatManager.sendMessage("Hello")
+        try await waitForStreamingToFinish()
+
         XCTAssertNotNil(chatManager.currentConversation)
     }
 
@@ -204,28 +201,37 @@ final class ChatManagerTests: XCTestCase {
 
         chatManager.newConversation()
         await chatManager.sendMessage("Hi")
-
-        let deadline = Date().addingTimeInterval(2)
-        while chatManager.isStreaming && Date() < deadline {
-            await Task.yield()
-        }
+        try await waitForStreamingToFinish()
 
         XCTAssertEqual(chatManager.currentConversation?.messages.last?.content, "Hello")
     }
 
-    func test_stopStreaming_setsIsStreamingFalse() async {
-        mockService.mockEvents = [] // no events = stream stays open until stopped
+    func test_stopStreaming_setsIsStreamingFalse() async throws {
+        mockService.mockEvents = []
 
         chatManager.newConversation()
 
         let sendTask = Task { await self.chatManager.sendMessage("Hello") }
-        await Task.yield()
+        // Give the send task a moment to start before stopping
+        try await Task.sleep(nanoseconds: 50_000_000)
 
         await chatManager.stopStreaming()
         sendTask.cancel()
 
         XCTAssertFalse(chatManager.isStreaming)
         XCTAssertTrue(mockService.stopStreamingCalled)
+    }
+
+    // MARK: - Helper
+
+    /// Waits up to 5 s for streaming to finish, sleeping 50 ms between checks so
+    /// the main-actor scheduler has real suspension points (reliable on loaded CI).
+    private func waitForStreamingToFinish(timeout: TimeInterval = 5) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while chatManager.isStreaming && Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000) // 50 ms
+        }
+        XCTAssertFalse(chatManager.isStreaming, "Timed out waiting for streaming to finish")
     }
 }
 
