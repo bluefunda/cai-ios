@@ -27,7 +27,7 @@ final class ChatManager: ObservableObject {
     // MARK: - Private
 
     private let service: ChatServiceProtocol
-    private var apiService: BFFAPIService?
+    var apiService: BFFAPIService?
     private var streamingTask: Task<Void, Never>?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
     private var currentBFFToken: String = ""
@@ -343,6 +343,11 @@ final class ChatManager: ObservableObject {
 
             isStreaming = false
         }
+    }
+
+    func uploadAttachment(data: Data, filename: String, mimeType: String) async throws -> String? {
+        guard let api = apiService else { throw ChatServiceError.notConnected }
+        return try await api.uploadFile(data: data, filename: filename, mimeType: mimeType)
     }
 
     func stopStreaming() async {

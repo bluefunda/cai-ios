@@ -33,7 +33,10 @@ jobs:
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | grep -E '^(Build|error:|warning:|note:)' || true
+            build > /tmp/build.log 2>&1
+          BUILD_EXIT=$?
+          grep -E "^(error:|warning:|note:|Build succeeded|BUILD SUCCEEDED|BUILD FAILED)" /tmp/build.log || true
+          exit $BUILD_EXIT
 
       - name: Test
         run: |
@@ -44,4 +47,7 @@ jobs:
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            test 2>&1 | grep -E '^(Test|error:|warning:|Executed)' || true
+            test > /tmp/test.log 2>&1
+          TEST_EXIT=$?
+          grep -E "^(Test Suite|Test Case|error:|Executed|FAILED|PASSED)" /tmp/test.log || true
+          exit $TEST_EXIT

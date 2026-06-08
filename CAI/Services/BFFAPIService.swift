@@ -136,6 +136,23 @@ final class BFFAPIService {
         ])
     }
 
+    func uploadFile(
+        data: Data,
+        filename: String,
+        mimeType: String,
+        bucket: String = "abaper"
+    ) async throws -> String? {
+        let raw = try await client.uploadMultipart(
+            "/storage/upload",
+            data: data,
+            filename: filename,
+            mimeType: mimeType,
+            queryItems: [URLQueryItem(name: "bucket", value: bucket)]
+        )
+        let result = try JSONDecoder().decode(FileUploadResultDTO.self, from: raw)
+        return result.resolvedURL
+    }
+
     // MARK: - Stripe
 
     func fetchSubscription() async throws -> StripeSubscriptionDTO {
