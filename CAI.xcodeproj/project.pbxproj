@@ -26,6 +26,8 @@
 		B1000016201BCDEF /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006201BCDEF /* StorageView.swift */; };
 		C1000017201BCDEF /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDEF /* MarkdownView.swift */; };
 		D1000018201BCDEF /* StorageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000008201BCDEF /* StorageViewModel.swift */; };
+		E100001001BCDEF /* CAITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002001BCDEF /* CAITests.swift */; };
+		E100001101BCDEF /* MockChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002101BCDEF /* MockChatService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +52,9 @@
 		B1000006201BCDEF /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		C1000007201BCDEF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
 		D1000008201BCDEF /* StorageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageViewModel.swift; sourceTree = "<group>"; };
+		E100002001BCDEF /* CAITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAITests.swift; sourceTree = "<group>"; };
+		E100002101BCDEF /* MockChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockChatService.swift; sourceTree = "<group>"; };
+		E100002201BCDEF /* CAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,11 +67,30 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXContainerItemProxy section */
+		E100004001BCDEF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000080201BCDEF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000060201BCDEF;
+			remoteInfo = CAI;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		E100005001BCDEF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000060201BCDEF /* CAI */;
+			targetProxy = E100004001BCDEF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin PBXGroup section */
 		A1000040201BCDEF = {
 			isa = PBXGroup;
 			children = (
 				A1000041201BCDEF /* CAI */,
+				E100003001BCDEF /* CAITests */,
 				A1000050201BCDEF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -125,8 +149,18 @@
 			isa = PBXGroup;
 			children = (
 				A1000020201BCDEF /* CAI.app */,
+				E100002201BCDEF /* CAITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E100003001BCDEF /* CAITests */ = {
+			isa = PBXGroup;
+			children = (
+				E100002001BCDEF /* CAITests.swift */,
+				E100002101BCDEF /* MockChatService.swift */,
+			);
+			path = CAITests;
 			sourceTree = "<group>";
 		};
 		B1000020201BCDEF /* Models */ = {
@@ -166,6 +200,22 @@
 			productReference = A1000020201BCDEF /* CAI.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E100007001BCDEF /* CAITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E100009001BCDEF /* Build configuration list for PBXNativeTarget "CAITests" */;
+			buildPhases = (
+				E100006001BCDEF /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E100005001BCDEF /* PBXTargetDependency */,
+			);
+			name = CAITests;
+			productName = CAITests;
+			productReference = E100002201BCDEF /* CAITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -178,6 +228,10 @@
 				TargetAttributes = {
 					A1000060201BCDEF = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					E100007001BCDEF = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A1000060201BCDEF;
 					};
 				};
 			};
@@ -195,6 +249,7 @@
 			projectRoot = "";
 			targets = (
 				A1000060201BCDEF /* CAI */,
+				E100007001BCDEF /* CAITests */,
 			);
 		};
 /* End PBXProject section */
@@ -233,6 +288,15 @@
 				B1000016201BCDEF /* StorageView.swift in Sources */,
 				C1000017201BCDEF /* MarkdownView.swift in Sources */,
 				D1000018201BCDEF /* StorageViewModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E100006001BCDEF /* Sources (CAITests) */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E100001001BCDEF /* CAITests.swift in Sources */,
+				E100001101BCDEF /* MockChatService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -418,6 +482,42 @@
 			};
 			name = Release;
 		};
+		E100008001BCDEF /* Debug (CAITests) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bluefunda.ai.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CAI.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CAI";
+			};
+			name = Debug;
+		};
+		E100008101BCDEF /* Release (CAITests) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bluefunda.ai.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CAI.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CAI";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -435,6 +535,15 @@
 			buildConfigurations = (
 				A1000090201BCDEF /* Debug */,
 				A1000091201BCDEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E100009001BCDEF /* Build configuration list for PBXNativeTarget "CAITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E100008001BCDEF /* Debug */,
+				E100008101BCDEF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
