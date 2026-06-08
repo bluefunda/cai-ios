@@ -12,18 +12,24 @@ struct ChatView: View {
     @State private var attachmentFilename: String?
     @State private var attachmentMIME: String?
 
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Connection Status Banner
-                if chatManager.connectionStatus != .connected {
-                    ConnectionBanner(status: chatManager.connectionStatus)
-                }
+    // Scroll management
+    @State private var isAtBottom = true
+    @State private var showScrollButton = false
+    // Captured proxy for the scroll button tap
+    @State private var scrollProxy: ScrollViewProxy?
 
-                // Messages
+    var body: some View {
+        VStack(spacing: 0) {
+            // Connection banner
+            if chatManager.connectionStatus != .connected {
+                ConnectionBanner(status: chatManager.connectionStatus)
+            }
+
+            // Messages + scroll-down button overlay
+            ZStack(alignment: .bottomTrailing) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(spacing: 0) {
+                        LazyVStack(spacing: 0) {
                             if let conversation = chatManager.currentConversation,
                                !conversation.messages.isEmpty {
                                 ForEach(conversation.messages) { message in
@@ -31,79 +37,116 @@ struct ChatView: View {
                                         .id(message.id)
                                 }
 
-                                // Streaming indicator
                                 if chatManager.isStreaming {
                                     StreamingIndicator()
-                                        .id("streaming")
                                 }
+                            } else if chatManager.isLoadingChats {
+                                ProgressView()
+                                    .padding(.top, 40)
+                                    .frame(maxWidth: .infinity)
                             } else {
                                 EmptyStateView()
-                                    .frame(maxHeight: .infinity)
+                                    .frame(maxWidth: .infinity, minHeight: 300)
                             }
 
-                            // Anchor for scrolling
-                            Color.clear
-                                .frame(height: 1)
-                                .id("bottom")
+                            // Scroll anchor
+                            Color.clear.frame(height: 1).id("bottom")
                         }
                         .padding(.vertical)
-                        .frame(minHeight: 300)
                     }
                     .defaultScrollAnchor(.bottom)
                     .scrollDismissesKeyboard(.interactively)
+                    // Detect user scroll position
+                    .onScrollGeometryChange(for: Bool.self) { geo in
+                        let dist = geo.contentSize.height
+                            - geo.contentOffset.y
+                            - geo.containerSize.height
+                        return dist < 80
+                    } action: { _, nearBottom in
+                        isAtBottom = nearBottom
+                        if nearBottom { showScrollButton = false }
+                    }
+                    // Auto-scroll only when already at the bottom
                     .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
-                        scrollToBottom(proxy: proxy)
+                        if isAtBottom { scrollToBottom(proxy: proxy) }
                     }
                     .onChange(of: chatManager.currentConversation?.messages.last?.content.count) { _, _ in
-                        // Scroll as streaming content grows
-                        scrollToBottom(proxy: proxy)
+                        if isAtBottom { scrollToBottom(proxy: proxy) }
                     }
-                    .onChange(of: chatManager.isStreaming) { _, _ in
-                        scrollToBottom(proxy: proxy)
+                    // When streaming starts → scroll to bottom + show button when user scrolls away
+                    .onChange(of: chatManager.isStreaming) { _, streaming in
+                        if streaming {
+                            isAtBottom = true
+                            showScrollButton = false
+                            scrollToBottom(proxy: proxy)
+                        }
                     }
+                    // Show scroll button when not at bottom during streaming
+                    .onChange(of: isAtBottom) { _, atBottom in
+                        if !atBottom && chatManager.isStreaming {
+                            showScrollButton = true
+                        } else if atBottom {
+                            showScrollButton = false
+                        }
+                    }
+                    .onAppear { scrollProxy = proxy }
                 }
 
-                Divider()
-
-                // Input Area
-                ChatInputView(
-                    text: $inputText,
-                    isStreaming: chatManager.isStreaming,
-                    attachmentFilename: attachmentFilename,
-                    selectedPhotoItem: $selectedPhotoItem,
-                    onSend: sendMessage,
-                    onStop: stopStreaming,
-                    onClearAttachment: clearAttachment
-                )
-                .focused($isInputFocused)
-                .onChange(of: selectedPhotoItem) { _, item in
-                    Task { await loadAttachment(from: item) }
-                }
-            }
-            .navigationTitle(chatManager.currentConversation?.title ?? "New Chat")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                // Scroll-to-bottom button (shown when user has scrolled away)
+                if showScrollButton {
                     Button {
-                        chatManager.newConversation()
+                        isAtBottom = true
+                        showScrollButton = false
+                        if let proxy = scrollProxy {
+                            scrollToBottom(proxy: proxy)
+                        }
                     } label: {
-                        Image(systemName: "square.and.pencil")
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.white)
+                            .background(Color.blue, in: Circle())
+                            .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
                     }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    ModelPicker(selectedModel: $chatManager.selectedModel)
+                    .padding(.bottom, 12)
+                    .padding(.trailing, 16)
+                    .transition(.scale.combined(with: .opacity))
+                    .animation(.spring(duration: 0.2), value: showScrollButton)
                 }
             }
-            .alert("Error", isPresented: .constant(chatManager.error != nil)) {
-                Button("OK") {
-                    chatManager.error = nil
-                }
-            } message: {
-                Text(chatManager.error ?? "")
+
+            Divider()
+
+            // Input
+            ChatInputView(
+                text: $inputText,
+                isStreaming: chatManager.isStreaming,
+                attachmentFilename: attachmentFilename,
+                selectedPhotoItem: $selectedPhotoItem,
+                onSend: sendMessage,
+                onStop: stopStreaming,
+                onClearAttachment: clearAttachment
+            )
+            .onChange(of: selectedPhotoItem) { _, item in
+                Task { await loadAttachment(from: item) }
             }
         }
+        // Dismiss keyboard when AI starts responding
+        .onChange(of: chatManager.isStreaming) { _, streaming in
+            if streaming { dismissKeyboard() }
+        }
+        // Load messages when active conversation changes (fixes history)
+        .task(id: chatManager.currentConversation?.id) {
+            guard let id = chatManager.currentConversation?.id else { return }
+            await chatManager.loadMessages(for: id)
+        }
+        .alert("Error", isPresented: .constant(chatManager.error != nil)) {
+            Button("OK") { chatManager.error = nil }
+        } message: {
+            Text(chatManager.error ?? "")
+        }
     }
+
+    // MARK: - Actions
 
     private func sendMessage() {
         guard !inputText.isEmpty || attachmentData != nil else { return }
@@ -111,21 +154,12 @@ struct ChatView: View {
         inputText = ""
 
         if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
-            let capturedData = data
-            let capturedFilename = filename
-            let capturedMIME = mime
+            let d = data; let f = filename; let m = mime
             clearAttachment()
             Task {
-                let prompt: String
-                if let url = try? await chatManager.uploadAttachment(
-                    data: capturedData, filename: capturedFilename, mimeType: capturedMIME
-                ) {
-                    prompt = text.isEmpty
-                        ? "I've attached a file: \(url)"
-                        : "\(text)\n\n[Attached: \(url)]"
-                } else {
-                    prompt = text.isEmpty ? "I've attached a file." : text
-                }
+                let url = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
+                let prompt = url.map { text.isEmpty ? "I've attached a file: \($0)" : "\(text)\n\n[Attached: \($0)]" }
+                    ?? (text.isEmpty ? "I've attached a file." : text)
                 await chatManager.sendMessage(prompt)
             }
         } else {
@@ -138,25 +172,28 @@ struct ChatView: View {
     }
 
     private func loadAttachment(from item: PhotosPickerItem?) async {
-        guard let item else { return }
-        if let data = try? await item.loadTransferable(type: Data.self) {
-            attachmentData = data
-            attachmentMIME = "image/jpeg"
-            attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
-        }
+        guard let item, let data = try? await item.loadTransferable(type: Data.self) else { return }
+        attachmentData = data
+        attachmentMIME = "image/jpeg"
+        attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
     }
 
     private func clearAttachment() {
-        attachmentData = nil
-        attachmentFilename = nil
-        attachmentMIME = nil
-        selectedPhotoItem = nil
+        attachmentData = nil; attachmentFilename = nil
+        attachmentMIME = nil; selectedPhotoItem = nil
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.2)) {
             proxy.scrollTo("bottom", anchor: .bottom)
         }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
     }
 }
 
@@ -168,35 +205,28 @@ struct ConnectionBanner: View {
     var body: some View {
         HStack {
             Image(systemName: statusIcon)
-            Text(status.description)
-                .font(.caption)
+            Text(status.description).font(.caption)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
         .background(statusColor.opacity(0.2))
-        .foregroundColor(statusColor)
+        .foregroundStyle(statusColor)
     }
 
     private var statusIcon: String {
         switch status {
-        case .connecting, .reconnecting:
-            return "arrow.triangle.2.circlepath"
-        case .error:
-            return "exclamationmark.triangle"
-        default:
-            return "wifi.slash"
+        case .connecting, .reconnecting: return "arrow.triangle.2.circlepath"
+        case .error: return "exclamationmark.triangle"
+        default: return "wifi.slash"
         }
     }
 
     private var statusColor: Color {
         switch status {
-        case .connecting, .reconnecting:
-            return .orange
-        case .error:
-            return .red
-        default:
-            return .gray
+        case .connecting, .reconnecting: return .orange
+        case .error: return .red
+        default: return .gray
         }
     }
 }
@@ -208,33 +238,27 @@ struct MessageView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Avatar
             Circle()
                 .fill(message.role == .user ? Color.blue : Color.green)
                 .frame(width: 32, height: 32)
                 .overlay {
                     Image(systemName: message.role == .user ? "person.fill" : "brain.head.profile")
                         .font(.system(size: 14))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 }
 
-            // Content
             VStack(alignment: .leading, spacing: 4) {
                 Text(message.role.displayName)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
+                    .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
 
                 if message.role == .user {
-                    Text(message.content)
-                        .textSelection(.enabled)
+                    Text(message.content).textSelection(.enabled)
                 } else {
                     MarkdownView(content: message.content)
                 }
 
                 Text(message.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(.caption2).foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -252,46 +276,36 @@ struct StreamingIndicator: View {
     let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack {
+        HStack(alignment: .top, spacing: 12) {
             Circle()
                 .fill(Color.green)
                 .frame(width: 32, height: 32)
                 .overlay {
                     Image(systemName: "brain.head.profile")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white)
+                        .font(.system(size: 14)).foregroundStyle(.white)
                 }
-
             Text("Thinking" + String(repeating: ".", count: dotCount + 1))
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-
+                .foregroundStyle(.secondary).font(.subheadline)
             Spacer()
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .onReceive(timer) { _ in
-            dotCount = (dotCount + 1) % 3
-        }
+        .onReceive(timer) { _ in dotCount = (dotCount + 1) % 3 }
     }
 }
 
-// MARK: - Empty State View
+// MARK: - Empty State
 
 struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 60))
-                .foregroundColor(.secondary.opacity(0.5))
-
+                .foregroundStyle(.secondary.opacity(0.5))
             Text("Start a Conversation")
-                .font(.title2)
-                .fontWeight(.semibold)
-
+                .font(.title2).fontWeight(.semibold)
             Text("Ask anything about SAP, ABAP, or use MCP tools")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -317,16 +331,11 @@ struct ChatInputView: View {
             // Attachment preview strip
             if let filename = attachmentFilename {
                 HStack(spacing: 8) {
-                    Image(systemName: "photo")
-                        .foregroundStyle(.blue)
-                    Text(filename)
-                        .font(.caption)
-                        .lineLimit(1)
-                        .foregroundStyle(.secondary)
+                    Image(systemName: "photo").foregroundStyle(.blue)
+                    Text(filename).font(.caption).lineLimit(1).foregroundStyle(.secondary)
                     Spacer()
                     Button(action: onClearAttachment) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -335,7 +344,6 @@ struct ChatInputView: View {
             }
 
             HStack(alignment: .bottom, spacing: 8) {
-                // Photo picker button
                 PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                     Image(systemName: attachmentFilename != nil ? "photo.fill" : "photo")
                         .font(.system(size: 22))
@@ -343,7 +351,6 @@ struct ChatInputView: View {
                         .frame(width: 36, height: 36)
                 }
 
-                // Text Field
                 TextField("Message...", text: $text, axis: .vertical)
                     .textFieldStyle(.plain)
                     .padding(12)
@@ -351,7 +358,6 @@ struct ChatInputView: View {
                     .cornerRadius(20)
                     .lineLimit(1...5)
 
-                // Send / Stop button
                 Button {
                     isStreaming ? onStop() : onSend()
                 } label: {
@@ -382,19 +388,15 @@ struct ModelPicker: View {
                 } label: {
                     HStack {
                         Text(model.name)
-                        if model.id == selectedModel.id {
-                            Image(systemName: "checkmark")
-                        }
+                        if model.id == selectedModel.id { Image(systemName: "checkmark") }
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
                 Text(selectedModel.provider.uppercased())
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
+                    .font(.caption).fontWeight(.medium)
+                Image(systemName: "chevron.down").font(.caption2)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -407,19 +409,4 @@ struct ModelPicker: View {
 #Preview {
     ChatView()
         .environmentObject(ChatManager(service: BFFChatService()))
-}
-
-// Preview helper — keeps ChatInputView preview compiling with the updated signature
-#Preview("Input") {
-    @Previewable @State var text = ""
-    @Previewable @State var photo: PhotosPickerItem? = nil
-    ChatInputView(
-        text: $text,
-        isStreaming: false,
-        attachmentFilename: "photo_123.jpg",
-        selectedPhotoItem: $photo,
-        onSend: {},
-        onStop: {},
-        onClearAttachment: {}
-    )
 }
