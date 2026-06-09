@@ -415,15 +415,24 @@ struct ChatInputView: View {
 struct ModeModelPicker: View {
     @EnvironmentObject var chatManager: ChatManager
 
+    // Exactly one of {a thinking mode, an explicit LLM} is active, mirroring
+    // the cai web UnifiedModeSelector.
+    private func modeIsActive(_ mode: ThinkingMode) -> Bool {
+        !chatManager.userPickedModel && chatManager.thinkingMode == mode
+    }
+    private func modelIsActive(_ model: LLMModel) -> Bool {
+        chatManager.userPickedModel && chatManager.selectedModel.id == model.id
+    }
+
     var body: some View {
         Menu {
             // Thinking modes
             Section {
                 ForEach(ThinkingMode.allCases) { mode in
                     Button {
-                        chatManager.thinkingMode = mode
+                        chatManager.selectThinkingMode(mode)
                     } label: {
-                        if chatManager.thinkingMode == mode {
+                        if modeIsActive(mode) {
                             Label(mode.label, systemImage: "checkmark")
                         } else {
                             Label(mode.label, systemImage: mode.icon)
@@ -436,9 +445,9 @@ struct ModeModelPicker: View {
             Section("LLM") {
                 ForEach(chatManager.availableModels) { model in
                     Button {
-                        chatManager.selectedModel = model
+                        chatManager.selectModel(model)
                     } label: {
-                        if chatManager.selectedModel.id == model.id {
+                        if modelIsActive(model) {
                             Label(model.name, systemImage: "checkmark")
                         } else {
                             Text(model.name)
@@ -448,9 +457,13 @@ struct ModeModelPicker: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: chatManager.thinkingMode.icon).font(.caption2)
-                Text(chatManager.thinkingMode.label)
+                Image(systemName: chatManager.userPickedModel ? "cpu" : chatManager.thinkingMode.icon)
+                    .font(.caption2)
+                Text(chatManager.userPickedModel
+                     ? chatManager.selectedModel.name
+                     : chatManager.thinkingMode.label)
                     .font(.caption).fontWeight(.medium)
+                    .lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption2)
             }
             .padding(.horizontal, 8)

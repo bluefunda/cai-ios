@@ -26,6 +26,25 @@ final class ChatManager: ObservableObject {
         didSet { UserDefaults.standard.set(thinkingMode.rawValue, forKey: "cai_thinking_mode") }
     }
 
+    /// True when the user explicitly picked an LLM (vs. letting the thinking
+    /// mode drive model selection). Mirrors the web app's `modelExplicit`.
+    /// Not persisted — resets to false each launch so a mode is active by default.
+    @Published var userPickedModel: Bool = false
+
+    /// Select a thinking mode — clears the explicit-model flag so the mode
+    /// drives model selection on the backend.
+    func selectThinkingMode(_ mode: ThinkingMode) {
+        thinkingMode = mode
+        userPickedModel = false
+    }
+
+    /// Select a specific LLM — marks the model as explicit so the backend
+    /// uses it and ignores the thinking mode.
+    func selectModel(_ model: LLMModel) {
+        selectedModel = model
+        userPickedModel = true
+    }
+
     @Published var availableModels: [LLMModel] = LLMModel.defaultModels
     @Published var availableMCPServers: [MCPServer] = []
     @Published var subscribedMCPServerIds: Set<String> = []
@@ -290,7 +309,8 @@ final class ChatManager: ObservableObject {
             isNewChat: isFirstMessage,
             mcpServerName: selectedMCPServer?.name,
             mcpServerURL: selectedMCPServer?.url,
-            thinkingMode: thinkingMode.rawValue
+            thinkingMode: thinkingMode.rawValue,
+            modelExplicit: userPickedModel
         )
 
         isStreaming = true

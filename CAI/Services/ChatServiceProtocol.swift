@@ -88,6 +88,9 @@ struct ChatRequest {
     let messages: [ChatMessage]?
     /// Reasoning effort: "auto", "quick", or "deep".
     let thinkingMode: String
+    /// True when the user explicitly picked a model; the backend then uses
+    /// `model` and ignores `thinkingMode`.
+    let modelExplicit: Bool
 
     init(
         chatId: String,
@@ -97,7 +100,8 @@ struct ChatRequest {
         mcpServerName: String? = nil,
         mcpServerURL: String? = nil,
         messages: [ChatMessage]? = nil,
-        thinkingMode: String = "auto"
+        thinkingMode: String = "auto",
+        modelExplicit: Bool = false
     ) {
         self.chatId = chatId
         self.prompt = prompt
@@ -107,6 +111,7 @@ struct ChatRequest {
         self.mcpServerURL = mcpServerURL
         self.messages = messages
         self.thinkingMode = thinkingMode
+        self.modelExplicit = modelExplicit
     }
 
     /// Convert to JSON payload for NATS/BFF
@@ -116,7 +121,8 @@ struct ChatRequest {
             "model": model,
             "prompt": prompt,
             "isNewChat": isNewChat,
-            "thinkingMode": thinkingMode
+            "thinkingMode": thinkingMode,
+            "modelExplicit": modelExplicit
         ]
 
         if let mcpName = mcpServerName {
