@@ -27,56 +27,72 @@ struct ChatView: View {
 
             // Messages + scroll-down button overlay
             ZStack(alignment: .bottomTrailing) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            if let conversation = chatManager.currentConversation,
-                               !conversation.messages.isEmpty {
-                                ForEach(conversation.messages) { message in
-                                    MessageView(message: message)
-                                        .id(message.id)
+                GeometryReader { outer in
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                if let conversation = chatManager.currentConversation,
+                                   !conversation.messages.isEmpty {
+                                    ForEach(conversation.messages) { message in
+                                        MessageView(message: message)
+                                            .id(message.id)
+                                    }
+
+                                    if chatManager.isStreaming {
+                                        StreamingIndicator()
+                                    }
+                                } else if chatManager.isLoadingChats {
+                                    ProgressView()
+                                        .padding(.top, 40)
+                                        .frame(maxWidth: .infinity)
+                                } else {
+                                    EmptyStateView()
+                                        .frame(maxWidth: .infinity, minHeight: 300)
                                 }
 
-                                if chatManager.isStreaming {
-                                    StreamingIndicator()
-                                }
-                            } else if chatManager.isLoadingChats {
-                                ProgressView()
-                                    .padding(.top, 40)
-                                    .frame(maxWidth: .infinity)
-                            } else {
-                                EmptyStateView()
-                                    .frame(maxWidth: .infinity, minHeight: 300)
+                                // Scroll anchor + bottom-visibility probe (works iOS 17+)
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id("bottom")
+                                    .background(
+                                        GeometryReader { marker in
+                                            Color.clear.preference(
+                                                key: AtBottomPreferenceKey.self,
+                                                value: marker.frame(in: .named("chatScroll")).minY
+                                                    <= outer.size.height + 60
+                                            )
+                                        }
+                                    )
                             }
-
-                            // Scroll anchor
-                            Color.clear.frame(height: 1).id("bottom")
+                            .padding(.vertical)
                         }
-                        .padding(.vertical)
-                    }
-                    .defaultScrollAnchor(.bottom)
-                    .scrollDismissesKeyboard(.interactively)
-                    // Detect user scroll position (iOS 18+); iOS 17 always auto-scrolls
-                    .trackScrollPosition(isAtBottom: $isAtBottom, showScrollButton: $showScrollButton, isStreaming: chatManager.isStreaming)
-                    // Auto-scroll only when already at the bottom
-                    .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
-                        if isAtBottom { scrollToBottom(proxy: proxy) }
-                    }
-                    .onChange(of: chatManager.currentConversation?.messages.last?.content.count) { _, _ in
-                        if isAtBottom { scrollToBottom(proxy: proxy) }
-                    }
-                    // When streaming starts → scroll to bottom + show button when user scrolls away
-                    .onChange(of: chatManager.isStreaming) { _, streaming in
-                        if streaming {
-                            isAtBottom = true
-                            showScrollButton = false
-                            scrollToBottom(proxy: proxy)
+                        .coordinateSpace(name: "chatScroll")
+                        .defaultScrollAnchor(.bottom)
+                        .scrollDismissesKeyboard(.interactively)
+                        .onPreferenceChange(AtBottomPreferenceKey.self) { atBottom in
+                            isAtBottom = atBottom
+                            showScrollButton = !atBottom
                         }
+                        // Auto-scroll only when already at the bottom
+                        .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
+                            if isAtBottom { scrollToBottom(proxy: proxy) }
+                        }
+                        .onChange(of: chatManager.currentConversation?.messages.last?.content.count) { _, _ in
+                            if isAtBottom { scrollToBottom(proxy: proxy) }
+                        }
+                        // When streaming starts → jump to bottom and follow
+                        .onChange(of: chatManager.isStreaming) { _, streaming in
+                            if streaming {
+                                isAtBottom = true
+                                showScrollButton = false
+                                scrollToBottom(proxy: proxy)
+                            }
+                        }
+                        .onAppear { scrollProxy = proxy }
                     }
-                    .onAppear { scrollProxy = proxy }
                 }
 
-                // Scroll-to-bottom button (shown when user has scrolled away)
+                // Scroll-to-bottom button (shown when scrolled up / response overflows)
                 if showScrollButton {
                     Button {
                         isAtBottom = true
@@ -106,6 +122,7 @@ struct ChatView: View {
                 isStreaming: chatManager.isStreaming,
                 attachmentFilename: attachmentFilename,
                 selectedPhotoItem: $selectedPhotoItem,
+                isFocused: $isInputFocused,
                 onSend: sendMessage,
                 onStop: stopStreaming,
                 onClearAttachment: clearAttachment
@@ -116,7 +133,10 @@ struct ChatView: View {
         }
         // Dismiss keyboard when AI starts responding
         .onChange(of: chatManager.isStreaming) { _, streaming in
-            if streaming { dismissKeyboard() }
+            if streaming {
+                isInputFocused = false
+                dismissKeyboard()
+            }
         }
         // Load messages when active conversation changes (fixes history)
         .task(id: chatManager.currentConversation?.id) {
@@ -332,6 +352,7 @@ struct ChatInputView: View {
     let isStreaming: Bool
     let attachmentFilename: String?
     @Binding var selectedPhotoItem: PhotosPickerItem?
+    var isFocused: FocusState<Bool>.Binding
     let onSend: () -> Void
     let onStop: () -> Void
     let onClearAttachment: () -> Void
@@ -365,6 +386,7 @@ struct ChatInputView: View {
 
                 TextField("Message...", text: $text, axis: .vertical)
                     .textFieldStyle(.plain)
+                    .focused(isFocused)
                     .padding(12)
                     .background(Color(.systemGray6))
                     .cornerRadius(20)
@@ -418,34 +440,13 @@ struct ModelPicker: View {
     }
 }
 
-// MARK: - Scroll Position Tracker (iOS 18+ only)
+// MARK: - Scroll Position Tracking (cross-version, iOS 17+)
 
-extension View {
-    /// Tracks scroll distance from the bottom using onScrollGeometryChange (iOS 18+).
-    /// On iOS 17 the view is returned unchanged — auto-scroll always fires.
-    @ViewBuilder
-    func trackScrollPosition(
-        isAtBottom: Binding<Bool>,
-        showScrollButton: Binding<Bool>,
-        isStreaming: Bool
-    ) -> some View {
-        if #available(iOS 18.0, *) {
-            self.onScrollGeometryChange(for: Bool.self) { geo in
-                let dist = geo.contentSize.height
-                    - geo.contentOffset.y
-                    - geo.containerSize.height
-                return dist < 80
-            } action: { _, nearBottom in
-                isAtBottom.wrappedValue = nearBottom
-                if nearBottom {
-                    showScrollButton.wrappedValue = false
-                } else if isStreaming {
-                    showScrollButton.wrappedValue = true
-                }
-            }
-        } else {
-            self
-        }
+/// True when the bottom anchor is at/near the visible bottom of the scroll view.
+private struct AtBottomPreferenceKey: PreferenceKey {
+    static var defaultValue: Bool = true
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = nextValue()
     }
 }
 

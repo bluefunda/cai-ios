@@ -76,6 +76,15 @@ struct AppShell: View {
             .zIndex(2)
         }
         .animation(.default, value: sidebarOpen)
+        // Dismiss the keyboard whenever the chat-history sidebar opens
+        .onChange(of: sidebarOpen) { _, open in
+            if open {
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil, from: nil, for: nil
+                )
+            }
+        }
         .sheet(item: $activeSheet) { sheet in
             sheetView(sheet)
         }
