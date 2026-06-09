@@ -39,7 +39,7 @@ struct SettingsView: View {
                         MCPServerSelectionView()
                     } label: {
                         HStack {
-                            Label("MCP Server", systemImage: "server.rack")
+                            Label("Assistant", systemImage: "sparkles")
                             Spacer()
                             Text(chatManager.selectedMCPServer?.name ?? "None")
                                 .foregroundColor(.secondary)
@@ -264,7 +264,7 @@ struct MCPServerSelectionView: View {
     @EnvironmentObject var chatManager: ChatManager
     @Environment(\.dismiss) private var dismiss
 
-    private let noneServer = MCPServer(id: "none", name: "None", url: "", description: "No MCP agent")
+    private let noneServer = MCPServer(id: "none", name: "None", url: "", description: "No assistant")
 
     private var displayServers: [MCPServer] {
         [noneServer] + chatManager.availableMCPServers
@@ -307,14 +307,14 @@ struct MCPServerSelectionView: View {
                 }
             }
         }
-        .navigationTitle("MCP Server")
+        .navigationTitle("Assistants")
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if chatManager.availableMCPServers.isEmpty {
                 ContentUnavailableView(
-                    "No MCP Servers",
-                    systemImage: "server.rack",
-                    description: Text("No MCP servers are configured for your account.")
+                    "No Assistants",
+                    systemImage: "sparkles",
+                    description: Text("No assistants are configured for your account.")
                 )
             }
         }
