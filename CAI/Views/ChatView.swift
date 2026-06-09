@@ -408,27 +408,48 @@ struct ChatInputView: View {
     }
 }
 
-// MARK: - Model Picker
+// MARK: - Mode + Model Picker
 
-struct ModelPicker: View {
-    @Binding var selectedModel: LLMModel
+/// Single dropdown combining the thinking mode (Auto / Quick Response /
+/// Think Deeper) and the LLM, mirroring the cai web app.
+struct ModeModelPicker: View {
     @EnvironmentObject var chatManager: ChatManager
 
     var body: some View {
         Menu {
-            ForEach(chatManager.availableModels) { model in
-                Button {
-                    selectedModel = model
-                } label: {
-                    HStack {
-                        Text(model.name)
-                        if model.id == selectedModel.id { Image(systemName: "checkmark") }
+            // Thinking modes
+            Section {
+                ForEach(ThinkingMode.allCases) { mode in
+                    Button {
+                        chatManager.thinkingMode = mode
+                    } label: {
+                        if chatManager.thinkingMode == mode {
+                            Label(mode.label, systemImage: "checkmark")
+                        } else {
+                            Label(mode.label, systemImage: mode.icon)
+                        }
+                    }
+                }
+            }
+
+            // LLMs
+            Section("LLM") {
+                ForEach(chatManager.availableModels) { model in
+                    Button {
+                        chatManager.selectedModel = model
+                    } label: {
+                        if chatManager.selectedModel.id == model.id {
+                            Label(model.name, systemImage: "checkmark")
+                        } else {
+                            Text(model.name)
+                        }
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                Text(selectedModel.provider.uppercased())
+                Image(systemName: chatManager.thinkingMode.icon).font(.caption2)
+                Text(chatManager.thinkingMode.label)
                     .font(.caption).fontWeight(.medium)
                 Image(systemName: "chevron.down").font(.caption2)
             }
