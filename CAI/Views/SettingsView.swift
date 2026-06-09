@@ -5,6 +5,10 @@ struct SettingsView: View {
     @EnvironmentObject var chatManager: ChatManager
     @State private var showLogoutConfirmation = false
 
+    // Internal infra details (Connection, Build) are only shown to the
+    // internal/employee realm; end users on `individual` don't see them.
+    private var isTrmRealm: Bool { authManager.realm == "trm" }
+
     var body: some View {
         NavigationStack {
             List {
@@ -35,7 +39,7 @@ struct SettingsView: View {
                         MCPServerSelectionView()
                     } label: {
                         HStack {
-                            Label("MCP Server", systemImage: "server.rack")
+                            Label("Assistant", systemImage: "sparkles")
                             Spacer()
                             Text(chatManager.selectedMCPServer?.name ?? "None")
                                 .foregroundColor(.secondary)
@@ -64,25 +68,27 @@ struct SettingsView: View {
                     Text("Subscription")
                 }
 
-                // Connection Status
-                Section {
-                    HStack {
-                        Label("Status", systemImage: statusIcon)
-                        Spacer()
-                        Text(chatManager.connectionStatus.description)
-                            .foregroundColor(statusColor)
-                    }
+                // Connection Status — internal infra detail, trm realm only
+                if isTrmRealm {
+                    Section {
+                        HStack {
+                            Label("Status", systemImage: statusIcon)
+                            Spacer()
+                            Text(chatManager.connectionStatus.description)
+                                .foregroundColor(statusColor)
+                        }
 
-                    HStack {
-                        Label("Service", systemImage: "network")
-                        Spacer()
-                        Text("BFF (api.bluefunda.com/ai)")
-                            .foregroundColor(.secondary)
+                        HStack {
+                            Label("Service", systemImage: "network")
+                            Spacer()
+                            Text("BFF (api.bluefunda.com/ai)")
+                                .foregroundColor(.secondary)
+                        }
+                    } header: {
+                        Text("Connection")
+                    } footer: {
+                        Text("Using cai-gw/cai-bff HTTP SSE endpoints.")
                     }
-                } header: {
-                    Text("Connection")
-                } footer: {
-                    Text("Using cai-gw/cai-bff HTTP SSE endpoints.")
                 }
 
                 // App Info
@@ -94,11 +100,14 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    HStack {
-                        Label("Build", systemImage: "hammer")
-                        Spacer()
-                        Text("MVP")
-                            .foregroundColor(.secondary)
+                    // Build detail — trm realm only
+                    if isTrmRealm {
+                        HStack {
+                            Label("Build", systemImage: "hammer")
+                            Spacer()
+                            Text("MVP")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 } header: {
                     Text("About")
@@ -255,7 +264,7 @@ struct MCPServerSelectionView: View {
     @EnvironmentObject var chatManager: ChatManager
     @Environment(\.dismiss) private var dismiss
 
-    private let noneServer = MCPServer(id: "none", name: "None", url: "", description: "No MCP agent")
+    private let noneServer = MCPServer(id: "none", name: "None", url: "", description: "No assistant")
 
     private var displayServers: [MCPServer] {
         [noneServer] + chatManager.availableMCPServers
@@ -298,14 +307,14 @@ struct MCPServerSelectionView: View {
                 }
             }
         }
-        .navigationTitle("MCP Server")
+        .navigationTitle("Assistants")
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if chatManager.availableMCPServers.isEmpty {
                 ContentUnavailableView(
-                    "No MCP Servers",
-                    systemImage: "server.rack",
-                    description: Text("No MCP servers are configured for your account.")
+                    "No Assistants",
+                    systemImage: "sparkles",
+                    description: Text("No assistants are configured for your account.")
                 )
             }
         }
