@@ -59,7 +59,8 @@ final class BFFChatService: ChatServiceProtocol {
                 var payload: [String: Any] = [
                     "type": "Human",
                     "model": request.model,
-                    "prompt": request.prompt
+                    "prompt": request.prompt,
+                    "thinkingMode": request.thinkingMode
                 ]
                 if let mcpName = request.mcpServerName { payload["mcp_server_name"] = mcpName }
                 if let mcpURL  = request.mcpServerURL  { payload["mcp_server_url"]  = mcpURL  }

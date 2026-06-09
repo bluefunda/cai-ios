@@ -132,8 +132,8 @@ struct AppTopBar: View {
 
             Spacer()
 
-            // Model picker — user avatar moved to the sidebar (ChatGPT/Claude style)
-            ModelPicker(selectedModel: $chatManager.selectedModel)
+            // Mode + model picker — user avatar moved to the sidebar (ChatGPT/Claude style)
+            ModeModelPicker()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

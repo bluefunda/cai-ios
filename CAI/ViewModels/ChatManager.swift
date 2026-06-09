@@ -17,6 +17,15 @@ final class ChatManager: ObservableObject {
 
     @Published var selectedModel: LLMModel = LLMModel.defaultModel
     @Published var selectedMCPServer: MCPServer?
+
+    /// Reasoning effort sent with each message. Persisted across launches.
+    @Published var thinkingMode: ThinkingMode = {
+        let raw = UserDefaults.standard.string(forKey: "cai_thinking_mode") ?? "auto"
+        return ThinkingMode(rawValue: raw) ?? .auto
+    }() {
+        didSet { UserDefaults.standard.set(thinkingMode.rawValue, forKey: "cai_thinking_mode") }
+    }
+
     @Published var availableModels: [LLMModel] = LLMModel.defaultModels
     @Published var availableMCPServers: [MCPServer] = []
     @Published var subscribedMCPServerIds: Set<String> = []
@@ -280,7 +289,8 @@ final class ChatManager: ObservableObject {
             model: selectedModel.id,
             isNewChat: isFirstMessage,
             mcpServerName: selectedMCPServer?.name,
-            mcpServerURL: selectedMCPServer?.url
+            mcpServerURL: selectedMCPServer?.url,
+            thinkingMode: thinkingMode.rawValue
         )
 
         isStreaming = true
@@ -418,6 +428,39 @@ struct Conversation: Identifiable, Equatable {
     let createdAt: Date
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
+}
+
+// Reasoning effort, mirrors the cai web app's thinking-mode selector.
+enum ThinkingMode: String, CaseIterable, Identifiable {
+    case auto
+    case quick
+    case deep
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .auto:  return "Auto"
+        case .quick: return "Quick Response"
+        case .deep:  return "Think Deeper"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .auto:  return "Balanced speed and quality"
+        case .quick: return "Answers right away"
+        case .deep:  return "Thinks longer for better answers"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .auto:  return "wand.and.stars"
+        case .quick: return "bolt"
+        case .deep:  return "brain"
+        }
+    }
 }
 
 struct LLMModel: Identifiable, Hashable {

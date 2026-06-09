@@ -86,6 +86,8 @@ struct ChatRequest {
     let mcpServerName: String?
     let mcpServerURL: String?
     let messages: [ChatMessage]?
+    /// Reasoning effort: "auto", "quick", or "deep".
+    let thinkingMode: String
 
     init(
         chatId: String,
@@ -94,7 +96,8 @@ struct ChatRequest {
         isNewChat: Bool = true,
         mcpServerName: String? = nil,
         mcpServerURL: String? = nil,
-        messages: [ChatMessage]? = nil
+        messages: [ChatMessage]? = nil,
+        thinkingMode: String = "auto"
     ) {
         self.chatId = chatId
         self.prompt = prompt
@@ -103,6 +106,7 @@ struct ChatRequest {
         self.mcpServerName = mcpServerName
         self.mcpServerURL = mcpServerURL
         self.messages = messages
+        self.thinkingMode = thinkingMode
     }
 
     /// Convert to JSON payload for NATS/BFF
@@ -111,7 +115,8 @@ struct ChatRequest {
             "type": "Human",
             "model": model,
             "prompt": prompt,
-            "isNewChat": isNewChat
+            "isNewChat": isNewChat,
+            "thinkingMode": thinkingMode
         ]
 
         if let mcpName = mcpServerName {
