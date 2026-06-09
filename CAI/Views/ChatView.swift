@@ -56,16 +56,8 @@ struct ChatView: View {
                     }
                     .defaultScrollAnchor(.bottom)
                     .scrollDismissesKeyboard(.interactively)
-                    // Detect user scroll position
-                    .onScrollGeometryChange(for: Bool.self) { geo in
-                        let dist = geo.contentSize.height
-                            - geo.contentOffset.y
-                            - geo.containerSize.height
-                        return dist < 80
-                    } action: { _, nearBottom in
-                        isAtBottom = nearBottom
-                        if nearBottom { showScrollButton = false }
-                    }
+                    // Detect user scroll position (iOS 18+); iOS 17 always auto-scrolls
+                    .trackScrollPosition(isAtBottom: $isAtBottom, showScrollButton: $showScrollButton, isStreaming: chatManager.isStreaming)
                     // Auto-scroll only when already at the bottom
                     .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
                         if isAtBottom { scrollToBottom(proxy: proxy) }
@@ -79,14 +71,6 @@ struct ChatView: View {
                             isAtBottom = true
                             showScrollButton = false
                             scrollToBottom(proxy: proxy)
-                        }
-                    }
-                    // Show scroll button when not at bottom during streaming
-                    .onChange(of: isAtBottom) { _, atBottom in
-                        if !atBottom && chatManager.isStreaming {
-                            showScrollButton = true
-                        } else if atBottom {
-                            showScrollButton = false
                         }
                     }
                     .onAppear { scrollProxy = proxy }
@@ -402,6 +386,37 @@ struct ModelPicker: View {
             .padding(.vertical, 4)
             .background(Color.blue.opacity(0.1))
             .cornerRadius(8)
+        }
+    }
+}
+
+// MARK: - Scroll Position Tracker (iOS 18+ only)
+
+extension View {
+    /// Tracks scroll distance from the bottom using onScrollGeometryChange (iOS 18+).
+    /// On iOS 17 the view is returned unchanged — auto-scroll always fires.
+    @ViewBuilder
+    func trackScrollPosition(
+        isAtBottom: Binding<Bool>,
+        showScrollButton: Binding<Bool>,
+        isStreaming: Bool
+    ) -> some View {
+        if #available(iOS 18.0, *) {
+            self.onScrollGeometryChange(for: Bool.self) { geo in
+                let dist = geo.contentSize.height
+                    - geo.contentOffset.y
+                    - geo.containerSize.height
+                return dist < 80
+            } action: { _, nearBottom in
+                isAtBottom.wrappedValue = nearBottom
+                if nearBottom {
+                    showScrollButton.wrappedValue = false
+                } else if isStreaming {
+                    showScrollButton.wrappedValue = true
+                }
+            }
+        } else {
+            self
         }
     }
 }
