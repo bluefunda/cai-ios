@@ -25,6 +25,7 @@
 		B1000015201BCDEF /* RateLimitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000005201BCDEF /* RateLimitView.swift */; };
 		B1000016201BCDEF /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006201BCDEF /* StorageView.swift */; };
 		C1000017201BCDEF /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDEF /* MarkdownView.swift */; };
+		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
 		D1000018201BCDEF /* StorageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000008201BCDEF /* StorageViewModel.swift */; };
 		E100001001BCDEF /* CAITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002001BCDEF /* CAITests.swift */; };
 		E100001101BCDEF /* MockChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002101BCDEF /* MockChatService.swift */; };
@@ -51,6 +52,7 @@
 		B1000005201BCDEF /* RateLimitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitView.swift; sourceTree = "<group>"; };
 		B1000006201BCDEF /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		C1000007201BCDEF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
+		F1000009201BCDEF /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		D1000008201BCDEF /* StorageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageViewModel.swift; sourceTree = "<group>"; };
 		E100002001BCDEF /* CAITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAITests.swift; sourceTree = "<group>"; };
 		E100002101BCDEF /* MockChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockChatService.swift; sourceTree = "<group>"; };
@@ -120,6 +122,7 @@
 				B1000005201BCDEF /* RateLimitView.swift */,
 				B1000006201BCDEF /* StorageView.swift */,
 				C1000007201BCDEF /* MarkdownView.swift */,
+				F1000009201BCDEF /* SafariView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -287,6 +290,7 @@
 				B1000015201BCDEF /* RateLimitView.swift in Sources */,
 				B1000016201BCDEF /* StorageView.swift in Sources */,
 				C1000017201BCDEF /* MarkdownView.swift in Sources */,
+				F1000019201BCDEF /* SafariView.swift in Sources */,
 				D1000018201BCDEF /* StorageViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -219,6 +219,7 @@ struct ConnectionBanner: View {
 
 struct MessageView: View {
     let message: ChatMessage
+    @State private var didCopy = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -239,6 +240,33 @@ struct MessageView: View {
                     Text(message.content).textSelection(.enabled)
                 } else {
                     MarkdownView(content: message.content)
+                }
+
+                // Copy / Share actions on AI responses
+                if message.role == .assistant, !message.content.isEmpty {
+                    HStack(spacing: 16) {
+                        Button {
+                            UIPasteboard.general.string = message.content
+                            didCopy = true
+                            Task {
+                                try? await Task.sleep(for: .seconds(1.5))
+                                didCopy = false
+                            }
+                        } label: {
+                            Label(didCopy ? "Copied" : "Copy",
+                                  systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.secondary)
+
+                        ShareLink(item: message.content) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
                 }
 
                 Text(message.timestamp, style: .time)

@@ -32,6 +32,7 @@ struct AppShell: View {
 
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
+    @State private var safariURL: URL?
 
     enum AppSheet: String, Identifiable {
         case storage, settings
@@ -44,8 +45,7 @@ struct AppShell: View {
             VStack(spacing: 0) {
                 AppTopBar(
                     sidebarOpen: $sidebarOpen,
-                    onNewChat: { chatManager.newConversation() },
-                    onShowSettings: { activeSheet = .settings }
+                    onNewChat: { chatManager.newConversation() }
                 )
 
                 ChatView()
@@ -67,7 +67,8 @@ struct AppShell: View {
             SidebarDrawer(
                 isOpen: $sidebarOpen,
                 onOpenStorage: { activeSheet = .storage },
-                onOpenSettings: { activeSheet = .settings }
+                onOpenSettings: { activeSheet = .settings },
+                onOpenURL: { safariURL = $0 }
             )
             .frame(width: 300)
             .offset(x: sidebarOpen ? 0 : -310)
@@ -77,6 +78,9 @@ struct AppShell: View {
         .animation(.default, value: sidebarOpen)
         .sheet(item: $activeSheet) { sheet in
             sheetView(sheet)
+        }
+        .sheet(item: $safariURL) { url in
+            SafariView(url: url).ignoresSafeArea()
         }
     }
 
@@ -93,10 +97,8 @@ struct AppShell: View {
 
 struct AppTopBar: View {
     @EnvironmentObject var chatManager: ChatManager
-    @EnvironmentObject var authManager: AuthManager
     @Binding var sidebarOpen: Bool
     let onNewChat: () -> Void
-    let onShowSettings: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -121,21 +123,8 @@ struct AppTopBar: View {
 
             Spacer()
 
-            // Model picker
+            // Model picker — user avatar moved to the sidebar (ChatGPT/Claude style)
             ModelPicker(selectedModel: $chatManager.selectedModel)
-
-            // User avatar → settings
-            Button(action: onShowSettings) {
-                Circle()
-                    .fill(Color.brandBlue.gradient)
-                    .frame(width: 32, height: 32)
-                    .overlay {
-                        Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.white)
-                    }
-            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -152,8 +141,12 @@ struct SidebarDrawer: View {
     @Binding var isOpen: Bool
     let onOpenStorage: () -> Void
     let onOpenSettings: () -> Void
+    let onOpenURL: (URL) -> Void
 
     @State private var searchText = ""
+
+    private let helpURL = URL(string: "https://docs.bluefunda.com/")!
+    private let upgradeURL = URL(string: "https://cai.bluefunda.com/pricing")!
 
     private var filteredConversations: [Conversation] {
         guard !searchText.isEmpty else { return chatManager.conversations }
@@ -164,18 +157,25 @@ struct SidebarDrawer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Header ────────────────────────────────────
+            // ── Header: title + user avatar (top-right) ───
             HStack {
-                Text("Conversations")
-                    .font(.headline)
+                Text("Chats")
+                    .font(.title3)
+                    .fontWeight(.semibold)
                 Spacer()
                 Button {
                     withAnimation { isOpen = false }
+                    onOpenSettings()
                 } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption)
-                        .padding(6)
-                        .background(Color(.systemGray5), in: Circle())
+                    Circle()
+                        .fill(Color.brandBlue.gradient)
+                        .frame(width: 36, height: 36)
+                        .overlay {
+                            Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.white)
+                        }
                 }
             }
             .padding(.horizontal)
@@ -270,40 +270,17 @@ struct SidebarDrawer: View {
                     onOpenSettings()
                 }
 
-                Divider()
-
-                // User info
-                Button(action: {
+                SidebarNavButton(icon: "questionmark.circle", label: "Help & Support") {
                     withAnimation { isOpen = false }
-                    onOpenSettings()
-                }) {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(Color.brandBlue.gradient)
-                            .frame(width: 36, height: 36)
-                            .overlay {
-                                Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(.white)
-                            }
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(authManager.currentUser?.name ?? "User")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text(authManager.realm.uppercased())
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    onOpenURL(helpURL)
                 }
-                .buttonStyle(.plain)
+
+                SidebarNavButton(icon: "crown", label: "Upgrade Plan") {
+                    withAnimation { isOpen = false }
+                    onOpenURL(upgradeURL)
+                }
             }
+            .padding(.bottom, 8)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))
