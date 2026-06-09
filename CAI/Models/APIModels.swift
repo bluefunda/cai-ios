@@ -75,7 +75,7 @@ struct ChatSummaryDTO: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id = "chatId"
         case title = "chatTitle"
-        case firstMessage
+        case firstMessage = "firstPrompt"   // BFF field name
         case model
         case createdAt
         case updatedAt
@@ -88,11 +88,15 @@ struct ChatSummaryDTO: Codable, Identifiable {
 struct ChatMessagesResponse: Codable {
     let messages: [ChatMessageDTO]
 
+    // BFF returns { "chatHistory": [...] } — also handle "messages" and flat arrays.
     init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           let messages = try? container.decode([ChatMessageDTO].self, forKey: .messages) {
-            self.messages = messages
-            return
+        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+            if let msgs = try? container.decode([ChatMessageDTO].self, forKey: .chatHistory) {
+                self.messages = msgs; return
+            }
+            if let msgs = try? container.decode([ChatMessageDTO].self, forKey: .messages) {
+                self.messages = msgs; return
+            }
         }
         let container = try decoder.singleValueContainer()
         self.messages = (try? container.decode([ChatMessageDTO].self)) ?? []
@@ -103,7 +107,9 @@ struct ChatMessagesResponse: Codable {
         try container.encode(messages, forKey: .messages)
     }
 
-    enum CodingKeys: String, CodingKey { case messages }
+    enum CodingKeys: String, CodingKey {
+        case chatHistory, messages
+    }
 }
 
 struct ChatMessageDTO: Codable {
