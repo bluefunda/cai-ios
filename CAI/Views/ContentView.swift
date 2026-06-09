@@ -230,8 +230,8 @@ struct SidebarDrawer: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        ForEach(groupedConversations, id: \.0) { section, convos in
-                            Text(section)
+                        ForEach(groupedConversations) { group in
+                            Text(group.title)
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)
@@ -240,7 +240,7 @@ struct SidebarDrawer: View {
                                 .padding(.top, 12)
                                 .padding(.bottom, 2)
 
-                            ForEach(convos) { convo in
+                            ForEach(group.conversations) { convo in
                                 SidebarConversationRow(
                                     conversation: convo,
                                     isSelected: chatManager.currentConversation?.id == convo.id
@@ -311,7 +311,7 @@ struct SidebarDrawer: View {
     }
 
     // Group conversations by recency
-    private var groupedConversations: [(String, [Conversation])] {
+    private var groupedConversations: [ConversationGroup] {
         let now = Date()
         let cal = Calendar.current
 
@@ -322,18 +322,30 @@ struct SidebarDrawer: View {
 
         for c in filteredConversations {
             let days = cal.dateComponents([.day], from: c.createdAt, to: now).day ?? 0
-            if days == 0 { today.append(c) }
-            else if days == 1 { yesterday.append(c) }
-            else if days < 7 { thisWeek.append(c) }
-            else { older.append(c) }
+            if days == 0       { today.append(c) }
+            else if days == 1  { yesterday.append(c) }
+            else if days < 7   { thisWeek.append(c) }
+            else               { older.append(c) }
         }
 
-        var result: [(String, [Conversation])] = []
-        if !today.isEmpty    { result.append(("Today", today)) }
-        if !yesterday.isEmpty { result.append(("Yesterday", yesterday)) }
-        if !thisWeek.isEmpty { result.append(("This Week", thisWeek)) }
-        if !older.isEmpty    { result.append(("Older", older)) }
+        var result: [ConversationGroup] = []
+        if !today.isEmpty     { result.append(.init(title: "Today",     conversations: today)) }
+        if !yesterday.isEmpty { result.append(.init(title: "Yesterday", conversations: yesterday)) }
+        if !thisWeek.isEmpty  { result.append(.init(title: "This Week", conversations: thisWeek)) }
+        if !older.isEmpty     { result.append(.init(title: "Older",     conversations: older)) }
         return result
+    }
+}
+
+private struct ConversationGroup: Identifiable {
+    let id: String      // == title, always unique within a list
+    let title: String
+    let conversations: [Conversation]
+
+    init(title: String, conversations: [Conversation]) {
+        self.id = title
+        self.title = title
+        self.conversations = conversations
     }
 }
 
