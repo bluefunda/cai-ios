@@ -91,13 +91,22 @@ final class BFFChatService: ChatServiceProtocol {
                         return
                     }
 
-                    var buffer = ""
+                    // Accumulate raw bytes and decode complete SSE events as UTF-8.
+                    // Decoding per-byte (UnicodeScalar(UInt8)) is Latin-1 and corrupts
+                    // any multi-byte character (em dash, arrows, accents, emoji…).
+                    // SSE events are separated by a blank line ("\n\n"); that delimiter
+                    // is pure ASCII, so splitting on it never bisects a UTF-8 sequence.
+                    var byteBuffer = Data()
+                    let delimiter = Data([0x0A, 0x0A]) // "\n\n"
                     for try await byte in bytes {
                         if Task.isCancelled { break }
-                        buffer.append(Character(UnicodeScalar(byte)))
-                        while let range = buffer.range(of: "\n\n") {
-                            let eventText = String(buffer[..<range.lowerBound])
-                            buffer = String(buffer[range.upperBound...])
+                        byteBuffer.append(byte)
+                        // A "\n\n" can only complete when we just appended a newline.
+                        guard byte == 0x0A else { continue }
+                        while let range = byteBuffer.range(of: delimiter) {
+                            let eventData = byteBuffer.subdata(in: byteBuffer.startIndex..<range.lowerBound)
+                            byteBuffer.removeSubrange(byteBuffer.startIndex..<range.upperBound)
+                            let eventText = String(decoding: eventData, as: UTF8.self)
                             if let event = BFFChatService.parseSSEEvent(eventText) {
                                 continuation.yield(event)
                                 if event.isTerminal { continuation.finish(); return }
