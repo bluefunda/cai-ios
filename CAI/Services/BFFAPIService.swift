@@ -53,9 +53,15 @@ final class BFFAPIService {
     }
 
     func generateTitle(chatId: String, message: String) async throws -> String {
-        // Backend expects "message" key (confirmed from hurl tests)
-        let response: TitleResponse = try await client.post("/chats/\(chatId)/title", body: ["message": message])
-        return response.title ?? message.truncated(to: 60)
+        // BFF reads the "prompt" key — verified against cai-bff (req.Prompt),
+        // the cai web app ({ prompt }), and the Postman collection. Sending the
+        // wrong key left the prompt empty, so the model returned a generic
+        // "New Chat" that then got persisted.
+        let response: TitleResponse = try await client.post("/chats/\(chatId)/title", body: ["prompt": message])
+        if let title = response.title, !title.isBlank, title != "New Chat" {
+            return title
+        }
+        return message.truncated(to: 60)
     }
 
     func stopStream(chatId: String) async throws {
