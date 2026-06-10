@@ -73,19 +73,27 @@ struct ChatView: View {
                             isAtBottom = atBottom
                             showScrollButton = !atBottom
                         }
-                        // Auto-scroll only when already at the bottom
+                        // Follow the growing answer only while pinned to the bottom.
+                        // (Not during the send itself — that pins the prompt to the top.)
                         .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
-                            if isAtBottom { scrollToBottom(proxy: proxy) }
+                            if isAtBottom && !chatManager.isStreaming { scrollToBottom(proxy: proxy) }
                         }
                         .onChange(of: chatManager.currentConversation?.messages.last?.content.count) { _, _ in
                             if isAtBottom { scrollToBottom(proxy: proxy) }
                         }
-                        // When streaming starts → jump to bottom and follow
+                        // ChatGPT-style: when a response starts, pin the user's prompt
+                        // near the top and let the answer stream below without chasing
+                        // the bottom. Once it overflows the screen the down-arrow shows;
+                        // short answers that fit stay followed automatically.
                         .onChange(of: chatManager.isStreaming) { _, streaming in
                             if streaming {
-                                isAtBottom = true
-                                showScrollButton = false
-                                scrollToBottom(proxy: proxy)
+                                isAtBottom = false
+                                if let uid = chatManager.currentConversation?.messages
+                                    .last(where: { $0.role == .user })?.id {
+                                    withAnimation(.easeOut(duration: 0.25)) {
+                                        proxy.scrollTo(uid, anchor: .top)
+                                    }
+                                }
                             }
                         }
                         .onAppear { scrollProxy = proxy }
