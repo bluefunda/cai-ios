@@ -140,25 +140,47 @@ final class ChatManagerTests: XCTestCase {
         chatManager = ChatManager(service: mockService)
     }
 
-    func test_newConversation_addsToList() {
+    func test_newConversation_createsDraftNotInHistory() {
         chatManager.newConversation()
-        XCTAssertEqual(chatManager.conversations.count, 1)
         XCTAssertNotNil(chatManager.currentConversation)
         XCTAssertEqual(chatManager.currentConversation?.title, "New Chat")
+        // A draft is NOT added to history until the first message is sent.
+        XCTAssertTrue(chatManager.conversations.isEmpty)
     }
 
-    func test_deleteConversation_removesFromList() {
+    func test_sendMessage_addsDraftToHistory() async throws {
+        mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: "Hi!", stopped: false)]
         chatManager.newConversation()
+        XCTAssertTrue(chatManager.conversations.isEmpty)
+
+        await chatManager.sendMessage("Hello")
+        try await waitForStreamingToFinish()
+
+        XCTAssertEqual(chatManager.conversations.count, 1)
+    }
+
+    func test_deleteConversation_removesFromList() async throws {
+        mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: "Hi!", stopped: false)]
+        await chatManager.sendMessage("Hello")
+        try await waitForStreamingToFinish()
+        XCTAssertEqual(chatManager.conversations.count, 1)
+
         let conv = chatManager.conversations[0]
         chatManager.deleteConversation(conv)
         XCTAssertTrue(chatManager.conversations.isEmpty)
         XCTAssertNil(chatManager.currentConversation)
     }
 
-    func test_selectConversation_updatesCurrent() {
+    func test_selectConversation_updatesCurrent() async throws {
+        mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: "Hi!", stopped: false)]
+        await chatManager.sendMessage("first")
+        try await waitForStreamingToFinish()
+        let first = chatManager.conversations[0]
+
         chatManager.newConversation()
-        chatManager.newConversation()
-        let first = chatManager.conversations[1] // oldest
+        await chatManager.sendMessage("second")
+        try await waitForStreamingToFinish()
+
         chatManager.selectConversation(first)
         XCTAssertEqual(chatManager.currentConversation?.id, first.id)
     }
