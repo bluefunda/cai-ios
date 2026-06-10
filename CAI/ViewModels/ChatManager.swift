@@ -251,15 +251,17 @@ final class ChatManager: ObservableObject {
     // MARK: - Conversations
 
     func newConversation() {
-        let conversation = Conversation(
+        // Create a draft only — it is NOT added to history until the first
+        // message is sent (see sendMessage → upsertConversation). This keeps
+        // empty "New Chat" entries out of the sidebar when the user taps New
+        // Chat without typing anything (ChatGPT-style).
+        currentConversation = Conversation(
             id: UUID().uuidString,
             title: "New Chat",
             messages: [],
             model: selectedModel.id,
             createdAt: Date()
         )
-        conversations.insert(conversation, at: 0)
-        currentConversation = conversation
     }
 
     func selectConversation(_ conversation: Conversation) {
@@ -293,7 +295,8 @@ final class ChatManager: ObservableObject {
         conversation.messages.append(assistantMessage)
 
         currentConversation = conversation
-        updateConversation(conversation)
+        // Insert the draft into history now that it has its first message.
+        upsertConversation(conversation)
 
         // Persist user message server-side (best-effort, non-blocking)
         if let api = apiService {
@@ -400,6 +403,16 @@ final class ChatManager: ObservableObject {
     private func updateConversation(_ conversation: Conversation) {
         if let idx = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[idx] = conversation
+        }
+    }
+
+    /// Updates the conversation in place, or inserts it at the top of history
+    /// if it isn't there yet (used when a draft sends its first message).
+    private func upsertConversation(_ conversation: Conversation) {
+        if let idx = conversations.firstIndex(where: { $0.id == conversation.id }) {
+            conversations[idx] = conversation
+        } else {
+            conversations.insert(conversation, at: 0)
         }
     }
 
