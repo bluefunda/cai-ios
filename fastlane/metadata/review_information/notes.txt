@@ -1,0 +1,34 @@
+DEMO ACCOUNT
+Use the credentials provided in the demo_user / demo_password fields to sign in.
+On the login screen, select the "Individual" realm (the default, left tab), then tap
+"Sign in with Keycloak." You will be redirected to auth.bluefunda.com in an in-app
+browser. Enter the demo credentials there and approve the OAuth consent screen.
+After sign-in you will be returned to the app and land on the chat interface.
+
+AI APPLICATION SAFEGUARDS
+• This is a closed-access service: all users must create a BlueFunda account and agree
+  to Terms of Service before API access is granted. No anonymous usage is possible.
+• The backend (cai-bff) enforces per-user daily and monthly token rate limits visible
+  in the app's Usage dashboard (Settings → Rate Limit).
+• AI model providers (Groq, OpenAI, DeepSeek) apply their own content policies.
+• The app does not allow users to interact with other users' content and has no
+  public UGC feed. All conversations are private to the authenticated account.
+• The app transmits only user-typed prompts and uploaded files to the backend;
+  no device identifiers, location, or contacts are collected.
+
+ACCOUNT DELETION
+# TODO: Account deletion is not currently available in-app (only Sign Out).
+# Before submission, either: (a) add an in-app "Delete Account" flow that calls the
+# backend user-delete endpoint, OR (b) add a "Delete my account" link in Settings
+# that opens https://accounts.bluefunda.com/delete (you must create this web page).
+# Apple Guideline 5.1.1 requires in-app account deletion for apps that support
+# account creation. This MUST be resolved before the app will be approved.
+
+NOTES FOR REVIEWER
+• The app requires iOS 17.0+.
+• Network calls go to api.bluefunda.com (HTTPS/443) and auth.bluefunda.com (HTTPS/443).
+  Both are live production endpoints — no sandbox or mock server is needed.
+• The SSE streaming chat may take 1–3 seconds to begin responding; this is expected
+  as the backend initialises the LLM context.
+• MCP server list may be empty for the demo account; this is normal.
+• Cloud storage may show an empty folder for the demo account; this is normal.

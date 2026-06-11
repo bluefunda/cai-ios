@@ -1,0 +1,1 @@
+Chat with Groq, GPT-4o, and DeepSeek in one app. Switch models, control reasoning depth, attach files, and stream responses in real time.

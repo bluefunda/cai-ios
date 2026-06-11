@@ -24,3 +24,8 @@ DerivedData/
 # CocoaPods (not used, but just in case)
 Pods/
 Podfile.lock
+
+# App Store review credentials — never commit real values
+fastlane/metadata/review_information/demo_user.txt
+fastlane/metadata/review_information/demo_password.txt
+fastlane/metadata/review_information/phone_number.txt
