@@ -51,16 +51,50 @@ struct ModeSwitcher: View {
     }
 }
 
-// MARK: - Code View (Phase 0 placeholder)
+// MARK: - Code View
 
 struct CodeView: View {
     @Binding var mode: AppMode
-    @StateObject private var codeManager = CodeManager()
+    @EnvironmentObject var authManager: AuthManager
+    @StateObject private var systemStore = SAPSystemStore()
+    @State private var showSystems = false
 
     var body: some View {
         VStack(spacing: 0) {
-            CodeTopBar(mode: $mode)
-            CodeEmptyState()
+            CodeTopBar(
+                mode: $mode,
+                activeSystem: systemStore.activeSystem,
+                onSystems: { showSystems = true }
+            )
+            content
+        }
+        .sheet(isPresented: $showSystems) {
+            SystemManagerView(store: systemStore)
+                .environmentObject(authManager)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let active = systemStore.activeSystem {
+            // Phase 2 replaces this with the object browser.
+            VStack(spacing: 12) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.blue.opacity(0.7))
+                Text(active.name)
+                    .font(.headline)
+                Text("\(active.displayHost) · client \(active.client)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Connected. Object browser coming next.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            CodeEmptyState(onConnect: { showSystems = true })
         }
     }
 }
@@ -69,12 +103,19 @@ struct CodeView: View {
 
 private struct CodeTopBar: View {
     @Binding var mode: AppMode
+    let activeSystem: SAPSystem?
+    let onSystems: () -> Void
 
     var body: some View {
         HStack {
+            Button(action: onSystems) {
+                Image(systemName: "server.rack").font(.system(size: 17))
+            }
             Spacer()
             ModeSwitcher(mode: $mode)
             Spacer()
+            // Invisible spacer to keep the pill centered.
+            Image(systemName: "server.rack").font(.system(size: 17)).opacity(0)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -86,6 +127,8 @@ private struct CodeTopBar: View {
 // MARK: - Empty State
 
 private struct CodeEmptyState: View {
+    let onConnect: () -> Void
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "chevron.left.forwardslash.chevron.right")
@@ -101,6 +144,12 @@ private struct CodeEmptyState: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+
+            Button(action: onConnect) {
+                Label("Add SAP System", systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -108,4 +157,5 @@ private struct CodeEmptyState: View {
 
 #Preview {
     CodeView(mode: .constant(.code))
+        .environmentObject(AuthManager())
 }
