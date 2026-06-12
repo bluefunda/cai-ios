@@ -77,22 +77,8 @@ struct CodeView: View {
     @ViewBuilder
     private var content: some View {
         if let active = systemStore.activeSystem {
-            // Phase 2 replaces this with the object browser.
-            VStack(spacing: 12) {
-                Image(systemName: "server.rack")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.blue.opacity(0.7))
-                Text(active.name)
-                    .font(.headline)
-                Text("\(active.displayHost) · client \(active.client)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Connected. Object browser coming next.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ObjectBrowserView(api: CodeAPIService.make(authManager: authManager, system: active))
+                .id(active.id)   // rebuild the browser when the active system changes
         } else {
             CodeEmptyState(onConnect: { showSystems = true })
         }

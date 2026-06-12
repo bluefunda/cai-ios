@@ -50,6 +50,43 @@ final class CodeAPIService {
         try await post("/api/v1/system/connect", body: [:])
     }
 
+    // MARK: - Object browser
+
+    func searchObjects(_ pattern: String, type: String? = nil) async throws -> [ADTObject] {
+        var body: [String: Any] = ["object_name": pattern.uppercased()]
+        if let type, !type.isEmpty { body["object_type"] = type.uppercased() }
+        let data: ADTSearchData = try await post("/api/v1/objects/search", body: body)
+        return data.objects
+    }
+
+    func packageContents(_ packageName: String) async throws -> [PackageNode] {
+        let data: PackageContents = try await post(
+            "/api/v1/packages/contents",
+            body: ["package_name": packageName.uppercased()]
+        )
+        return data.nodes
+    }
+
+    func listPackages(_ pattern: String = "*") async throws -> [ADTPackageSummary] {
+        try await post("/api/v1/objects/list", body: [
+            "object_type": "packages",
+            "object_name": pattern.uppercased()
+        ])
+    }
+
+    // MARK: - Source
+
+    func getObject(type: String, name: String, functionGroup: String? = nil) async throws -> ADTSourceCode {
+        var body: [String: Any] = [
+            "object_type": type.uppercased(),
+            "object_name": name.uppercased()
+        ]
+        if let fg = functionGroup, !fg.isEmpty {
+            body["function_group"] = fg.uppercased()
+        }
+        return try await post("/api/v1/objects/get", body: body)
+    }
+
     // MARK: - Generic POST (envelope-aware)
 
     func post<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {

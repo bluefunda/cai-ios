@@ -33,6 +33,10 @@
 		H1000013201BCDEF /* SAPSystemStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000003201BCDEF /* SAPSystemStore.swift */; };
 		H1000014201BCDEF /* CodeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000004201BCDEF /* CodeAPIService.swift */; };
 		H1000015201BCDEF /* SystemManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000005201BCDEF /* SystemManagerView.swift */; };
+		J1000011201BCDEF /* ADTModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000001201BCDEF /* ADTModels.swift */; };
+		J1000012201BCDEF /* ABAPHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000002201BCDEF /* ABAPHighlighter.swift */; };
+		J1000013201BCDEF /* ObjectBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000003201BCDEF /* ObjectBrowserView.swift */; };
+		J1000014201BCDEF /* SourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000004201BCDEF /* SourceView.swift */; };
 		D1000018201BCDEF /* StorageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000008201BCDEF /* StorageViewModel.swift */; };
 		E100001001BCDEF /* CAITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002001BCDEF /* CAITests.swift */; };
 		E100001101BCDEF /* MockChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002101BCDEF /* MockChatService.swift */; };
@@ -67,6 +71,10 @@
 		H1000003201BCDEF /* SAPSystemStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystemStore.swift; sourceTree = "<group>"; };
 		H1000004201BCDEF /* CodeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAPIService.swift; sourceTree = "<group>"; };
 		H1000005201BCDEF /* SystemManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SystemManagerView.swift; sourceTree = "<group>"; };
+		J1000001201BCDEF /* ADTModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADTModels.swift; sourceTree = "<group>"; };
+		J1000002201BCDEF /* ABAPHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ABAPHighlighter.swift; sourceTree = "<group>"; };
+		J1000003201BCDEF /* ObjectBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ObjectBrowserView.swift; sourceTree = "<group>"; };
+		J1000004201BCDEF /* SourceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SourceView.swift; sourceTree = "<group>"; };
 		D1000008201BCDEF /* StorageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageViewModel.swift; sourceTree = "<group>"; };
 		E100002001BCDEF /* CAITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAITests.swift; sourceTree = "<group>"; };
 		E100002101BCDEF /* MockChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockChatService.swift; sourceTree = "<group>"; };
@@ -139,6 +147,9 @@
 				F1000009201BCDEF /* SafariView.swift */,
 				G1000010201BCDEF /* CodeView.swift */,
 				H1000005201BCDEF /* SystemManagerView.swift */,
+				J1000002201BCDEF /* ABAPHighlighter.swift */,
+				J1000003201BCDEF /* ObjectBrowserView.swift */,
+				J1000004201BCDEF /* SourceView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -190,6 +201,7 @@
 			children = (
 				B1000001201BCDEF /* APIModels.swift */,
 				H1000001201BCDEF /* SAPSystem.swift */,
+				J1000001201BCDEF /* ADTModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -319,6 +331,10 @@
 				H1000013201BCDEF /* SAPSystemStore.swift in Sources */,
 				H1000014201BCDEF /* CodeAPIService.swift in Sources */,
 				H1000015201BCDEF /* SystemManagerView.swift in Sources */,
+				J1000011201BCDEF /* ADTModels.swift in Sources */,
+				J1000012201BCDEF /* ABAPHighlighter.swift in Sources */,
+				J1000013201BCDEF /* ObjectBrowserView.swift in Sources */,
+				J1000014201BCDEF /* SourceView.swift in Sources */,
 				D1000018201BCDEF /* StorageViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
