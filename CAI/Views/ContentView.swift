@@ -27,50 +27,40 @@ struct ContentView: View {
 // MARK: - Authenticated Root (Chat / </>Code mode switch)
 
 struct AuthenticatedRoot: View {
-    @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
-
-    private var mode: Binding<AppMode> {
-        Binding(
-            get: { AppMode(rawValue: modeRaw) ?? .chat },
-            set: { modeRaw = $0.rawValue }
-        )
-    }
-
-    var body: some View {
-        switch mode.wrappedValue {
-        case .chat: AppShell(mode: mode)
-        case .code: CodeView(mode: mode)
-        }
-    }
+    var body: some View { AppShell() }
 }
 
-// MARK: - App Shell (Chat mode)
+// MARK: - App Shell (unified Chat + Code shell)
 
 struct AppShell: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
-    @Binding var mode: AppMode
 
+    @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
     @State private var safariURL: URL?
+
+    // Code mode
+    @StateObject private var systemStore = SAPSystemStore()
+    @State private var showSystems = false
 
     enum AppSheet: String, Identifiable {
         case storage, settings
         var id: String { rawValue }
     }
 
+    private var mode: AppMode { AppMode(rawValue: modeRaw) ?? .chat }
+    private var modeBinding: Binding<AppMode> {
+        Binding(get: { mode }, set: { modeRaw = $0.rawValue })
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             // ── Main content ──────────────────────────────
             VStack(spacing: 0) {
-                AppTopBar(
-                    mode: $mode,
-                    sidebarOpen: $sidebarOpen,
-                    onNewChat: { chatManager.newConversation() }
-                )
-
-                ChatView()
+                topBar
+                content
             }
             .zIndex(0)
 
@@ -85,9 +75,10 @@ struct AppShell: View {
                     .transition(.opacity)
             }
 
-            // ── Sidebar drawer ────────────────────────────
+            // ── Sidebar drawer (shared by both modes) ─────
             SidebarDrawer(
                 isOpen: $sidebarOpen,
+                currentMode: modeBinding,
                 onOpenStorage: { activeSheet = .storage },
                 onOpenSettings: { activeSheet = .settings },
                 onOpenURL: { safariURL = $0 }
@@ -98,7 +89,6 @@ struct AppShell: View {
             .zIndex(2)
         }
         .animation(.default, value: sidebarOpen)
-        // Dismiss the keyboard whenever the chat-history sidebar opens
         .onChange(of: sidebarOpen) { _, open in
             if open {
                 UIApplication.shared.sendAction(
@@ -107,11 +97,30 @@ struct AppShell: View {
                 )
             }
         }
-        .sheet(item: $activeSheet) { sheet in
-            sheetView(sheet)
+        .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
+        .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
+        .sheet(isPresented: $showSystems) {
+            SystemManagerView(store: systemStore).environmentObject(authManager)
         }
-        .sheet(item: $safariURL) { url in
-            SafariView(url: url).ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var topBar: some View {
+        switch mode {
+        case .chat:
+            ChatTopBar(sidebarOpen: $sidebarOpen, onNewChat: { chatManager.newConversation() })
+        case .code:
+            CodeTopBar(sidebarOpen: $sidebarOpen, onSystems: { showSystems = true })
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch mode {
+        case .chat:
+            ChatView()
+        case .code:
+            CodeContent(systemStore: systemStore, onConnect: { showSystems = true })
         }
     }
 
@@ -124,44 +133,67 @@ struct AppShell: View {
     }
 }
 
+// MARK: - Hamburger
+
+struct HamburgerButton: View {
+    @Binding var sidebarOpen: Bool
+    var body: some View {
+        Button {
+            withAnimation(.spring(duration: 0.25)) { sidebarOpen.toggle() }
+        } label: {
+            VStack(spacing: 5) {
+                Capsule().frame(width: 22, height: 2)
+                Capsule().frame(width: 22, height: 2)
+            }
+            .foregroundStyle(.primary)
+        }
+    }
+}
+
 // MARK: - Top Bar
 
-struct AppTopBar: View {
+struct ChatTopBar: View {
     @EnvironmentObject var chatManager: ChatManager
-    @Binding var mode: AppMode
     @Binding var sidebarOpen: Bool
     let onNewChat: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            // Two-bar hamburger
-            Button {
-                withAnimation(.spring(duration: 0.25)) {
-                    sidebarOpen.toggle()
-                }
-            } label: {
-                VStack(spacing: 5) {
-                    Capsule().frame(width: 22, height: 2)
-                    Capsule().frame(width: 22, height: 2)
-                }
-                .foregroundStyle(.primary)
-            }
+            HamburgerButton(sidebarOpen: $sidebarOpen)
 
-            // New chat
             Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 18))
+                Image(systemName: "square.and.pencil").font(.system(size: 18))
             }
 
             Spacer()
 
-            // Chat / </>Code mode switch
-            ModeSwitcher(mode: $mode)
+            ModeModelPicker()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+        .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+// MARK: - Code Top Bar
+
+struct CodeTopBar: View {
+    @Binding var sidebarOpen: Bool
+    let onSystems: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            HamburgerButton(sidebarOpen: $sidebarOpen)
+
+            Text("Code")
+                .font(.headline)
 
             Spacer()
 
-            // Mode + model picker — user avatar moved to the sidebar (ChatGPT/Claude style)
-            ModeModelPicker()
+            Button(action: onSystems) {
+                Image(systemName: "server.rack").font(.system(size: 17))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -176,6 +208,7 @@ struct SidebarDrawer: View {
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var authManager: AuthManager
     @Binding var isOpen: Bool
+    @Binding var currentMode: AppMode
     let onOpenStorage: () -> Void
     let onOpenSettings: () -> Void
     let onOpenURL: (URL) -> Void
@@ -221,6 +254,7 @@ struct SidebarDrawer: View {
 
             // New chat row
             Button {
+                currentMode = .chat
                 chatManager.newConversation()
                 withAnimation { isOpen = false }
             } label: {
@@ -283,6 +317,7 @@ struct SidebarDrawer: View {
                                     isSelected: chatManager.currentConversation?.id == convo.id
                                 )
                                 .onTapGesture {
+                                    currentMode = .chat
                                     chatManager.selectConversation(convo)
                                     withAnimation { isOpen = false }
                                 }
@@ -307,6 +342,11 @@ struct SidebarDrawer: View {
 
             // ── Bottom nav ────────────────────────────────
             VStack(spacing: 0) {
+                SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
+                    currentMode = .code
+                    withAnimation { isOpen = false }
+                }
+
                 SidebarNavButton(icon: "externaldrive", label: "Cloud Storage") {
                     withAnimation { isOpen = false }
                     onOpenStorage()
