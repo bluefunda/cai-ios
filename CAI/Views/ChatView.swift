@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 struct ChatView: View {
     @EnvironmentObject var chatManager: ChatManager
@@ -23,6 +24,10 @@ struct ChatView: View {
     @State private var attachmentData: Data?
     @State private var attachmentFilename: String?
     @State private var attachmentMIME: String?
+    @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
+
+    private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
 
     // Scroll management
     @State private var isAtBottom = true
@@ -144,14 +149,23 @@ struct ChatView: View {
                 text: $inputText,
                 isStreaming: chatManager.isStreaming,
                 attachmentFilename: attachmentFilename,
-                selectedPhotoItem: $selectedPhotoItem,
                 isFocused: $isInputFocused,
                 onSend: sendMessage,
                 onStop: stopStreaming,
-                onClearAttachment: clearAttachment
+                onClearAttachment: clearAttachment,
+                onPickPhoto: { showPhotoPicker = true },
+                onPickFile: { showFileImporter = true }
             )
+            .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, item in
                 Task { await loadAttachment(from: item) }
+            }
+            .fileImporter(
+                isPresented: $showFileImporter,
+                allowedContentTypes: importableTypes,
+                allowsMultipleSelection: false
+            ) { result in
+                handleFileImport(result)
             }
         }
         // Dismiss keyboard when AI starts responding
@@ -208,6 +222,32 @@ struct ChatView: View {
     private func clearAttachment() {
         attachmentData = nil; attachmentFilename = nil
         attachmentMIME = nil; selectedPhotoItem = nil
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        guard url.startAccessingSecurityScopedResource() else { return }
+        defer { url.stopAccessingSecurityScopedResource() }
+        guard let data = try? Data(contentsOf: url) else { return }
+        attachmentData = data
+        attachmentFilename = url.lastPathComponent
+        attachmentMIME = mimeType(for: url.pathExtension)
+    }
+
+    private func mimeType(for ext: String) -> String {
+        switch ext.lowercased() {
+        case "jpg", "jpeg": return "image/jpeg"
+        case "png":         return "image/png"
+        case "gif":         return "image/gif"
+        case "heic":        return "image/heic"
+        case "webp":        return "image/webp"
+        case "pdf":         return "application/pdf"
+        case "txt":         return "text/plain"
+        case "csv":         return "text/csv"
+        case "json":        return "application/json"
+        case "zip":         return "application/zip"
+        default:            return "application/octet-stream"
+        }
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
@@ -421,11 +461,12 @@ struct ChatInputView: View {
     @Binding var text: String
     let isStreaming: Bool
     let attachmentFilename: String?
-    @Binding var selectedPhotoItem: PhotosPickerItem?
     var isFocused: FocusState<Bool>.Binding
     let onSend: () -> Void
     let onStop: () -> Void
     let onClearAttachment: () -> Void
+    let onPickPhoto: () -> Void
+    let onPickFile: () -> Void
 
     private var canSend: Bool { !text.isEmpty || attachmentFilename != nil }
 
@@ -434,7 +475,7 @@ struct ChatInputView: View {
             // Attachment preview strip
             if let filename = attachmentFilename {
                 HStack(spacing: 8) {
-                    Image(systemName: "photo").foregroundStyle(.blue)
+                    Image(systemName: "paperclip").foregroundStyle(.blue)
                     Text(filename).font(.caption).lineLimit(1).foregroundStyle(.secondary)
                     Spacer()
                     Button(action: onClearAttachment) {
@@ -447,8 +488,11 @@ struct ChatInputView: View {
             }
 
             HStack(alignment: .bottom, spacing: 8) {
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    Image(systemName: attachmentFilename != nil ? "photo.fill" : "photo")
+                Menu {
+                    Button { onPickPhoto() } label: { Label("Photo Library", systemImage: "photo") }
+                    Button { onPickFile() } label: { Label("Files", systemImage: "folder") }
+                } label: {
+                    Image(systemName: attachmentFilename != nil ? "paperclip.circle.fill" : "paperclip")
                         .font(.system(size: 22))
                         .foregroundStyle(attachmentFilename != nil ? .blue : .secondary)
                         .frame(width: 36, height: 36)
