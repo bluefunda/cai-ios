@@ -1,41 +1,12 @@
-BlueFunda AI is a native iOS client for the BlueFunda Cognitive AI Interface — a multi-model chat platform that routes your conversations through Groq (Llama 3.3 70B), OpenAI GPT-4o, and DeepSeek Chat, all from one clean SwiftUI interface.
-
-SWITCH MODELS ON THE FLY
-Every conversation can run on a different AI model. Choose the fastest engine for quick lookups, the most capable for deep analysis, or the most economical for everyday tasks — without leaving the app. The model list is fetched live from the server so new options appear automatically as they become available.
-
-CONTROL REASONING DEPTH
-Three thinking modes let you trade speed for depth:
-• Auto — the model decides based on the question
-• Quick Response — minimal reasoning, fastest answers
-• Think Deeper — extended step-by-step reasoning for complex problems and multi-part analysis
-
-STREAMING RESPONSES
-Answers appear word by word in real time using Server-Sent Events. Stop generation mid-stream the moment you have what you need — no waiting for a full response you don't want.
-
-RICH MARKDOWN RENDERING
-Code blocks with syntax highlighting, tables, headings, numbered lists, blockquotes, and inline formatting all render natively. No raw markup cluttering your screen — just clean, readable output.
-
-FULL CONVERSATION HISTORY
-Every chat is saved, automatically titled, and grouped by recency (Today / Yesterday / This Week / Older). Full-text search across all conversations, swipe to delete, and lazy-loading keep even large histories fast and navigable.
-
-IMAGE ATTACHMENTS
-Send photos from your Photos library alongside any prompt for multimodal analysis, visual reasoning, and image-based questions.
-
-MCP SERVER INTEGRATION
-Connect AI responses to your organization's Model Context Protocol (MCP) servers for real-time data access, enterprise tool calls, and custom integrations — selectable per conversation.
-
-CLOUD FILE STORAGE
-Browse, upload, download, and delete files in your personal cloud workspace. Attach documents directly to conversations for in-context analysis. A storage stats panel keeps you informed of usage.
-
-USAGE DASHBOARD
-A built-in rate limit view shows your daily and monthly token consumption with progress bars so you always know where you stand — and why a request was blocked if one ever is.
-
-SECURE SIGN-IN
-Sign in with your BlueFunda account via OAuth2/OIDC (Keycloak). Refresh tokens are stored exclusively in the iOS Keychain and refreshed automatically in the background. The app never handles your password directly.
-
-NO ADS. NO TRACKING.
-BlueFunda AI uses zero third-party analytics or crash-reporting SDKs. Your conversations stay between you and the BlueFunda backend.
-
-—
-
-Requires a BlueFunda account. Visit bluefunda.com to sign up.
+BlueFunda AI is a conversational agent platform built for professionals who need fast, accurate, work-grade answers.
+Ask a question in plain language and BlueFunda AI responds with context-aware guidance, draft content, and step-by-step help. It's designed for enterprise and SAP-centric workflows, but flexible enough for everyday knowledge work.
+What you can do:
+• Chat with an AI agent tuned for technical and enterprise questions
+• Get help drafting, summarizing, and explaining complex material
+• Pick up conversations across devices with synced history
+• Work hands-free on the go with a fast, mobile-first interface
+Why BlueFunda AI:
+• Built by a team with deep SAP and enterprise domain expertise
+• Focused on precise, useful output — not generic chatter
+• Privacy-conscious design with transparent data handling
+BlueFunda AI is part of the BlueFunda product family. Learn more at bluefunda.com.

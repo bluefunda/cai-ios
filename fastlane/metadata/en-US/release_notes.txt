@@ -1,3 +1,1 @@
-BlueFunda AI is now available on the App Store.
 
-Chat with Groq (Llama 3.3 70B), OpenAI GPT-4o, and DeepSeek Chat — switching models per conversation. Control reasoning depth with Auto / Quick Response / Think Deeper modes. Stream real-time responses, attach images, search conversation history, connect MCP tool servers, and manage your cloud file storage — all in one native iOS app.

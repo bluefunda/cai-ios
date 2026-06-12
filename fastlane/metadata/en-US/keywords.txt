@@ -1,1 +1,1 @@
-chat,assistant,groq,gpt,deepseek,llm,models,reasoning,streaming,storage,chatbot,tools,mcp,oauth
+SAP,AI,ABAP,agent,assistant,GenAI,automation,enterprise,developer,chatbot,consultant,productivity
