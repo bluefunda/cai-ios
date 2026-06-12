@@ -1,0 +1,7 @@
+# fastlane/Deliverfile
+skip_screenshots(true)       # add screenshots later
+skip_binary_upload(false)    # set true for metadata-only runs
+submit_for_review(false)     # never auto-submit
+automatic_release(false)
+
+force(true)                  # skip HTML diff preview prompt
