@@ -11,7 +11,7 @@ struct ContentView: View {
             if authManager.isLoading {
                 LoadingView()
             } else if authManager.isAuthenticated {
-                AppShell()
+                AuthenticatedRoot()
             } else {
                 LoginView()
             }
@@ -24,11 +24,32 @@ struct ContentView: View {
     }
 }
 
-// MARK: - App Shell (replaces MainTabView)
+// MARK: - Authenticated Root (Chat / </>Code mode switch)
+
+struct AuthenticatedRoot: View {
+    @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
+
+    private var mode: Binding<AppMode> {
+        Binding(
+            get: { AppMode(rawValue: modeRaw) ?? .chat },
+            set: { modeRaw = $0.rawValue }
+        )
+    }
+
+    var body: some View {
+        switch mode.wrappedValue {
+        case .chat: AppShell(mode: mode)
+        case .code: CodeView(mode: mode)
+        }
+    }
+}
+
+// MARK: - App Shell (Chat mode)
 
 struct AppShell: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
+    @Binding var mode: AppMode
 
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
@@ -44,6 +65,7 @@ struct AppShell: View {
             // ── Main content ──────────────────────────────
             VStack(spacing: 0) {
                 AppTopBar(
+                    mode: $mode,
                     sidebarOpen: $sidebarOpen,
                     onNewChat: { chatManager.newConversation() }
                 )
@@ -106,6 +128,7 @@ struct AppShell: View {
 
 struct AppTopBar: View {
     @EnvironmentObject var chatManager: ChatManager
+    @Binding var mode: AppMode
     @Binding var sidebarOpen: Bool
     let onNewChat: () -> Void
 
@@ -129,6 +152,11 @@ struct AppTopBar: View {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 18))
             }
+
+            Spacer()
+
+            // Chat / </>Code mode switch
+            ModeSwitcher(mode: $mode)
 
             Spacer()
 
