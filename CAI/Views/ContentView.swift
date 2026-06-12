@@ -286,6 +286,16 @@ struct SidebarDrawer: View {
                                     chatManager.selectConversation(convo)
                                     withAnimation { isOpen = false }
                                 }
+                                .contextMenu {
+                                    ShareLink(item: convo.markdownExport) {
+                                        Label("Share", systemImage: "square.and.arrow.up")
+                                    }
+                                    Button(role: .destructive) {
+                                        chatManager.deleteConversation(convo)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                     }

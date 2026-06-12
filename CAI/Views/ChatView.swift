@@ -3,8 +3,20 @@ import PhotosUI
 
 struct ChatView: View {
     @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
+
+    /// Personalised greeting for the empty-chat screen.
+    private var greetingText: String {
+        if !chatManager.greeting.isEmpty { return chatManager.greeting }
+        let hour = Calendar.current.component(.hour, from: Date())
+        let part = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good evening")
+        if let first = authManager.currentUser?.name.split(separator: " ").first {
+            return "\(part), \(first)"
+        }
+        return part
+    }
 
     // Attachment state
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -46,8 +58,11 @@ struct ChatView: View {
                                         .padding(.top, 40)
                                         .frame(maxWidth: .infinity)
                                 } else {
-                                    EmptyStateView()
-                                        .frame(maxWidth: .infinity, minHeight: 300)
+                                    EmptyStateView(greeting: greetingText) { prompt in
+                                        inputText = prompt
+                                        isInputFocused = true
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 300)
                                 }
 
                                 // Scroll anchor + bottom-visibility probe (works iOS 17+)
@@ -334,19 +349,66 @@ struct StreamingIndicator: View {
     }
 }
 
-// MARK: - Empty State
+// MARK: - Empty State (greeting + suggested prompts)
 
 struct EmptyStateView: View {
+    let greeting: String
+    let onSelectPrompt: (String) -> Void
+
+    private struct Suggestion: Identifiable {
+        let id = UUID()
+        let icon: String
+        let label: String
+        let prompt: String
+    }
+
+    private let suggestions: [Suggestion] = [
+        .init(icon: "chevron.left.forwardslash.chevron.right", label: "Explain ABAP", prompt: "Explain what this ABAP code does:\n\n"),
+        .init(icon: "doc.text", label: "Write a report", prompt: "Write an ABAP report that "),
+        .init(icon: "ladybug", label: "Debug an error", prompt: "Help me debug this error: "),
+        .init(icon: "magnifyingglass", label: "SELECT help", prompt: "Write an ABAP SQL SELECT that "),
+        .init(icon: "envelope", label: "Draft an email", prompt: "Help me draft a professional email about: "),
+        .init(icon: "text.append", label: "Summarize", prompt: "Summarize the following: ")
+    ]
+
+    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary.opacity(0.5))
-            Text("Start a Conversation")
-                .font(.title2).fontWeight(.semibold)
-            Text("Ask anything about SAP, ABAP, or use MCP tools")
-                .font(.subheadline).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        VStack(spacing: 22) {
+            VStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.blue.gradient)
+                Text(greeting)
+                    .font(.title2).fontWeight(.semibold)
+                    .multilineTextAlignment(.center)
+                Text("How can I help you today?")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(suggestions) { suggestion in
+                    Button {
+                        onSelectPrompt(suggestion.prompt)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: suggestion.icon)
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                            Text(suggestion.label)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -495,4 +557,5 @@ private struct AtBottomPreferenceKey: PreferenceKey {
 #Preview {
     ChatView()
         .environmentObject(ChatManager(service: BFFChatService()))
+        .environmentObject(AuthManager())
 }
