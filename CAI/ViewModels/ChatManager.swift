@@ -12,7 +12,9 @@ final class ChatManager: ObservableObject {
     @Published var currentConversation: Conversation?
     @Published var isStreaming = false
     @Published var isLoadingChats = false
-    @Published var error: String?
+    @Published var error: String? {
+        didSet { if error != nil, oldValue == nil { Haptic.notify(.error) } }
+    }
     @Published var connectionStatus: ConnectionStatus = .disconnected
 
     @Published var selectedModel: LLMModel = LLMModel.defaultModel
@@ -265,11 +267,13 @@ final class ChatManager: ObservableObject {
     }
 
     func selectConversation(_ conversation: Conversation) {
+        Haptic.selection()
         currentConversation = conversation
         Task { await loadMessages(for: conversation.id) }
     }
 
     func deleteConversation(_ conversation: Conversation) {
+        Haptic.impact(.rigid)
         conversations.removeAll { $0.id == conversation.id }
         if currentConversation?.id == conversation.id {
             currentConversation = conversations.first
@@ -280,6 +284,7 @@ final class ChatManager: ObservableObject {
 
     func sendMessage(_ text: String) async {
         guard !text.isBlank, !isStreaming else { return }
+        Haptic.impact(.medium)   // message sent
 
         if currentConversation == nil { newConversation() }
         guard var conversation = currentConversation else { return }
@@ -346,6 +351,7 @@ final class ChatManager: ObservableObject {
                             timestamp: assistantMessage.timestamp
                         )
                         updateLastMessage(assistantMessage, in: conversation.id)
+                        Haptic.impact(.light)   // response complete
 
                         // Persist AI message (best-effort)
                         if let api = apiService, !finalContent.isEmpty {
@@ -461,6 +467,16 @@ struct Conversation: Identifiable, Equatable {
     let createdAt: Date
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
+
+    /// Markdown export of the whole transcript for the iOS share sheet.
+    var markdownExport: String {
+        var out = "# \(title)\n\n"
+        for message in messages where !message.content.isEmpty {
+            let who = message.role == .user ? "You" : "BlueFunda AI"
+            out += "**\(who):** \(message.content)\n\n"
+        }
+        return out
+    }
 }
 
 // Reasoning effort, mirrors the cai web app's thinking-mode selector.
