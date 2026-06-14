@@ -4,6 +4,9 @@ struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
     @State private var showLogoutConfirmation = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
 
     // Internal infra details (Connection, Build) are only shown to the
     // internal/employee realm; end users on `individual` don't see them.
@@ -125,6 +128,26 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                // Delete Account
+                Section {
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if isDeleting {
+                                ProgressView()
+                            } else {
+                                Text("Delete Account")
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(isDeleting)
+                } footer: {
+                    Text("Permanently deletes your account and all associated data. This can't be undone.")
+                }
             }
             .navigationTitle("Settings")
             .confirmationDialog("Sign Out", isPresented: $showLogoutConfirmation) {
@@ -138,6 +161,31 @@ struct SettingsView: View {
             } message: {
                 Text("Are you sure you want to sign out?")
             }
+            .confirmationDialog("Delete Account", isPresented: $showDeleteConfirmation) {
+                Button("Delete Account", role: .destructive) { deleteAccount() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your account and data. This action cannot be undone.")
+            }
+            .alert("Delete Failed", isPresented: .constant(deleteError != nil)) {
+                Button("OK") { deleteError = nil }
+            } message: {
+                Text(deleteError ?? "")
+            }
+        }
+    }
+
+    private func deleteAccount() {
+        isDeleting = true
+        Task {
+            do {
+                await chatManager.disconnect()
+                try await authManager.deleteAccount()
+                // On success, isAuthenticated flips to false → routes to LoginView.
+            } catch {
+                deleteError = error.localizedDescription
+            }
+            isDeleting = false
         }
     }
 

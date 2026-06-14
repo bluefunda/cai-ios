@@ -26,6 +26,9 @@ final class AuthManager: NSObject, ObservableObject {
         static let keychainService = "com.bluefunda.ai"
     }
 
+    /// Public BFF gateway base (gateway.internal is cluster-only).
+    static let bffBaseURL = "https://api.bluefunda.com/ai"
+
     var realm: String = "individual"
 
     // MARK: - Computed Properties
@@ -86,6 +89,45 @@ final class AuthManager: NSObject, ObservableObject {
         clearKeychain()
 
         // Clear local state
+        accessToken = nil
+        refreshToken = nil
+        tokenExpiresAt = nil
+        currentUser = nil
+        isAuthenticated = false
+    }
+
+    /// Permanently deletes the user's account server-side, then clears the
+    /// local session. Mirrors the BFF contract:
+    ///   DELETE https://api.bluefunda.com/ai/user
+    ///   headers: access-token: <jwt>, x-realm: <realm>
+    /// (The host is the public gateway; gateway.internal is cluster-only.)
+    func deleteAccount() async throws {
+        guard let existing = accessToken else { throw AuthError.notAuthenticated }
+        try? await refreshTokenIfNeeded()
+        let token = accessToken ?? existing
+
+        guard let url = URL(string: "\(Self.bffBaseURL)/user") else {
+            throw AuthError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "accept")
+        request.setValue(token, forHTTPHeaderField: "access-token")
+        request.setValue(realm, forHTTPHeaderField: "x-realm")
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw AuthError.deleteAccountFailed("No response")
+        }
+        guard (200...299).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw AuthError.deleteAccountFailed("HTTP \(http.statusCode) \(body.prefix(120))")
+        }
+
+        // Account is gone — wipe the local session (no token revoke needed).
+        clearKeychain()
         accessToken = nil
         refreshToken = nil
         tokenExpiresAt = nil
@@ -380,6 +422,7 @@ enum AuthError: LocalizedError {
     case tokenExchangeFailed
     case tokenRefreshFailed
     case notAuthenticated
+    case deleteAccountFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -395,6 +438,8 @@ enum AuthError: LocalizedError {
             return "Failed to refresh token"
         case .notAuthenticated:
             return "Not authenticated"
+        case .deleteAccountFailed(let reason):
+            return "Couldn't delete account: \(reason)"
         }
     }
 }
