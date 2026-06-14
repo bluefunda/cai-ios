@@ -18,6 +18,7 @@
 		A1000009201BCDEF /* BFFChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019201BCDEF /* BFFChatService.swift */; };
 		A100000A201BCDEF /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001A201BCDEF /* AuthManager.swift */; };
 		A100000B201BCDEF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A100001B201BCDEF /* Assets.xcassets */; };
+		L1000011201BCDEF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = L1000001201BCDEF /* PrivacyInfo.xcprivacy */; };
 		B1000011201BCDEF /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001201BCDEF /* APIModels.swift */; };
 		B1000012201BCDEF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002201BCDEF /* APIClient.swift */; };
 		B1000013201BCDEF /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000003201BCDEF /* Extensions.swift */; };
@@ -56,6 +57,7 @@
 		A100001A201BCDEF /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		A100001B201BCDEF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A100001C201BCDEF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		L1000001201BCDEF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A1000020201BCDEF /* CAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1000001201BCDEF /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
 		B1000002201BCDEF /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -132,6 +134,7 @@
 				B1000021201BCDEF /* Utilities */,
 				A100001B201BCDEF /* Assets.xcassets */,
 				A100001C201BCDEF /* Info.plist */,
+				L1000001201BCDEF /* PrivacyInfo.xcprivacy */,
 			);
 			path = CAI;
 			sourceTree = "<group>";
@@ -299,6 +302,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A100000B201BCDEF /* Assets.xcassets in Resources */,
+				L1000011201BCDEF /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
