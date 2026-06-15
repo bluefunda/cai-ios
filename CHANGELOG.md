@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/bluefunda/cai-ios/compare/v1.0.0...v1.0.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **ci:** specify manual signing in ExportOptions.plist for exportArchive ([#56](https://github.com/bluefunda/cai-ios/issues/56)) ([f31f2f3](https://github.com/bluefunda/cai-ios/commit/f31f2f3fbe21eaf015ddb44f836ced4fdc83e608))
+
 ## 1.0.0 (2026-06-15)
 
 
