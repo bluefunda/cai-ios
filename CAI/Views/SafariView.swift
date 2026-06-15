@@ -3,7 +3,7 @@ import SafariServices
 
 // MARK: - Safari View
 // In-app browser wrapper for SFSafariViewController, used for Help & Support
-// and Upgrade Plan links so users stay inside the app.
+// links so users stay inside the app.
 
 struct SafariView: UIViewControllerRepresentable {
     let url: URL

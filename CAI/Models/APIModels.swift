@@ -427,49 +427,6 @@ struct GreetingsDTO: Codable {
     }
 }
 
-// MARK: - Stripe (/stripe/*)
-
-struct StripeSubscriptionDTO: Codable {
-    let planName: String?
-    let status: String?
-    let currentPeriodEnd: String?
-
-    enum CodingKeys: String, CodingKey {
-        case planName = "plan_name"
-        case status
-        case currentPeriodEnd = "current_period_end"
-    }
-}
-
-struct StripePlansDTO: Codable {
-    let plans: [StripePlanDTO]
-
-    init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           let plans = try? container.decode([StripePlanDTO].self, forKey: .plans) {
-            self.plans = plans; return
-        }
-        let container = try decoder.singleValueContainer()
-        self.plans = (try? container.decode([StripePlanDTO].self)) ?? []
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(plans, forKey: .plans)
-    }
-
-    enum CodingKeys: String, CodingKey { case plans }
-}
-
-struct StripePlanDTO: Codable, Identifiable {
-    let id: String
-    let name: String
-    let price: Double?
-    let currency: String?
-    let interval: String?
-    let features: [String]?
-}
-
 // MARK: - Generic API Error
 
 struct APIErrorDTO: Codable {
