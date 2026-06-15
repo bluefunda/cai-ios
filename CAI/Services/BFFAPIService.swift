@@ -158,17 +158,6 @@ final class BFFAPIService {
         let result = try JSONDecoder().decode(FileUploadResultDTO.self, from: raw)
         return result.resolvedURL
     }
-
-    // MARK: - Stripe
-
-    func fetchSubscription() async throws -> StripeSubscriptionDTO {
-        try await client.get("/stripe/subscription")
-    }
-
-    func fetchPlans() async throws -> [StripePlanDTO] {
-        let response: StripePlansDTO = try await client.get("/stripe/plans")
-        return response.plans
-    }
 }
 
 // MARK: - Convenience: AuthManager token provider factory

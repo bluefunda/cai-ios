@@ -17,12 +17,18 @@ AI APPLICATION SAFEGUARDS
   no device identifiers, location, or contacts are collected.
 
 ACCOUNT DELETION
-# TODO: Account deletion is not currently available in-app (only Sign Out).
-# Before submission, either: (a) add an in-app "Delete Account" flow that calls the
-# backend user-delete endpoint, OR (b) add a "Delete my account" link in Settings
-# that opens https://accounts.bluefunda.com/delete (you must create this web page).
-# Apple Guideline 5.1.1 requires in-app account deletion for apps that support
-# account creation. This MUST be resolved before the app will be approved.
+The app provides an in-app "Delete Account" option (Settings → Delete Account).
+This permanently deletes the account and all associated data via the backend
+user-delete endpoint and signs the user out. A confirmation dialog is shown
+before deletion proceeds.
+
+REPORTING OBJECTIONABLE CONTENT
+Settings → Report Suspicious Content opens a pre-filled email to our support
+team (info@bluefunda.com) for reporting any in-app content believed to be
+suspicious, abusive, or in violation of our policies.
+
+LEGAL
+Settings → Legal provides links to our Privacy Policy and Terms of Service.
 
 NOTES FOR REVIEWER
 • The app requires iOS 17.0+.

@@ -167,6 +167,12 @@ struct ChatView: View {
             ) { result in
                 handleFileImport(result)
             }
+
+            Text("AI responses may be inaccurate. Verify important information.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 4)
         }
         // Dismiss keyboard when AI starts responding
         .onChange(of: chatManager.isStreaming) { _, streaming in

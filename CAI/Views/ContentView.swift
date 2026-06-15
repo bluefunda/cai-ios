@@ -216,7 +216,6 @@ struct SidebarDrawer: View {
     @State private var searchText = ""
 
     private let helpURL = URL(string: "https://docs.bluefunda.com/")!
-    private let upgradeURL = URL(string: "https://cai.bluefunda.com/pricing")!
 
     private var filteredConversations: [Conversation] {
         guard !searchText.isEmpty else { return chatManager.conversations }
@@ -360,11 +359,6 @@ struct SidebarDrawer: View {
                 SidebarNavButton(icon: "questionmark.circle", label: "Help & Support") {
                     withAnimation { isOpen = false }
                     onOpenURL(helpURL)
-                }
-
-                SidebarNavButton(icon: "crown", label: "Upgrade Plan") {
-                    withAnimation { isOpen = false }
-                    onOpenURL(upgradeURL)
                 }
             }
             .padding(.bottom, 8)

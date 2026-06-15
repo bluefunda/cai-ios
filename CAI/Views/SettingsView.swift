@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
+    @Environment(\.openURL) private var openURL
     @State private var showLogoutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
@@ -116,6 +117,37 @@ struct SettingsView: View {
                     Text("About")
                 }
 
+                // Legal
+                Section {
+                    Button {
+                        openURL(privacyPolicyURL)
+                    } label: {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                            .foregroundColor(.primary)
+                    }
+
+                    Button {
+                        openURL(termsOfServiceURL)
+                    } label: {
+                        Label("Terms of Service", systemImage: "doc.text")
+                            .foregroundColor(.primary)
+                    }
+                } header: {
+                    Text("Legal")
+                }
+
+                // Report Suspicious Content
+                Section {
+                    Button {
+                        openURL(reportContentURL)
+                    } label: {
+                        Label("Report Suspicious Content", systemImage: "flag")
+                            .foregroundColor(.primary)
+                    }
+                } footer: {
+                    Text("Report content within the app that you believe is suspicious, abusive, or violates our policies. This opens an email to our support team.")
+                }
+
                 // Logout
                 Section {
                     Button(role: .destructive) {
@@ -173,6 +205,26 @@ struct SettingsView: View {
                 Text(deleteError ?? "")
             }
         }
+    }
+
+    private let privacyPolicyURL = URL(string: "https://bluefunda.com/privacy/")!
+    private let termsOfServiceURL = URL(string: "https://bluefunda.com/terms/")!
+
+    private var reportContentURL: URL {
+        let subject = "Report Suspicious Content - CAI iOS App"
+        var body = "Please describe the content you'd like to report and where you encountered it (e.g. chat message, conversation title):\n\n\n"
+        if let email = authManager.currentUser?.email {
+            body += "—\nAccount: \(email)"
+        }
+
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=?")
+
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed) ?? subject
+        let encodedBody = body.addingPercentEncoding(withAllowedCharacters: allowed) ?? body
+
+        return URL(string: "mailto:info@bluefunda.com?subject=\(encodedSubject)&body=\(encodedBody)")
+            ?? URL(string: "mailto:info@bluefunda.com")!
     }
 
     private func deleteAccount() {
