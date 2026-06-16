@@ -5,6 +5,12 @@ On the login screen, select the "Individual" realm (the default, left tab), then
 browser. Enter the demo credentials there and approve the OAuth consent screen.
 After sign-in you will be returned to the app and land on the chat interface.
 
+SIGN IN WITH APPLE
+The app supports Sign in with Apple (Guideline 4.8) alongside Google and Microsoft.
+The Apple sign-in button is visible on the auth.bluefunda.com login page after tapping
+"Sign in with Keycloak." Tapping it initiates a standard Apple OAuth flow via
+ASWebAuthenticationSession and creates/links a BlueFunda account automatically.
+
 AI APPLICATION SAFEGUARDS
 • This is a closed-access service: all users must create a BlueFunda account and agree
   to Terms of Service before API access is granted. No anonymous usage is possible.
