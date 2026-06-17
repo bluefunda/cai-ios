@@ -111,6 +111,8 @@ final class ChatManager: ObservableObject {
         await service.disconnect()
         connectionStatus = .disconnected
         apiService = nil
+        conversations = []
+        currentConversation = nil
     }
 
     // MARK: - Data Loading
