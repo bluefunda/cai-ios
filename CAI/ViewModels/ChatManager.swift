@@ -111,6 +111,11 @@ final class ChatManager: ObservableObject {
         await service.disconnect()
         connectionStatus = .disconnected
         apiService = nil
+        conversations = []
+        currentConversation = nil
+        subscribedMCPServerIds = []
+        selectedMCPServer = nil
+        rateLimit = nil
     }
 
     // MARK: - Data Loading
