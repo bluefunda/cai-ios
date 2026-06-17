@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/bluefunda/cai-ios/compare/v1.0.1...v1.0.2) (2026-06-17)
+
+
+### Bug Fixes
+
+* **account:** use Authorization Bearer header for delete account request ([#59](https://github.com/bluefunda/cai-ios/issues/59)) ([8ab80fc](https://github.com/bluefunda/cai-ios/commit/8ab80fc340667dda402a2c8fcbab9db7c1701ef6))
+
 ## [1.0.1](https://github.com/bluefunda/cai-ios/compare/v1.0.0...v1.0.1) (2026-06-15)
 
 
