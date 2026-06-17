@@ -113,6 +113,9 @@ final class ChatManager: ObservableObject {
         apiService = nil
         conversations = []
         currentConversation = nil
+        subscribedMCPServerIds = []
+        selectedMCPServer = nil
+        rateLimit = nil
     }
 
     // MARK: - Data Loading
