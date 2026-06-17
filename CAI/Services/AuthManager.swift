@@ -99,7 +99,7 @@ final class AuthManager: NSObject, ObservableObject {
     /// Permanently deletes the user's account server-side, then clears the
     /// local session. Mirrors the BFF contract:
     ///   DELETE https://api.bluefunda.com/ai/user
-    ///   headers: access-token: <jwt>, x-realm: <realm>
+    ///   headers: Authorization: Bearer <jwt>, X-Realm: <realm>
     /// (The host is the public gateway; gateway.internal is cluster-only.)
     func deleteAccount() async throws {
         guard let existing = accessToken else { throw AuthError.notAuthenticated }
@@ -113,8 +113,8 @@ final class AuthManager: NSObject, ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "accept")
-        request.setValue(token, forHTTPHeaderField: "access-token")
-        request.setValue(realm, forHTTPHeaderField: "x-realm")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(realm, forHTTPHeaderField: "X-Realm")
         request.timeoutInterval = 30
 
         let (data, response) = try await URLSession.shared.data(for: request)
