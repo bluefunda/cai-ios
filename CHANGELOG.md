@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/bluefunda/cai-ios/compare/v1.0.3...v1.0.4) (2026-06-18)
+
+
+### Bug Fixes
+
+* **chat:** clear user state on disconnect to prevent stale data after account deletion ([#63](https://github.com/bluefunda/cai-ios/issues/63)) ([d5af340](https://github.com/bluefunda/cai-ios/commit/d5af340784f32dc2dd9212c311b1fac8dfd22c5e))
+
 ## [1.0.3](https://github.com/bluefunda/cai-ios/compare/v1.0.2...v1.0.3) (2026-06-17)
 
 
