@@ -33,14 +33,18 @@ final class AuthManager: NSObject, ObservableObject {
 
     // MARK: - Computed Properties
 
-    private var authorizationURL: URL? {
+    private func authorizationURL(idpHint: String? = nil) -> URL? {
         var components = URLComponents(string: "\(Config.keycloakBaseURL)/realms/\(realm)/protocol/openid-connect/auth")
-        components?.queryItems = [
+        var items: [URLQueryItem] = [
             URLQueryItem(name: "client_id", value: Config.clientId),
             URLQueryItem(name: "redirect_uri", value: Config.redirectURI),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "scope", value: "openid profile email offline_access"),
         ]
+        if let hint = idpHint {
+            items.append(URLQueryItem(name: "kc_idp_hint", value: hint))
+        }
+        components?.queryItems = items
         return components?.url
     }
 
@@ -54,12 +58,12 @@ final class AuthManager: NSObject, ObservableObject {
 
     // MARK: - Public Methods
 
-    func login(realm: String = "cai") {
+    func login(realm: String = "individual", idpHint: String? = nil) {
         self.realm = realm
         isLoading = true
         error = nil
 
-        guard let url = authorizationURL else {
+        guard let url = authorizationURL(idpHint: idpHint) else {
             error = .invalidURL
             isLoading = false
             return
