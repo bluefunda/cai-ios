@@ -72,11 +72,11 @@ struct ConversationRow: View {
         HStack(spacing: 12) {
             // Icon
             Circle()
-                .fill(isSelected ? Color.blue : Color.gray.opacity(0.3))
+                .fill(isSelected ? BFColor.primary : BFColor.neutral200)
                 .frame(width: 44, height: 44)
                 .overlay {
                     Image(systemName: "bubble.left.and.bubble.right")
-                        .foregroundColor(isSelected ? .white : .gray)
+                        .foregroundColor(isSelected ? BFColor.textInverse : BFColor.neutral500)
                 }
 
             // Content
@@ -111,11 +111,11 @@ struct ConversationRow: View {
             // Checkmark if selected
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.blue)
+                    .foregroundColor(BFColor.primary)
             }
         }
         .padding(.vertical, 4)
-        .background(isSelected ? Color.blue.opacity(0.05) : Color.clear)
+        .background(isSelected ? BFColor.primaryTint : Color.clear)
     }
 }
 

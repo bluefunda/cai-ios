@@ -131,9 +131,9 @@ struct ChatView: View {
                     } label: {
                         Image(systemName: "arrow.down.circle.fill")
                             .font(.system(size: 36))
-                            .foregroundStyle(.white)
-                            .background(Color.blue, in: Circle())
-                            .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                            .foregroundStyle(BFColor.textInverse)
+                            .background(BFColor.primary, in: Circle())
+                            .bfShadow(BFShadow.md)
                     }
                     .padding(.bottom, 12)
                     .padding(.trailing, 16)
@@ -297,9 +297,9 @@ struct ConnectionBanner: View {
 
     private var statusColor: Color {
         switch status {
-        case .connecting, .reconnecting: return .orange
-        case .error: return .red
-        default: return .gray
+        case .connecting, .reconnecting: return BFColor.warning
+        case .error: return BFColor.error
+        default: return BFColor.neutral400
         }
     }
 }
@@ -313,12 +313,12 @@ struct MessageView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
-                .fill(message.role == .user ? Color.blue : Color.green)
+                .fill(message.role == .user ? BFColor.primary : BFColor.success)
                 .frame(width: 32, height: 32)
                 .overlay {
                     Image(systemName: message.role == .user ? "person.fill" : "brain.head.profile")
                         .font(.system(size: 14))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(BFColor.textInverse)
                 }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -366,7 +366,7 @@ struct MessageView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(message.role == .user ? Color.blue.opacity(0.05) : Color.clear)
+        .background(message.role == .user ? BFColor.primarySubtle : Color.clear)
     }
 }
 
@@ -379,11 +379,11 @@ struct StreamingIndicator: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
-                .fill(Color.green)
+                .fill(BFColor.success)
                 .frame(width: 32, height: 32)
                 .overlay {
                     Image(systemName: "brain.head.profile")
-                        .font(.system(size: 14)).foregroundStyle(.white)
+                        .font(.system(size: 14)).foregroundStyle(BFColor.textInverse)
                 }
             Text("Thinking" + String(repeating: ".", count: dotCount + 1))
                 .foregroundStyle(.secondary).font(.subheadline)
@@ -424,7 +424,7 @@ struct EmptyStateView: View {
             VStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 44))
-                    .foregroundStyle(.blue.gradient)
+                    .foregroundStyle(BFColor.primary.gradient)
                 Text(greeting)
                     .font(.title2).fontWeight(.semibold)
                     .multilineTextAlignment(.center)
@@ -440,7 +440,7 @@ struct EmptyStateView: View {
                         HStack(spacing: 8) {
                             Image(systemName: suggestion.icon)
                                 .font(.caption)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(BFColor.primary)
                             Text(suggestion.label)
                                 .font(.subheadline)
                                 .foregroundStyle(.primary)
@@ -481,7 +481,7 @@ struct ChatInputView: View {
             // Attachment preview strip
             if let filename = attachmentFilename {
                 HStack(spacing: 8) {
-                    Image(systemName: "paperclip").foregroundStyle(.blue)
+                    Image(systemName: "paperclip").foregroundStyle(BFColor.primary)
                     Text(filename).font(.caption).lineLimit(1).foregroundStyle(.secondary)
                     Spacer()
                     Button(action: onClearAttachment) {
@@ -507,7 +507,7 @@ struct ChatInputView: View {
                 } label: {
                     Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
                         .font(.system(size: 32))
-                        .foregroundStyle(isStreaming ? .red : (canSend ? .blue : .secondary))
+                        .foregroundStyle(isStreaming ? BFColor.error : (canSend ? BFColor.primary : .secondary))
                 }
                 .disabled(!isStreaming && !canSend)
             }
@@ -578,7 +578,7 @@ struct ModeModelPicker: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.blue.opacity(0.1))
+            .background(BFColor.primaryTint)
             .cornerRadius(8)
         }
     }

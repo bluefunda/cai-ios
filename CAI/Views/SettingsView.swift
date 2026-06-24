@@ -257,13 +257,13 @@ struct SettingsView: View {
     private var statusColor: Color {
         switch chatManager.connectionStatus {
         case .connected:
-            return .green
+            return BFColor.success
         case .connecting, .reconnecting:
-            return .orange
+            return BFColor.warning
         case .error:
-            return .red
+            return BFColor.error
         case .disconnected:
-            return .gray
+            return BFColor.neutral400
         }
     }
 }
@@ -277,13 +277,13 @@ struct UserInfoRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(Color.blue.gradient)
+                .fill(BFColor.primary.gradient)
                 .frame(width: 50, height: 50)
                 .overlay {
                     Text(user.name.prefix(1).uppercased())
                         .font(.title2)
                         .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .foregroundColor(BFColor.textInverse)
                 }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -300,8 +300,8 @@ struct UserInfoRow: View {
                         .fontWeight(.medium)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(4)
+                        .background(BFColor.primaryTint)
+                        .cornerRadius(BFRadius.sm)
 
                     if user.isAdmin {
                         Text("ADMIN")
@@ -309,9 +309,9 @@ struct UserInfoRow: View {
                             .fontWeight(.medium)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.1))
-                            .foregroundColor(.orange)
-                            .cornerRadius(4)
+                            .background(BFColor.warningBg)
+                            .foregroundColor(BFColor.warning)
+                            .cornerRadius(BFRadius.sm)
                     }
                 }
             }
@@ -347,7 +347,7 @@ struct ModelSelectionView: View {
 
                         if model.id == chatManager.selectedModel.id {
                             Image(systemName: "checkmark")
-                                .foregroundColor(.blue)
+                                .foregroundColor(BFColor.primary)
                         }
                     }
                 }
@@ -401,7 +401,7 @@ struct MCPServerSelectionView: View {
 
                         if isSelected(server) {
                             Image(systemName: "checkmark")
-                                .foregroundColor(.blue)
+                                .foregroundColor(BFColor.primary)
                         }
                     }
                 }

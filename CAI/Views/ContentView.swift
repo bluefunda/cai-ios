@@ -425,7 +425,7 @@ private struct SidebarConversationRow: View {
         .padding(.vertical, 9)
         .background(
             isSelected
-                ? Color.blue.opacity(0.12)
+                ? BFColor.primaryTint
                 : Color.clear,
             in: RoundedRectangle(cornerRadius: 8)
         )
