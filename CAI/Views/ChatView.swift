@@ -326,7 +326,9 @@ struct MessageView: View {
                     .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
 
                 if message.role == .user {
-                    Text(message.content).textSelection(.enabled)
+                    Text(message.content)
+                        .foregroundStyle(BFColor.textChat)
+                        .textSelection(.enabled)
                 } else {
                     MarkdownView(content: message.content)
                 }
@@ -366,7 +368,7 @@ struct MessageView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(message.role == .user ? BFColor.primarySubtle : Color.clear)
+        .background(message.role == .user ? BFColor.primary.opacity(0.08) : Color.clear)
     }
 }
 
