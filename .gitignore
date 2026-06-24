@@ -29,3 +29,6 @@ Podfile.lock
 fastlane/metadata/review_information/demo_user.txt
 fastlane/metadata/review_information/demo_password.txt
 fastlane/metadata/review_information/phone_number.txt
+
+# Brand assets — large binary; extracted content lives in BRAND.md
+Brand_Guidelines.zip
