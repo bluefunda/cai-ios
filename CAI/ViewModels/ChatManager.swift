@@ -329,6 +329,12 @@ final class ChatManager: ObservableObject {
         isStreaming = true
         error = nil
 
+        // Fire-and-forget title generation for new chats — runs in parallel
+        // with streaming, not gated on stream_end (matches web app behavior).
+        if isFirstMessage {
+            updateConversationTitle(conversation.id, from: text)
+        }
+
         streamingTask = Task {
             var finalContent = ""
             do {
@@ -367,11 +373,6 @@ final class ChatManager: ObservableObject {
                                     content: finalContent
                                 )
                             }
-                        }
-
-                        // Generate title after first exchange
-                        if isFirstMessage {
-                            updateConversationTitle(conversation.id, from: text)
                         }
 
                     case .heartbeat:
