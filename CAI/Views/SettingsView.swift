@@ -28,18 +28,6 @@ struct SettingsView: View {
                 // Model Settings
                 Section {
                     NavigationLink {
-                        ModelSelectionView()
-                    } label: {
-                        HStack {
-                            Label("Default Model", systemImage: "brain")
-                            Spacer()
-                            Text(chatManager.selectedModel.name)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-
-                    NavigationLink {
                         MCPServerSelectionView()
                     } label: {
                         HStack {
@@ -317,44 +305,6 @@ struct UserInfoRow: View {
             }
         }
         .padding(.vertical, 4)
-    }
-}
-
-// MARK: - Model Selection View
-
-struct ModelSelectionView: View {
-    @EnvironmentObject var chatManager: ChatManager
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        List {
-            ForEach(chatManager.availableModels) { model in
-                Button {
-                    chatManager.selectedModel = model
-                    dismiss()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(model.name)
-                                .foregroundColor(.primary)
-
-                            Text(model.provider)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        if model.id == chatManager.selectedModel.id {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(BFColor.primary)
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Select Model")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
