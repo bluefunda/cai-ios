@@ -327,7 +327,7 @@ struct MessageView: View {
 
                 if message.role == .user {
                     Text(message.content)
-                        .foregroundStyle(BFColor.textChat)
+                        .foregroundStyle(.primary)
                         .textSelection(.enabled)
                 } else {
                     MarkdownView(content: message.content)
