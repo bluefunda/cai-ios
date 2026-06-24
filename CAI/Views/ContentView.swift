@@ -473,55 +473,328 @@ struct LoadingView: View {
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     @State private var selectedRealm = "individual"
-    let realms = ["individual", "trm"]
+    @State private var logoTapCount = 0
+    @State private var showRealmPicker = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 40) {
+        ZStack {
+            LinearGradient(
+                colors: [Color(.systemBackground), Color.blue.opacity(0.06)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
                 Spacer()
 
-                VStack(spacing: 16) {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 80))
-                        .foregroundStyle(.blue.gradient)
-                    Text("CAI")
-                        .font(.largeTitle).fontWeight(.bold)
-                    Text("Cognitive AI Interface")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Select Realm")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Picker("Realm", selection: $selectedRealm) {
-                        ForEach(realms, id: \.self) { Text($0.uppercased()).tag($0) }
+                VStack(spacing: 20) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue.gradient)
+                            .frame(width: 96, height: 96)
+                            .shadow(color: .blue.opacity(0.3), radius: 20, y: 8)
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 44))
+                            .foregroundStyle(.white)
                     }
-                    .pickerStyle(.segmented)
-                }
-                .padding(.horizontal, 40)
-
-                Button {
-                    authManager.login(realm: selectedRealm)
-                } label: {
-                    HStack {
-                        Image(systemName: "person.badge.key")
-                        Text("Sign in with Keycloak")
+                    .onTapGesture {
+                        logoTapCount += 1
+                        if logoTapCount >= 5 { showRealmPicker = true; logoTapCount = 0 }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundStyle(.white)
-                    .cornerRadius(12)
+
+                    VStack(spacing: 6) {
+                        Text("BlueFunda AI")
+                            .font(.system(size: 30, weight: .bold))
+                        Text("Your intelligent AI assistant")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    VStack(spacing: 12) {
+                        Text("Sign in to continue")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 14)
+                            .padding(.bottom, 4)
+
+                        SocialSignInButton(label: "Continue with Google", style: .outlined) {
+                            authManager.login(realm: selectedRealm, idpHint: "google")
+                        } icon: {
+                            GoogleLogoView()
+                        }
+
+                        SocialSignInButton(label: "Continue with Microsoft", style: .outlined) {
+                            authManager.login(realm: selectedRealm, idpHint: "azure")
+                        } icon: {
+                            MicrosoftLogoView()
+                        }
+
+                        SocialSignInButton(label: "Continue with Apple", style: .filled) {
+                            authManager.login(realm: selectedRealm, idpHint: "apple")
+                        } icon: {
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 32, height: 32)
+                                .background(Color.black)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                    .padding(.horizontal, 32)
                 }
-                .padding(.horizontal, 40)
 
                 Spacer()
 
-                Text("Powered by BlueFunda")
-                    .font(.caption).foregroundStyle(.secondary).padding(.bottom)
+                VStack(spacing: 4) {
+                    if selectedRealm == "trm" {
+                        Text("TRM")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Color(.systemGray5), in: Capsule())
+                    }
+                    Text("Powered by BlueFunda")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 32)
             }
-            .toolbar(.hidden, for: .navigationBar)
         }
+        .confirmationDialog("Select Realm", isPresented: $showRealmPicker) {
+            Button("Individual") { selectedRealm = "individual" }
+            Button("TRM") { selectedRealm = "trm" }
+        }
+        .alert("Error", isPresented: .constant(authManager.error != nil)) {
+            Button("OK") { authManager.error = nil }
+        } message: {
+            Text(authManager.error?.localizedDescription ?? "")
+        }
+    }
+}
+
+private struct SocialSignInButton<Icon: View>: View {
+    enum Style { case outlined, filled }
+
+    let label: String
+    let style: Style
+    let action: () -> Void
+    let icon: Icon
+
+    init(label: String, style: Style, action: @escaping () -> Void, @ViewBuilder icon: () -> Icon) {
+        self.label = label
+        self.style = style
+        self.action = action
+        self.icon = icon()
+    }
+
+    private var backgroundColor: Color {
+        style == .filled ? .primary : Color(.systemBackground)
+    }
+
+    private var foregroundColor: Color {
+        style == .filled ? .white : .primary
+    }
+
+    private var borderColor: Color {
+        style == .filled ? .clear : Color(.systemGray4)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Capsule()
+                    .fill(backgroundColor)
+                Capsule()
+                    .stroke(borderColor, lineWidth: 1)
+
+                HStack {
+                    Spacer()
+
+                    HStack(spacing: 12) {
+                        icon
+                            .frame(width: 26, height: 26)
+
+                        Text(label)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(foregroundColor)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+            }
+            .frame(height: 50)
+        }
+        .buttonStyle(.plain)
+        .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+    }
+}
+
+private struct GoogleLogoView: View {
+    var body: some View {
+        GeometryReader { geo in
+            let scale = min(geo.size.width, geo.size.height) / 48
+            ZStack {
+                Path { path in
+                    path.move(to: CGPoint(x: 43.611 * scale, y: 20.083 * scale))
+                    path.addLine(to: CGPoint(x: 42 * scale, y: 20 * scale))
+                    path.addLine(to: CGPoint(x: 24 * scale, y: 20 * scale))
+                    path.addLine(to: CGPoint(x: 24 * scale, y: 28 * scale))
+                    path.addLine(to: CGPoint(x: 35.303 * scale, y: 28 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 36 * scale),
+                        control1: CGPoint(x: 33.654 * scale, y: 32.657 * scale),
+                        control2: CGPoint(x: 29.223 * scale, y: 36 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 12 * scale, y: 24 * scale),
+                        control1: CGPoint(x: 17.676 * scale, y: 36 * scale),
+                        control2: CGPoint(x: 12 * scale, y: 30.627 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 12 * scale),
+                        control1: CGPoint(x: 12 * scale, y: 17.373 * scale),
+                        control2: CGPoint(x: 17.373 * scale, y: 12 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 31.961 * scale, y: 15.039 * scale),
+                        control1: CGPoint(x: 27.059 * scale, y: 12 * scale),
+                        control2: CGPoint(x: 29.842 * scale, y: 13.154 * scale)
+                    )
+                    path.addLine(to: CGPoint(x: 37.618 * scale, y: 9.382 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 4 * scale),
+                        control1: CGPoint(x: 34.046 * scale, y: 6.053 * scale),
+                        control2: CGPoint(x: 29.268 * scale, y: 4 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 4 * scale, y: 24 * scale),
+                        control1: CGPoint(x: 12.955 * scale, y: 4 * scale),
+                        control2: CGPoint(x: 4 * scale, y: 12.955 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 44 * scale),
+                        control1: CGPoint(x: 4 * scale, y: 35.045 * scale),
+                        control2: CGPoint(x: 12.955 * scale, y: 44 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 44 * scale, y: 24 * scale),
+                        control1: CGPoint(x: 35.045 * scale, y: 44 * scale),
+                        control2: CGPoint(x: 44 * scale, y: 35.045 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 43.611 * scale, y: 20.083 * scale),
+                        control1: CGPoint(x: 44 * scale, y: 22.659 * scale),
+                        control2: CGPoint(x: 43.862 * scale, y: 21.35 * scale)
+                    )
+                    path.closeSubpath()
+                }
+                .fill(Color(red: 1, green: 0.756, blue: 0.027))
+
+                Path { path in
+                    path.move(to: CGPoint(x: 6.306 * scale, y: 14.691 * scale))
+                    path.addLine(to: CGPoint(x: 12.877 * scale, y: 19.51 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 12 * scale),
+                        control1: CGPoint(x: 14.655 * scale, y: 15.108 * scale),
+                        control2: CGPoint(x: 18.961 * scale, y: 12 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 31.961 * scale, y: 15.039 * scale),
+                        control1: CGPoint(x: 27.059 * scale, y: 12 * scale),
+                        control2: CGPoint(x: 29.842 * scale, y: 13.154 * scale)
+                    )
+                    path.addLine(to: CGPoint(x: 37.618 * scale, y: 9.382 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 4 * scale),
+                        control1: CGPoint(x: 34.046 * scale, y: 6.053 * scale),
+                        control2: CGPoint(x: 29.268 * scale, y: 4 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 6.306 * scale, y: 14.691 * scale),
+                        control1: CGPoint(x: 16.318 * scale, y: 4 * scale),
+                        control2: CGPoint(x: 9.656 * scale, y: 8.337 * scale)
+                    )
+                    path.closeSubpath()
+                }
+                .fill(Color(red: 1, green: 0.239, blue: 0))
+
+                Path { path in
+                    path.move(to: CGPoint(x: 24 * scale, y: 44 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 37.409 * scale, y: 38.808 * scale),
+                        control1: CGPoint(x: 29.166 * scale, y: 44 * scale),
+                        control2: CGPoint(x: 33.86 * scale, y: 42.023 * scale)
+                    )
+                    path.addLine(to: CGPoint(x: 31.219 * scale, y: 33.57 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 36 * scale),
+                        control1: CGPoint(x: 29.211 * scale, y: 35.091 * scale),
+                        control2: CGPoint(x: 26.715 * scale, y: 36 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 12.717 * scale, y: 28.054 * scale),
+                        control1: CGPoint(x: 18.798 * scale, y: 36 * scale),
+                        control2: CGPoint(x: 14.381 * scale, y: 32.683 * scale)
+                    )
+                    path.addLine(to: CGPoint(x: 6.195 * scale, y: 33.079 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 24 * scale, y: 44 * scale),
+                        control1: CGPoint(x: 9.505 * scale, y: 39.556 * scale),
+                        control2: CGPoint(x: 16.227 * scale, y: 44 * scale)
+                    )
+                    path.closeSubpath()
+                }
+                .fill(Color(red: 0.298, green: 0.737, blue: 0.318))
+
+                Path { path in
+                    path.move(to: CGPoint(x: 43.611 * scale, y: 20.083 * scale))
+                    path.addLine(to: CGPoint(x: 42 * scale, y: 20 * scale))
+                    path.addLine(to: CGPoint(x: 24 * scale, y: 20 * scale))
+                    path.addLine(to: CGPoint(x: 24 * scale, y: 28 * scale))
+                    path.addLine(to: CGPoint(x: 35.303 * scale, y: 28 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 31.216 * scale, y: 33.571 * scale),
+                        control1: CGPoint(x: 34.511 * scale, y: 32.237 * scale),
+                        control2: CGPoint(x: 33.072 * scale, y: 34.166 * scale)
+                    )
+                    path.addLine(to: CGPoint(x: 37.406 * scale, y: 38.809 * scale))
+                    path.addCurve(
+                        to: CGPoint(x: 44 * scale, y: 24 * scale),
+                        control1: CGPoint(x: 36.971 * scale, y: 39.205 * scale),
+                        control2: CGPoint(x: 44 * scale, y: 34 * scale)
+                    )
+                    path.addCurve(
+                        to: CGPoint(x: 43.611 * scale, y: 20.083 * scale),
+                        control1: CGPoint(x: 44 * scale, y: 22.659 * scale),
+                        control2: CGPoint(x: 43.862 * scale, y: 21.35 * scale)
+                    )
+                    path.closeSubpath()
+                }
+                .fill(Color(red: 0.098, green: 0.463, blue: 0.824))
+            }
+        }
+        .frame(width: 28, height: 28)
+    }
+}
+
+private struct MicrosoftLogoView: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Color(red: 1, green: 87/255, blue: 34/255)
+                Color(red: 76/255, green: 175/255, blue: 80/255)
+            }
+            HStack(spacing: 0) {
+                Color(red: 3/255, green: 169/255, blue: 244/255)
+                Color(red: 1, green: 193/255, blue: 7/255)
+            }
+        }
+        .frame(width: 28, height: 28)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
