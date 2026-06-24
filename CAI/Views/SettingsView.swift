@@ -19,7 +19,7 @@ struct SettingsView: View {
                 // User Section
                 Section {
                     if let user = authManager.currentUser {
-                        UserInfoRow(user: user, realm: authManager.realm)
+                        UserInfoRow(user: user)
                     }
                 } header: {
                     Text("Account")
@@ -27,18 +27,6 @@ struct SettingsView: View {
 
                 // Model Settings
                 Section {
-                    NavigationLink {
-                        ModelSelectionView()
-                    } label: {
-                        HStack {
-                            Label("Default Model", systemImage: "brain")
-                            Spacer()
-                            Text(chatManager.selectedModel.name)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-
                     NavigationLink {
                         MCPServerSelectionView()
                     } label: {
@@ -272,7 +260,6 @@ struct SettingsView: View {
 
 struct UserInfoRow: View {
     let user: User
-    let realm: String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -294,67 +281,19 @@ struct UserInfoRow: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
-                HStack(spacing: 4) {
-                    Text(realm.uppercased())
+                if user.isAdmin {
+                    Text("ADMIN")
                         .font(.caption2)
                         .fontWeight(.medium)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(BFColor.primaryTint)
+                        .background(BFColor.warningBg)
+                        .foregroundColor(BFColor.warning)
                         .cornerRadius(BFRadius.sm)
-
-                    if user.isAdmin {
-                        Text("ADMIN")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(BFColor.warningBg)
-                            .foregroundColor(BFColor.warning)
-                            .cornerRadius(BFRadius.sm)
-                    }
                 }
             }
         }
         .padding(.vertical, 4)
-    }
-}
-
-// MARK: - Model Selection View
-
-struct ModelSelectionView: View {
-    @EnvironmentObject var chatManager: ChatManager
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        List {
-            ForEach(chatManager.availableModels) { model in
-                Button {
-                    chatManager.selectedModel = model
-                    dismiss()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(model.name)
-                                .foregroundColor(.primary)
-
-                            Text(model.provider)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        if model.id == chatManager.selectedModel.id {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(BFColor.primary)
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Select Model")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
