@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/bluefunda/cai-ios/compare/v1.0.4...v1.1.0) (2026-06-24)
+
+
+### Features
+
+* **login:** redesign login screen with BlueFunda AI branding and social sign-in ([e01b9ec](https://github.com/bluefunda/cai-ios/commit/e01b9ecadfc6bb03f4ec8e7603efd0b0d0e6f1e6))
+
+
+### Bug Fixes
+
+* **login:** Updated login screen design changes and skipped login with keycloak button routing ([75ebae6](https://github.com/bluefunda/cai-ios/commit/75ebae6ae0dcd1e7a269cd2feea0d7cc1d89da46))
+
 ## [1.0.4](https://github.com/bluefunda/cai-ios/compare/v1.0.3...v1.0.4) (2026-06-18)
 
 
