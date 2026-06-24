@@ -590,7 +590,7 @@ private struct SocialSignInButton<Icon: View>: View {
     }
 
     private var backgroundColor: Color {
-        style == .filled ? .primary : Color(.systemBackground)
+        style == .filled ? .black : Color(.systemBackground)
     }
 
     private var foregroundColor: Color {
@@ -598,7 +598,7 @@ private struct SocialSignInButton<Icon: View>: View {
     }
 
     private var borderColor: Color {
-        style == .filled ? .clear : Color(.systemGray4)
+        Color(.systemGray4)
     }
 
     var body: some View {
