@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.1.0](https://github.com/bluefunda/cai-ios/compare/v1.0.4...v1.1.0) (2026-06-24)
+
+
+### Features
+
+* **login:** redesign login screen with BlueFunda AI branding and social sign-in ([e01b9ec](https://github.com/bluefunda/cai-ios/commit/e01b9ecadfc6bb03f4ec8e7603efd0b0d0e6f1e6))
+
+
+### Bug Fixes
+
+* **login:** Updated login screen design changes and skipped login with keycloak button routing ([75ebae6](https://github.com/bluefunda/cai-ios/commit/75ebae6ae0dcd1e7a269cd2feea0d7cc1d89da46))
+
+## [1.0.4](https://github.com/bluefunda/cai-ios/compare/v1.0.3...v1.0.4) (2026-06-18)
+
+
+### Bug Fixes
+
+* **chat:** clear user state on disconnect to prevent stale data after account deletion ([#63](https://github.com/bluefunda/cai-ios/issues/63)) ([d5af340](https://github.com/bluefunda/cai-ios/commit/d5af340784f32dc2dd9212c311b1fac8dfd22c5e))
+
+## [1.0.3](https://github.com/bluefunda/cai-ios/compare/v1.0.2...v1.0.3) (2026-06-17)
+
+
+### Bug Fixes
+
+* **chat:** clear user state on disconnect to prevent stale data after account deletion ([#61](https://github.com/bluefunda/cai-ios/issues/61)) ([0134871](https://github.com/bluefunda/cai-ios/commit/013487114e8a197edb8c82f24b4bb3aea2822763))
+
+## [1.0.2](https://github.com/bluefunda/cai-ios/compare/v1.0.1...v1.0.2) (2026-06-17)
+
+
+### Bug Fixes
+
+* **account:** use Authorization Bearer header for delete account request ([#59](https://github.com/bluefunda/cai-ios/issues/59)) ([8ab80fc](https://github.com/bluefunda/cai-ios/commit/8ab80fc340667dda402a2c8fcbab9db7c1701ef6))
+
 ## [1.0.1](https://github.com/bluefunda/cai-ios/compare/v1.0.0...v1.0.1) (2026-06-15)
 
 

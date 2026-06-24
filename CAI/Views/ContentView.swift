@@ -346,11 +346,6 @@ struct SidebarDrawer: View {
                     withAnimation { isOpen = false }
                 }
 
-                SidebarNavButton(icon: "externaldrive", label: "Cloud Storage") {
-                    withAnimation { isOpen = false }
-                    onOpenStorage()
-                }
-
                 SidebarNavButton(icon: "gear", label: "Settings") {
                     withAnimation { isOpen = false }
                     onOpenSettings()

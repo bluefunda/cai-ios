@@ -494,16 +494,6 @@ struct ChatInputView: View {
             }
 
             HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    Button { onPickPhoto() } label: { Label("Photo Library", systemImage: "photo") }
-                    Button { onPickFile() } label: { Label("Files", systemImage: "folder") }
-                } label: {
-                    Image(systemName: attachmentFilename != nil ? "paperclip.circle.fill" : "paperclip")
-                        .font(.system(size: 22))
-                        .foregroundStyle(attachmentFilename != nil ? .blue : .secondary)
-                        .frame(width: 36, height: 36)
-                }
-
                 TextField("Message...", text: $text, axis: .vertical)
                     .textFieldStyle(.plain)
                     .focused(isFocused)
