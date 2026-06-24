@@ -237,7 +237,7 @@ struct SidebarDrawer: View {
                     onOpenSettings()
                 } label: {
                     Circle()
-                        .fill(Color.brandBlue.gradient)
+                        .fill(BFColor.primary.gradient)
                         .frame(width: 36, height: 36)
                         .overlay {
                             Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
@@ -479,7 +479,7 @@ struct LoginView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(.systemBackground), Color.blue.opacity(0.06)],
+                colors: [Color(.systemBackground), BFColor.primaryTint],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -491,12 +491,12 @@ struct LoginView: View {
                 VStack(spacing: 20) {
                     ZStack {
                         Circle()
-                            .fill(Color.blue.gradient)
+                            .fill(BFColor.primary.gradient)
                             .frame(width: 96, height: 96)
-                            .shadow(color: .blue.opacity(0.3), radius: 20, y: 8)
+                            .bfShadow(BFShadow.lg)
                         Image(systemName: "brain.head.profile")
                             .font(.system(size: 44))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(BFColor.textInverse)
                     }
                     .onTapGesture {
                         logoTapCount += 1
@@ -505,16 +505,16 @@ struct LoginView: View {
 
                     VStack(spacing: 6) {
                         Text("BlueFunda AI")
-                            .font(.system(size: 30, weight: .bold))
+                            .font(BFFont.h3)
                         Text("Your intelligent AI assistant")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(BFFont.bodySmall)
+                            .foregroundStyle(BFColor.textTertiary)
                     }
 
                     VStack(spacing: 12) {
                         Text("Sign in to continue")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .font(BFFont.micro)
+                            .foregroundStyle(BFColor.textTertiary)
                             .padding(.top, 14)
                             .padding(.bottom, 4)
 
@@ -549,17 +549,17 @@ struct LoginView: View {
                 VStack(spacing: 4) {
                     if selectedRealm == "trm" {
                         Text("TRM")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
+                            .font(BFFont.micro)
+                            .foregroundStyle(BFColor.textMuted)
+                            .padding(.horizontal, BFSpacing._2)
                             .padding(.vertical, 2)
-                            .background(Color(.systemGray5), in: Capsule())
+                            .background(BFColor.neutral100, in: Capsule())
                     }
                     Text("Powered by BlueFunda")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(BFFont.caption)
+                        .foregroundStyle(BFColor.textMuted)
                 }
-                .padding(.bottom, 32)
+                .padding(.bottom, BFSpacing._8)
             }
         }
         .confirmationDialog("Select Realm", isPresented: $showRealmPicker) {
@@ -617,7 +617,7 @@ private struct SocialSignInButton<Icon: View>: View {
                             .frame(width: 26, height: 26)
 
                         Text(label)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(BFFont.bodySmall)
                             .foregroundColor(foregroundColor)
                             .lineLimit(1)
                     }
@@ -629,7 +629,7 @@ private struct SocialSignInButton<Icon: View>: View {
             .frame(height: 50)
         }
         .buttonStyle(.plain)
-        .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
+        .bfShadow(BFShadow.sm)
     }
 }
 

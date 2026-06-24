@@ -12,7 +12,7 @@ struct SafariView: UIViewControllerRepresentable {
         let config = SFSafariViewController.Configuration()
         config.entersReaderIfAvailable = false
         let controller = SFSafariViewController(url: url, configuration: config)
-        controller.preferredControlTintColor = UIColor(Color.brandBlue)
+        controller.preferredControlTintColor = UIColor(BFColor.primary)
         return controller
     }
 
