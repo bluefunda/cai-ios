@@ -40,6 +40,13 @@
 		J1000013201BCDEF /* ObjectBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000003201BCDEF /* ObjectBrowserView.swift */; };
 		J1000014201BCDEF /* SourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000004201BCDEF /* SourceView.swift */; };
 		D1000018201BCDEF /* StorageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000008201BCDEF /* StorageViewModel.swift */; };
+		DS100001201BCDEF /* BFColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000001201BCDEF /* BFColors.swift */; };
+		DS100002201BCDEF /* BFTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000002201BCDEF /* BFTypography.swift */; };
+		DS100003201BCDEF /* BFSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000003201BCDEF /* BFSpacing.swift */; };
+		DS100004201BCDEF /* BFRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000004201BCDEF /* BFRadius.swift */; };
+		DS100005201BCDEF /* BFShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000005201BCDEF /* BFShadow.swift */; };
+		DS100006201BCDEF /* BFMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000006201BCDEF /* BFMotion.swift */; };
+		DS100007201BCDEF /* BFIconSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000007201BCDEF /* BFIconSize.swift */; };
 		E100001001BCDEF /* CAITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002001BCDEF /* CAITests.swift */; };
 		E100001101BCDEF /* MockChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002101BCDEF /* MockChatService.swift */; };
 /* End PBXBuildFile section */
@@ -80,6 +87,13 @@
 		J1000003201BCDEF /* ObjectBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ObjectBrowserView.swift; sourceTree = "<group>"; };
 		J1000004201BCDEF /* SourceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SourceView.swift; sourceTree = "<group>"; };
 		D1000008201BCDEF /* StorageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageViewModel.swift; sourceTree = "<group>"; };
+		DS000001201BCDEF /* BFColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFColors.swift; sourceTree = "<group>"; };
+		DS000002201BCDEF /* BFTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFTypography.swift; sourceTree = "<group>"; };
+		DS000003201BCDEF /* BFSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFSpacing.swift; sourceTree = "<group>"; };
+		DS000004201BCDEF /* BFRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFRadius.swift; sourceTree = "<group>"; };
+		DS000005201BCDEF /* BFShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFShadow.swift; sourceTree = "<group>"; };
+		DS000006201BCDEF /* BFMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFMotion.swift; sourceTree = "<group>"; };
+		DS000007201BCDEF /* BFIconSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFIconSize.swift; sourceTree = "<group>"; };
 		E100002001BCDEF /* CAITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAITests.swift; sourceTree = "<group>"; };
 		E100002101BCDEF /* MockChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockChatService.swift; sourceTree = "<group>"; };
 		E100002201BCDEF /* CAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -132,6 +146,7 @@
 				A1000044201BCDEF /* Services */,
 				B1000020201BCDEF /* Models */,
 				B1000021201BCDEF /* Utilities */,
+				DS200001201BCDEF /* DesignSystem */,
 				A100001B201BCDEF /* Assets.xcassets */,
 				A100001C201BCDEF /* Info.plist */,
 				L1000001201BCDEF /* PrivacyInfo.xcprivacy */,
@@ -220,6 +235,20 @@
 				K1000001201BCDEF /* HapticManager.swift */,
 			);
 			path = Utilities;
+			sourceTree = "<group>";
+		};
+		DS200001201BCDEF /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				DS000001201BCDEF /* BFColors.swift */,
+				DS000002201BCDEF /* BFTypography.swift */,
+				DS000003201BCDEF /* BFSpacing.swift */,
+				DS000004201BCDEF /* BFRadius.swift */,
+				DS000005201BCDEF /* BFShadow.swift */,
+				DS000006201BCDEF /* BFMotion.swift */,
+				DS000007201BCDEF /* BFIconSize.swift */,
+			);
+			path = DesignSystem;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -344,6 +373,13 @@
 				J1000013201BCDEF /* ObjectBrowserView.swift in Sources */,
 				J1000014201BCDEF /* SourceView.swift in Sources */,
 				D1000018201BCDEF /* StorageViewModel.swift in Sources */,
+				DS100001201BCDEF /* BFColors.swift in Sources */,
+				DS100002201BCDEF /* BFTypography.swift in Sources */,
+				DS100003201BCDEF /* BFSpacing.swift in Sources */,
+				DS100004201BCDEF /* BFRadius.swift in Sources */,
+				DS100005201BCDEF /* BFShadow.swift in Sources */,
+				DS100006201BCDEF /* BFMotion.swift in Sources */,
+				DS100007201BCDEF /* BFIconSize.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

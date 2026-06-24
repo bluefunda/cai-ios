@@ -30,13 +30,6 @@ extension String {
     }
 }
 
-// MARK: - Color
-
-extension Color {
-    static let brandBlue = Color(red: 0.118, green: 0.392, blue: 0.906)   // #1e64e7
-    static let brandNavy = Color(red: 0.106, green: 0.118, blue: 0.216)   // #1b1e37
-}
-
 // MARK: - View Helpers
 
 extension View {
