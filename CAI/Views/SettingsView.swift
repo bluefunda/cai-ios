@@ -19,7 +19,7 @@ struct SettingsView: View {
                 // User Section
                 Section {
                     if let user = authManager.currentUser {
-                        UserInfoRow(user: user, realm: authManager.realm)
+                        UserInfoRow(user: user)
                     }
                 } header: {
                     Text("Account")
@@ -260,7 +260,6 @@ struct SettingsView: View {
 
 struct UserInfoRow: View {
     let user: User
-    let realm: String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -282,25 +281,15 @@ struct UserInfoRow: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
-                HStack(spacing: 4) {
-                    Text(realm.uppercased())
+                if user.isAdmin {
+                    Text("ADMIN")
                         .font(.caption2)
                         .fontWeight(.medium)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(BFColor.primaryTint)
+                        .background(BFColor.warningBg)
+                        .foregroundColor(BFColor.warning)
                         .cornerRadius(BFRadius.sm)
-
-                    if user.isAdmin {
-                        Text("ADMIN")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(BFColor.warningBg)
-                            .foregroundColor(BFColor.warning)
-                            .cornerRadius(BFRadius.sm)
-                    }
                 }
             }
         }
