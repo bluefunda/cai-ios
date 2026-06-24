@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/bluefunda/cai-ios/compare/v1.1.0...v1.1.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* updated text color in the apple signin button ([#67](https://github.com/bluefunda/cai-ios/issues/67)) ([fb72a4a](https://github.com/bluefunda/cai-ios/commit/fb72a4a6af890845aa1245c9bef3c2f5ba6ded7b))
+
 ## [1.1.0](https://github.com/bluefunda/cai-ios/compare/v1.0.4...v1.1.0) (2026-06-24)
 
 
