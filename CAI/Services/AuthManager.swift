@@ -267,59 +267,15 @@ final class AuthManager: NSObject, ObservableObject {
 
     private func saveTokensToKeychain() {
         guard let refreshToken = refreshToken else { return }
-
-        let tokenData: [String: Any] = [
-            "refreshToken": refreshToken,
-            "realm": realm,
-            "expiresAt": tokenExpiresAt?.timeIntervalSince1970 ?? 0
-        ]
-
-        if let data = try? JSONSerialization.data(withJSONObject: tokenData) {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: Config.keychainService,
-                kSecAttrAccount as String: "auth_tokens"
-            ]
-
-            // Delete existing
-            SecItemDelete(query as CFDictionary)
-
-            // Add new
-            var addQuery = query
-            addQuery[kSecValueData as String] = data
-            SecItemAdd(addQuery as CFDictionary, nil)
-        }
+        KeychainStore.saveAuthTokens(refreshToken: refreshToken, realm: realm, expiresAt: tokenExpiresAt)
     }
 
     private func loadTokensFromKeychain() -> (refreshToken: String, realm: String)? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Config.keychainService,
-            kSecAttrAccount as String: "auth_tokens",
-            kSecReturnData as String: true
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let tokenData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let refreshToken = tokenData["refreshToken"] as? String,
-              let realm = tokenData["realm"] as? String else {
-            return nil
-        }
-
-        return (refreshToken, realm)
+        KeychainStore.loadAuthTokens()
     }
 
     private func clearKeychain() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Config.keychainService,
-            kSecAttrAccount as String: "auth_tokens"
-        ]
-        SecItemDelete(query as CFDictionary)
+        KeychainStore.clearAuthTokens()
     }
 
     /// Call this on app launch to restore session
