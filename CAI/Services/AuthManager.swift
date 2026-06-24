@@ -15,7 +15,6 @@ final class AuthManager: NSObject, ObservableObject {
     private var refreshToken: String?
     private var tokenExpiresAt: Date?
     private var webAuthSession: ASWebAuthenticationSession?
-
     // MARK: - Configuration
     struct Config {
         static let keycloakBaseURL = "https://auth.bluefunda.com"
@@ -24,6 +23,7 @@ final class AuthManager: NSObject, ObservableObject {
         static let redirectURI = "cai://auth/callback"
         static let tokenRefreshThreshold: TimeInterval = 60 // refresh 1 minute before expiry
         static let keychainService = "com.bluefunda.ai"
+        static let appleUserIDKey = "apple_user_id"
     }
 
     /// Public BFF gateway base (gateway.internal is cluster-only).
@@ -83,16 +83,72 @@ final class AuthManager: NSObject, ObservableObject {
         webAuthSession?.start()
     }
 
+    // MARK: - Native Apple Sign-In
+
+    func handleAppleAuthorization(_ authorization: ASAuthorization, realm: String = "individual") async {
+        self.realm = realm
+        isLoading = true
+        error = nil
+
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let identityTokenData = credential.identityToken,
+              let identityToken = String(data: identityTokenData, encoding: .utf8) else {
+            error = .authenticationFailed("Invalid Apple credential")
+            isLoading = false
+            return
+        }
+
+        KeychainStore.saveString(credential.user, for: Config.appleUserIDKey, service: Config.keychainService)
+
+        let authCode = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+
+        await exchangeAppleTokenForSession(identityToken: identityToken, authorizationCode: authCode)
+    }
+
+    private func exchangeAppleTokenForSession(identityToken: String, authorizationCode: String?) async {
+        var request = URLRequest(url: tokenURL)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+        var body = [
+            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+            "client_id": Config.clientId,
+            "subject_token": identityToken,
+            "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
+            "subject_issuer": "apple",
+            "scope": "openid profile email offline_access"
+        ]
+        if let code = authorizationCode {
+            body["authorization_code"] = code
+        }
+        request.httpBody = body.percentEncoded()
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                // Token exchange not supported — fall back to Keycloak web flow with Apple hint
+                login(realm: realm, idpHint: "apple")
+                return
+            }
+
+            let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+            await processTokenResponse(tokenResponse)
+        } catch {
+            // Fall back to web-based Apple auth via Keycloak
+            login(realm: realm, idpHint: "apple")
+        }
+    }
+
     func logout() async {
-        // Revoke token on server
         if let token = refreshToken {
             await revokeToken(token)
         }
 
-        // Clear keychain
         clearKeychain()
+        KeychainStore.delete(Config.appleUserIDKey, service: Config.keychainService)
 
-        // Clear local state
         accessToken = nil
         refreshToken = nil
         tokenExpiresAt = nil
@@ -278,8 +334,19 @@ final class AuthManager: NSObject, ObservableObject {
         KeychainStore.clearAuthTokens()
     }
 
-    /// Call this on app launch to restore session
+    /// Call this on app launch to restore session.
+    /// Checks Apple credential state first, then restores Keycloak tokens.
     func restoreSession() async {
+        // Check if Apple credential is still valid
+        if let appleUserID = KeychainStore.loadString(Config.appleUserIDKey, service: Config.keychainService) {
+            let state = await checkAppleCredentialState(userID: appleUserID)
+            if state == .revoked || state == .notFound {
+                clearKeychain()
+                KeychainStore.delete(Config.appleUserIDKey, service: Config.keychainService)
+                return
+            }
+        }
+
         guard let stored = loadTokensFromKeychain() else {
             return
         }
@@ -290,8 +357,15 @@ final class AuthManager: NSObject, ObservableObject {
         do {
             try await performTokenRefresh()
         } catch {
-            // Refresh failed - clear and require re-login
             clearKeychain()
+        }
+    }
+
+    private func checkAppleCredentialState(userID: String) async -> ASAuthorizationAppleIDProvider.CredentialState {
+        await withCheckedContinuation { continuation in
+            ASAuthorizationAppleIDProvider().getCredentialState(forUserID: userID) { state, _ in
+                continuation.resume(returning: state)
+            }
         }
     }
 
@@ -336,7 +410,7 @@ final class AuthManager: NSObject, ObservableObject {
     }
 }
 
-// MARK: - ASWebAuthenticationPresentationContextProviding
+// MARK: - Presentation Context
 
 extension AuthManager: ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -347,6 +421,7 @@ extension AuthManager: ASWebAuthenticationPresentationContextProviding {
         return window
     }
 }
+
 
 // MARK: - Supporting Types
 

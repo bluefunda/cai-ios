@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 // MARK: - Root
 
@@ -530,16 +531,24 @@ struct LoginView: View {
                             MicrosoftLogoView()
                         }
 
-                        SocialSignInButton(label: "Continue with Apple", style: .filled) {
-                            authManager.login(realm: selectedRealm, idpHint: "apple")
-                        } icon: {
-                            Image(systemName: "apple.logo")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 32, height: 32)
-                                .background(Color.black)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        SignInWithAppleButton(.continue) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            switch result {
+                            case .success(let authorization):
+                                Task {
+                                    await authManager.handleAppleAuthorization(authorization, realm: selectedRealm)
+                                }
+                            case .failure(let error):
+                                if (error as? ASAuthorizationError)?.code != .canceled {
+                                    authManager.error = .authenticationFailed(error.localizedDescription)
+                                }
+                            }
                         }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 50)
+                        .cornerRadius(9999)
+                        .bfShadow(BFShadow.sm)
                     }
                     .padding(.horizontal, 32)
                 }

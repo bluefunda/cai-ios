@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 @main
 struct CAIApp: App {
@@ -21,9 +22,16 @@ struct CAIApp: App {
                     }
                 }
                 .onChange(of: authManager.accessToken) { _, newToken in
-                    // Keep BFFAPIService's token in sync whenever AuthManager refreshes
                     if let token = newToken {
                         chatManager.updateToken(token)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(
+                    for: ASAuthorizationAppleIDProvider.credentialRevokedNotification
+                )) { _ in
+                    Task {
+                        await chatManager.disconnect()
+                        await authManager.logout()
                     }
                 }
         }
