@@ -115,7 +115,7 @@ struct ConversationRow: View {
             }
         }
         .padding(.vertical, 4)
-        .background(isSelected ? BFColor.primaryTint : Color.clear)
+        .background(isSelected ? BFColor.primary.opacity(0.15) : Color.clear)
     }
 }
 
