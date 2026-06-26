@@ -476,6 +476,7 @@ struct LoginView: View {
     @State private var selectedRealm = "individual"
     @State private var logoTapCount = 0
     @State private var showRealmPicker = false
+    @State private var appleNonce: (plain: String, hashed: String)?
 
     var body: some View {
         ZStack {
@@ -533,13 +534,25 @@ struct LoginView: View {
 
                         SignInWithAppleButton(.continue) { request in
                             request.requestedScopes = [.fullName, .email]
+                            // Generate a fresh nonce per attempt; hash sent to Apple,
+                            // plain forwarded to the backend for replay-attack prevention.
+                            let nonce = makeAuthNonce()
+                            appleNonce = nonce
+                            request.nonce = nonce?.hashed
                         } onCompletion: { result in
                             switch result {
                             case .success(let authorization):
+                                let plain = appleNonce?.plain
+                                appleNonce = nil
                                 Task {
-                                    await authManager.handleAppleAuthorization(authorization, realm: selectedRealm)
+                                    await authManager.handleAppleAuthorization(
+                                        authorization,
+                                        realm: selectedRealm,
+                                        nonce: plain
+                                    )
                                 }
                             case .failure(let error):
+                                appleNonce = nil
                                 if (error as? ASAuthorizationError)?.code != .canceled {
                                     authManager.error = .authenticationFailed(error.localizedDescription)
                                 }
