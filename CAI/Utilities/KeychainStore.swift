@@ -54,25 +54,37 @@ enum KeychainStore {
     private static let authService = "com.bluefunda.ai"
     private static let authTokensKey = "auth_tokens"
 
-    static func saveAuthTokens(refreshToken: String, realm: String, expiresAt: Date?) {
+    /// Persists the refresh token (or, for review sessions, the access token)
+    /// along with realm, expiry, and session kind.
+    static func saveAuthTokens(
+        refreshToken: String,
+        realm: String,
+        expiresAt: Date?,
+        sessionKind: String = "production"
+    ) {
         let payload: [String: Any] = [
             "refreshToken": refreshToken,
             "realm": realm,
-            "expiresAt": expiresAt?.timeIntervalSince1970 ?? 0
+            "expiresAt": expiresAt?.timeIntervalSince1970 ?? 0,
+            "sessionKind": sessionKind
         ]
         if let data = try? JSONSerialization.data(withJSONObject: payload) {
             save(data, for: authTokensKey, service: authService)
         }
     }
 
-    static func loadAuthTokens() -> (refreshToken: String, realm: String)? {
+    static func loadAuthTokens() -> (refreshToken: String, realm: String, expiresAt: Date?, sessionKind: SessionKind)? {
         guard let data = load(authTokensKey, service: authService),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let refreshToken = json["refreshToken"] as? String,
               let realm = json["realm"] as? String else {
             return nil
         }
-        return (refreshToken, realm)
+        let ts = json["expiresAt"] as? TimeInterval ?? 0
+        let expiresAt: Date? = ts > 0 ? Date(timeIntervalSince1970: ts) : nil
+        let kindRaw = json["sessionKind"] as? String ?? SessionKind.production.rawValue
+        let kind = SessionKind(rawValue: kindRaw) ?? .production
+        return (refreshToken, realm, expiresAt, kind)
     }
 
     static func clearAuthTokens() {
@@ -83,7 +95,7 @@ enum KeychainStore {
 
     private static func baseQuery(key: String, service: String?) -> [String: Any] {
         var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
+            kSecClass as String:   kSecClassGenericPassword,
             kSecAttrAccount as String: key
         ]
         if let service = service {
