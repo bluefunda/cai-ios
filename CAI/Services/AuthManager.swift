@@ -193,8 +193,9 @@ final class AuthManager: NSObject, ObservableObject {
                 sessionKind = .production
                 await processTokenResponse(tokenResponse)
             } else if (400...499).contains(http.statusCode) {
-                // Auth rejection — do not fall back, surface the error
-                error = .tokenExchangeFailed
+                let body = String(data: data, encoding: .utf8) ?? ""
+                print("[AuthManager] Keycloak token exchange failed: HTTP \(http.statusCode) — \(body)")
+                error = .authenticationFailed("Token exchange failed (HTTP \(http.statusCode)): \(body.prefix(200))")
                 isLoading = false
             } else {
                 // 5xx / server unavailable — try review fallback
