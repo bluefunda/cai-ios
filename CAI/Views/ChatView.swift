@@ -311,31 +311,31 @@ struct MessageView: View {
     @State private var didCopy = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 14) {
             Circle()
                 .fill(message.role == .user ? BFColor.primary : BFColor.success)
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
                 .overlay {
                     Image(systemName: message.role == .user ? "person.fill" : "brain.head.profile")
-                        .font(.system(size: 14))
+                        .font(.system(size: 16))
                         .foregroundStyle(BFColor.textInverse)
                 }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(message.role.displayName)
-                    .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+                    .font(BFFont.bodySmall).fontWeight(.semibold).foregroundStyle(.secondary)
 
                 if message.role == .user {
                     Text(message.content)
+                        .font(BFFont.body)
                         .foregroundStyle(.primary)
                         .textSelection(.enabled)
                 } else {
                     MarkdownView(content: message.content)
                 }
 
-                // Copy / Share actions on AI responses
                 if message.role == .assistant, !message.content.isEmpty {
-                    HStack(spacing: 16) {
+                    HStack(spacing: 20) {
                         Button {
                             UIPasteboard.general.string = message.content
                             didCopy = true
@@ -346,28 +346,28 @@ struct MessageView: View {
                         } label: {
                             Label(didCopy ? "Copied" : "Copy",
                                   systemImage: didCopy ? "checkmark" : "doc.on.doc")
-                                .font(.caption2)
+                                .font(.caption)
                         }
                         .foregroundStyle(.secondary)
 
                         ShareLink(item: message.content) {
                             Label("Share", systemImage: "square.and.arrow.up")
-                                .font(.caption2)
+                                .font(.caption)
                         }
                         .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .padding(.top, 2)
+                    .padding(.top, 4)
                 }
 
                 Text(message.timestamp, style: .time)
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Spacer()
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 12)
         .background(message.role == .user ? BFColor.primary.opacity(0.08) : Color.clear)
     }
 }
@@ -379,20 +379,20 @@ struct StreamingIndicator: View {
     let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 14) {
             Circle()
                 .fill(BFColor.success)
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
                 .overlay {
                     Image(systemName: "brain.head.profile")
-                        .font(.system(size: 14)).foregroundStyle(BFColor.textInverse)
+                        .font(.system(size: 16)).foregroundStyle(BFColor.textInverse)
                 }
             Text("Thinking" + String(repeating: ".", count: dotCount + 1))
-                .foregroundStyle(.secondary).font(.subheadline)
+                .foregroundStyle(.secondary).font(BFFont.body)
             Spacer()
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 12)
         .onReceive(timer) { _ in dotCount = (dotCount + 1) % 3 }
     }
 }
@@ -422,43 +422,43 @@ struct EmptyStateView: View {
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
-        VStack(spacing: 22) {
-            VStack(spacing: 8) {
+        VStack(spacing: BFSpacing._6) {
+            VStack(spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 44))
+                    .font(.system(size: 48))
                     .foregroundStyle(BFColor.primary.gradient)
                 Text(greeting)
-                    .font(.title2).fontWeight(.semibold)
+                    .font(BFFont.h4)
                     .multilineTextAlignment(.center)
                 Text("How can I help you today?")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(BFFont.body).foregroundStyle(.secondary)
             }
 
-            LazyVGrid(columns: columns, spacing: 10) {
+            LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(suggestions) { suggestion in
                     Button {
                         onSelectPrompt(suggestion.prompt)
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             Image(systemName: suggestion.icon)
-                                .font(.caption)
+                                .font(BFFont.bodySmall)
                                 .foregroundStyle(BFColor.primary)
                             Text(suggestion.label)
-                                .font(.subheadline)
+                                .font(BFFont.body)
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, BFSpacing._4)
+                        .padding(.vertical, 14)
+                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, BFSpacing._4)
         }
-        .padding()
+        .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -480,41 +480,41 @@ struct ChatInputView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Attachment preview strip
             if let filename = attachmentFilename {
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Image(systemName: "paperclip").foregroundStyle(BFColor.primary)
-                    Text(filename).font(.caption).lineLimit(1).foregroundStyle(.secondary)
+                    Text(filename).font(BFFont.bodySmall).lineLimit(1).foregroundStyle(.secondary)
                     Spacer()
                     Button(action: onClearAttachment) {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.vertical, 10)
                 .background(Color(.systemGray6))
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: 10) {
                 TextField("Message...", text: $text, axis: .vertical)
+                    .font(BFFont.body)
                     .textFieldStyle(.plain)
                     .focused(isFocused)
-                    .padding(12)
+                    .padding(14)
                     .background(Color(.systemGray6))
-                    .cornerRadius(20)
+                    .cornerRadius(22)
                     .lineLimit(1...5)
 
                 Button {
                     isStreaming ? onStop() : onSend()
                 } label: {
                     Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 36))
                         .foregroundStyle(isStreaming ? BFColor.error : (canSend ? BFColor.primary : .secondary))
                 }
                 .disabled(!isStreaming && !canSend)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, BFSpacing._4)
+            .padding(.vertical, 10)
             .background(Color(.systemBackground))
         }
     }
@@ -568,20 +568,20 @@ struct ModeModelPicker: View {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Image(systemName: chatManager.userPickedModel ? "cpu" : chatManager.thinkingMode.icon)
-                    .font(.caption2)
+                    .font(.caption)
                 Text(chatManager.userPickedModel
                      ? chatManager.selectedModel.name
                      : chatManager.thinkingMode.label)
-                    .font(.caption).fontWeight(.medium)
+                    .font(BFFont.bodySmall).fontWeight(.medium)
                     .lineLimit(1)
-                Image(systemName: "chevron.down").font(.caption2)
+                Image(systemName: "chevron.down").font(.caption)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(BFColor.primaryTint)
-            .cornerRadius(8)
+            .cornerRadius(10)
         }
     }
 }

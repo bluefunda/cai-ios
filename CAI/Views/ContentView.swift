@@ -367,21 +367,21 @@ struct ChatTopBar: View {
     var showHamburger: Bool = true
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             if showHamburger {
                 HamburgerButton(sidebarOpen: $sidebarOpen)
             }
 
             Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil").font(.system(size: 18))
+                Image(systemName: "square.and.pencil").font(.system(size: 20))
             }
 
             Spacer()
 
             ModeModelPicker()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .overlay(alignment: .bottom) { Divider() }
     }
@@ -395,22 +395,22 @@ struct CodeTopBar: View {
     var showHamburger: Bool = true
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             if showHamburger {
                 HamburgerButton(sidebarOpen: $sidebarOpen)
             }
 
             Text("Code")
-                .font(.headline)
+                .font(BFFont.h5)
 
             Spacer()
 
             Button(action: onSystems) {
-                Image(systemName: "server.rack").font(.system(size: 17))
+                Image(systemName: "server.rack").font(.system(size: 20))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .overlay(alignment: .bottom) { Divider() }
     }
