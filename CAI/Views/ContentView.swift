@@ -580,6 +580,9 @@ struct LoginView: View {
                     Text("Powered by BlueFunda")
                         .font(BFFont.caption)
                         .foregroundStyle(BFColor.textMuted)
+                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"))")
+                        .font(BFFont.micro)
+                        .foregroundStyle(BFColor.textMuted.opacity(0.6))
                 }
                 .padding(.bottom, BFSpacing._8)
             }

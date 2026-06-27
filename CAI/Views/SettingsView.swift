@@ -88,18 +88,8 @@ struct SettingsView: View {
                     HStack {
                         Label("Version", systemImage: "info.circle")
                         Spacer()
-                        Text("1.0.0")
+                        Text("\(appVersion) (\(buildNumber))")
                             .foregroundColor(.secondary)
-                    }
-
-                    // Build detail — trm realm only
-                    if isTrmRealm {
-                        HStack {
-                            Label("Build", systemImage: "hammer")
-                            Spacer()
-                            Text("MVP")
-                                .foregroundColor(.secondary)
-                        }
                     }
                 } header: {
                     Text("About")
@@ -193,6 +183,14 @@ struct SettingsView: View {
                 Text(deleteError ?? "")
             }
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–"
     }
 
     private let privacyPolicyURL = URL(string: "https://bluefunda.com/privacy/")!
