@@ -148,7 +148,7 @@ final class AuthManager: NSObject, ObservableObject {
 
         let authCode = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
 
-        await exchangeAppleTokenWithKeycloak(
+        await exchangeAppleTokenWithBFF(
             identityToken: identityToken,
             authorizationCode: authCode,
             nonce: nonce
@@ -184,7 +184,7 @@ final class AuthManager: NSObject, ObservableObject {
 
             guard let http = response as? HTTPURLResponse else {
                 // No HTTP response (e.g. TLS failure) — try review fallback
-                await tryReviewFallback(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
+                await exchangeAppleTokenWithBFF(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
                 return
             }
 
@@ -193,28 +193,25 @@ final class AuthManager: NSObject, ObservableObject {
                 sessionKind = .production
                 await processTokenResponse(tokenResponse)
             } else if (400...499).contains(http.statusCode) {
-                let body = String(data: data, encoding: .utf8) ?? ""
-                print("[AuthManager] Keycloak token exchange failed: HTTP \(http.statusCode) — \(body)")
-                error = .authenticationFailed("Token exchange failed (HTTP \(http.statusCode)): \(body.prefix(200))")
+                error = .tokenExchangeFailed
                 isLoading = false
             } else {
                 // 5xx / server unavailable — try review fallback
-                await tryReviewFallback(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
+                await exchangeAppleTokenWithBFF(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
             }
         } catch {
             // Network error — Keycloak unreachable, try review fallback
-            await tryReviewFallback(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
+            await exchangeAppleTokenWithBFF(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
         }
     }
 
-    // MARK: - App Store Reviewer Fallback
+    // MARK: - BFF Apple Token Exchange
     //
-    // When Keycloak is unreachable the BFF validates the Apple identity token
-    // directly (Apple JWKS) and issues a restricted, 24-hour review session.
-    // Constraints: Apple token still validated server-side; session is scoped,
-    // time-bound, auditable, and clearly separated from production auth.
+    // The BFF validates the Apple identity token directly (Apple JWKS) and
+    // issues a scoped, 24-hour session. Apple token is still validated
+    // server-side; session is time-bound, auditable, and scoped.
 
-    private func tryReviewFallback(
+    private func exchangeAppleTokenWithBFF(
         identityToken: String,
         authorizationCode: String?,
         nonce: String?
