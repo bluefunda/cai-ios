@@ -146,12 +146,33 @@ final class AuthManager: NSObject, ObservableObject {
 
         KeychainStore.saveString(credential.user, for: Config.appleUserIDKey, service: Config.keychainService)
 
+        // Apple provides fullName and email only on the FIRST authorization.
+        // Persist them locally so they survive subsequent sign-ins.
+        if let givenName = credential.fullName?.givenName {
+            UserDefaults.standard.set(givenName, forKey: "apple_given_name")
+        }
+        if let familyName = credential.fullName?.familyName {
+            UserDefaults.standard.set(familyName, forKey: "apple_family_name")
+        }
+        if let email = credential.email {
+            UserDefaults.standard.set(email, forKey: "apple_email")
+        }
+
         let authCode = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+
+        let fullName = [
+            UserDefaults.standard.string(forKey: "apple_given_name"),
+            UserDefaults.standard.string(forKey: "apple_family_name")
+        ].compactMap { $0 }.joined(separator: " ")
+
+        let email = UserDefaults.standard.string(forKey: "apple_email")
 
         await exchangeAppleTokenWithBFF(
             identityToken: identityToken,
             authorizationCode: authCode,
-            nonce: nonce
+            nonce: nonce,
+            fullName: fullName.isEmpty ? nil : fullName,
+            email: email
         )
     }
 
@@ -214,7 +235,9 @@ final class AuthManager: NSObject, ObservableObject {
     private func exchangeAppleTokenWithBFF(
         identityToken: String,
         authorizationCode: String?,
-        nonce: String?
+        nonce: String?,
+        fullName: String? = nil,
+        email: String? = nil
     ) async {
         guard let url = URL(string: "\(Self.bffBaseURL)/auth/apple-direct") else {
             error = .authenticationFailed("Service temporarily unavailable")
@@ -230,6 +253,8 @@ final class AuthManager: NSObject, ObservableObject {
         var body: [String: String] = ["identity_token": identityToken, "client_id": Config.clientId]
         if let code  = authorizationCode { body["authorization_code"] = code }
         if let nonce = nonce             { body["nonce"] = nonce }
+        if let name  = fullName          { body["full_name"] = name }
+        if let email = email             { body["email"] = email }
         req.httpBody = body.percentEncoded()
 
         do {
@@ -241,7 +266,7 @@ final class AuthManager: NSObject, ObservableObject {
             }
             let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
             sessionKind = .review
-            await processTokenResponse(tokenResponse)
+            await processTokenResponse(tokenResponse, appleFullName: fullName, appleEmail: email)
         } catch {
             self.error = .authenticationFailed("Service temporarily unavailable. Please try again.")
             isLoading = false
@@ -451,12 +476,20 @@ final class AuthManager: NSObject, ObservableObject {
         await processTokenResponse(tokenResponse)
     }
 
-    private func processTokenResponse(_ response: TokenResponse) async {
+    private func processTokenResponse(
+        _ response: TokenResponse,
+        appleFullName: String? = nil,
+        appleEmail: String? = nil
+    ) async {
         accessToken = response.accessToken
         tokenExpiresAt = Date().addingTimeInterval(TimeInterval(response.expiresIn))
 
-        if let user = decodeJWT(response.accessToken) {
+        if var user = decodeJWT(response.accessToken) {
+            if user.name.isEmpty, let name = appleFullName { user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles) }
+            if user.email.isEmpty, let email = appleEmail { user = User(id: user.id, email: email, name: user.name, roles: user.roles) }
             currentUser = user
+        } else if let appleFullName, let appleEmail {
+            currentUser = User(id: "", email: appleEmail, name: appleFullName, roles: [])
         }
 
         if sessionKind == .review {
