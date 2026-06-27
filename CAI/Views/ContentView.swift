@@ -36,11 +36,13 @@ struct AuthenticatedRoot: View {
 struct AppShell: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
     @State private var safariURL: URL?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
 
     // Code mode
     @StateObject private var systemStore = SAPSystemStore()
@@ -56,16 +58,62 @@ struct AppShell: View {
         Binding(get: { mode }, set: { modeRaw = $0.rawValue })
     }
 
+    private var isRegular: Bool { sizeClass == .regular }
+
     var body: some View {
+        Group {
+            if isRegular {
+                iPadLayout
+            } else {
+                iPhoneLayout
+            }
+        }
+        .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
+        .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
+        .sheet(isPresented: $showSystems) {
+            SystemManagerView(store: systemStore).environmentObject(authManager)
+        }
+    }
+
+    // MARK: - iPad: NavigationSplitView
+
+    private var iPadLayout: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            SidebarContent(
+                currentMode: modeBinding,
+                onOpenStorage: { activeSheet = .storage },
+                onOpenSettings: { activeSheet = .settings },
+                onOpenURL: { safariURL = $0 }
+            )
+        } detail: {
+            VStack(spacing: 0) {
+                iPadTopBar
+                content
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    @ViewBuilder
+    private var iPadTopBar: some View {
+        switch mode {
+        case .chat:
+            ChatTopBar(sidebarOpen: .constant(false), onNewChat: { chatManager.newConversation() }, showHamburger: false)
+        case .code:
+            CodeTopBar(sidebarOpen: .constant(false), onSystems: { showSystems = true }, showHamburger: false)
+        }
+    }
+
+    // MARK: - iPhone: ZStack drawer
+
+    private var iPhoneLayout: some View {
         ZStack(alignment: .leading) {
-            // ── Main content ──────────────────────────────
             VStack(spacing: 0) {
                 topBar
                 content
             }
             .zIndex(0)
 
-            // ── Dim overlay ───────────────────────────────
             if sidebarOpen {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
@@ -76,7 +124,6 @@ struct AppShell: View {
                     .transition(.opacity)
             }
 
-            // ── Sidebar drawer (shared by both modes) ─────
             SidebarDrawer(
                 isOpen: $sidebarOpen,
                 currentMode: modeBinding,
@@ -97,11 +144,6 @@ struct AppShell: View {
                     to: nil, from: nil, for: nil
                 )
             }
-        }
-        .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
-        .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
-        .sheet(isPresented: $showSystems) {
-            SystemManagerView(store: systemStore).environmentObject(authManager)
         }
     }
 
@@ -134,6 +176,171 @@ struct AppShell: View {
     }
 }
 
+// MARK: - Sidebar Content (shared between iPad split view and iPhone drawer)
+
+struct SidebarContent: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
+    @Binding var currentMode: AppMode
+    let onOpenStorage: () -> Void
+    let onOpenSettings: () -> Void
+    let onOpenURL: (URL) -> Void
+
+    @State private var searchText = ""
+
+    private let helpURL = URL(string: "https://docs.bluefunda.com/")!
+
+    private var filteredConversations: [Conversation] {
+        guard !searchText.isEmpty else { return chatManager.conversations }
+        return chatManager.conversations.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                currentMode = .chat
+                chatManager.newConversation()
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.pencil")
+                    Text("New Chat")
+                    Spacer()
+                }
+                .font(.subheadline)
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal)
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 8)
+
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search conversations", text: $searchText)
+                    .font(.subheadline)
+            }
+            .padding(8)
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+
+            if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredConversations.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "bubble.left")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                    Text(searchText.isEmpty ? "No conversations yet" : "No results")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(groupedConversations) { group in
+                            Text(group.title)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                                .padding(.bottom, 2)
+
+                            ForEach(group.conversations) { convo in
+                                SidebarConversationRow(
+                                    conversation: convo,
+                                    isSelected: chatManager.currentConversation?.id == convo.id
+                                )
+                                .onTapGesture {
+                                    currentMode = .chat
+                                    chatManager.selectConversation(convo)
+                                }
+                                .contextMenu {
+                                    ShareLink(item: convo.markdownExport) {
+                                        Label("Share", systemImage: "square.and.arrow.up")
+                                    }
+                                    Button(role: .destructive) {
+                                        chatManager.deleteConversation(convo)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+            }
+
+            Divider()
+
+            VStack(spacing: 0) {
+                SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
+                    currentMode = .code
+                }
+
+                SidebarNavButton(icon: "gear", label: "Settings") {
+                    onOpenSettings()
+                }
+
+                SidebarNavButton(icon: "questionmark.circle", label: "Help & Support") {
+                    onOpenURL(helpURL)
+                }
+            }
+            .padding(.bottom, 8)
+        }
+        .navigationTitle("Chats")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { onOpenSettings() } label: {
+                    Circle()
+                        .fill(BFColor.primary.gradient)
+                        .frame(width: 32, height: 32)
+                        .overlay {
+                            Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.white)
+                        }
+                }
+            }
+        }
+    }
+
+    private var groupedConversations: [ConversationGroup] {
+        let now = Date()
+        let cal = Calendar.current
+
+        var today: [Conversation] = []
+        var yesterday: [Conversation] = []
+        var thisWeek: [Conversation] = []
+        var older: [Conversation] = []
+
+        for c in filteredConversations {
+            let days = cal.dateComponents([.day], from: c.createdAt, to: now).day ?? 0
+            if days == 0       { today.append(c) }
+            else if days == 1  { yesterday.append(c) }
+            else if days < 7   { thisWeek.append(c) }
+            else               { older.append(c) }
+        }
+
+        var result: [ConversationGroup] = []
+        if !today.isEmpty     { result.append(.init(title: "Today",     conversations: today)) }
+        if !yesterday.isEmpty { result.append(.init(title: "Yesterday", conversations: yesterday)) }
+        if !thisWeek.isEmpty  { result.append(.init(title: "This Week", conversations: thisWeek)) }
+        if !older.isEmpty     { result.append(.init(title: "Older",     conversations: older)) }
+        return result
+    }
+}
+
 // MARK: - Hamburger
 
 struct HamburgerButton: View {
@@ -157,10 +364,13 @@ struct ChatTopBar: View {
     @EnvironmentObject var chatManager: ChatManager
     @Binding var sidebarOpen: Bool
     let onNewChat: () -> Void
+    var showHamburger: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {
-            HamburgerButton(sidebarOpen: $sidebarOpen)
+            if showHamburger {
+                HamburgerButton(sidebarOpen: $sidebarOpen)
+            }
 
             Button(action: onNewChat) {
                 Image(systemName: "square.and.pencil").font(.system(size: 18))
@@ -182,10 +392,13 @@ struct ChatTopBar: View {
 struct CodeTopBar: View {
     @Binding var sidebarOpen: Bool
     let onSystems: () -> Void
+    var showHamburger: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {
-            HamburgerButton(sidebarOpen: $sidebarOpen)
+            if showHamburger {
+                HamburgerButton(sidebarOpen: $sidebarOpen)
+            }
 
             Text("Code")
                 .font(.headline)
@@ -391,7 +604,7 @@ struct SidebarDrawer: View {
     }
 }
 
-private struct ConversationGroup: Identifiable {
+struct ConversationGroup: Identifiable {
     let id: String      // == title, always unique within a list
     let title: String
     let conversations: [Conversation]
@@ -405,7 +618,7 @@ private struct ConversationGroup: Identifiable {
 
 // MARK: - Sidebar Row
 
-private struct SidebarConversationRow: View {
+struct SidebarConversationRow: View {
     let conversation: Conversation
     let isSelected: Bool
 
@@ -436,7 +649,7 @@ private struct SidebarConversationRow: View {
 
 // MARK: - Sidebar Nav Button
 
-private struct SidebarNavButton: View {
+struct SidebarNavButton: View {
     let icon: String
     let label: String
     let action: () -> Void
