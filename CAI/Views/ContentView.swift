@@ -323,7 +323,7 @@ struct SidebarContent: View {
             }
             .buttonStyle(.plain)
         }
-        .navigationTitle("Chats")
+        .navigationTitle("BlueFunda AI")
     }
 
     private var groupedConversations: [ConversationGroup] {
@@ -451,9 +451,9 @@ struct SidebarDrawer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Header: title only ───────────────────────
+            // ── Header ──────────────────────────────────
             HStack {
-                Text("Chats")
+                Text("BlueFunda AI")
                     .font(.title3)
                     .fontWeight(.semibold)
                 Spacer()
