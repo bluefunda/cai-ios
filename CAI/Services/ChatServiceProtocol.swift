@@ -173,6 +173,17 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.content = content
         self.timestamp = timestamp
     }
+
+}
+
+extension ChatMessage {
+    init?(from persisted: PersistedMessage) {
+        guard let role = MessageRole(rawValue: persisted.roleRaw) else { return nil }
+        self.id = persisted.id
+        self.role = role
+        self.content = persisted.content
+        self.timestamp = persisted.timestamp
+    }
 }
 
 enum MessageRole: String, Codable {

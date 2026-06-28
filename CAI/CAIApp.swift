@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import AuthenticationServices
 
 @main
@@ -6,12 +7,20 @@ struct CAIApp: App {
     @StateObject private var authManager = AuthManager()
     @StateObject private var chatManager = ChatManager(service: BFFChatService())
 
+    private let container: ModelContainer = {
+        let schema = Schema([PersistedConversation.self, PersistedMessage.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        return try! ModelContainer(for: schema, configurations: [config])
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .modelContainer(container)
                 .environmentObject(authManager)
                 .environmentObject(chatManager)
                 .task {
+                    chatManager.configureStorage(container.mainContext)
                     await authManager.restoreSession()
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in

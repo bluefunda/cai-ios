@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 // MARK: - Chat Manager
 // Coordinates between UI, streaming chat service (BFFChatService), and REST API service (BFFAPIService).
@@ -59,6 +60,7 @@ final class ChatManager: ObservableObject {
     private let service: ChatServiceProtocol
     var apiService: BFFAPIService?
     private var streamingTask: Task<Void, Never>?
+    private var modelContext: ModelContext?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
     private var currentBFFToken: String = ""
 
@@ -144,10 +146,18 @@ final class ChatManager: ObservableObject {
                     createdAt: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
                 )
             }
-            // Merge server-side chats with any in-memory ones not yet persisted
-            let existingIds = Set(loaded.map(\.id))
-            let localOnly = conversations.filter { !existingIds.contains($0.id) }
-            conversations = loaded + localOnly
+            // Merge: keep cached messages for conversations that were already loaded
+            let mergedIds = Set(conversations.map(\.id))
+            let merged = loaded.map { conv -> Conversation in
+                if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
+                    return Conversation(id: conv.id, title: conv.title,
+                                        messages: cached.messages, model: conv.model, createdAt: conv.createdAt)
+                }
+                return conv
+            }
+            let localOnly = conversations.filter { !mergedIds.contains($0.id) }
+            conversations = merged + localOnly
+            cacheConversations(loaded)
         } catch {
             // Don't surface load errors — user can still create new chats
             print("[ChatManager] loadChats error: \(error)")
@@ -250,7 +260,22 @@ final class ChatManager: ObservableObject {
             if currentConversation?.id == conversationId {
                 currentConversation = conversations[idx]
             }
+            cacheMessages(messages, for: conversationId)
         } catch {
+            // Offline fallback: show whatever is cached
+            if conversations[idx].messages.isEmpty {
+                let convId = conversationId
+                let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
+                if let persisted = try? modelContext?.fetch(desc).first, !persisted.messages.isEmpty {
+                    let cached = persisted.messages
+                        .sorted(by: { $0.timestamp < $1.timestamp })
+                        .compactMap { ChatMessage(from: $0) }
+                    conversations[idx].messages = cached
+                    if currentConversation?.id == conversationId {
+                        currentConversation = conversations[idx]
+                    }
+                }
+            }
             print("[ChatManager] loadMessages error: \(error)")
         }
     }
@@ -283,6 +308,7 @@ final class ChatManager: ObservableObject {
         if currentConversation?.id == conversation.id {
             currentConversation = conversations.first
         }
+        deleteFromCache(conversation)
     }
 
     // MARK: - Messaging
@@ -389,6 +415,12 @@ final class ChatManager: ObservableObject {
             }
 
             isStreaming = false
+
+            // Persist the completed exchange locally
+            if let conv = currentConversation {
+                cacheConversations([conv])
+                cacheMessages(conv.messages, for: conv.id)
+            }
         }
     }
 
@@ -471,6 +503,80 @@ final class ChatManager: ObservableObject {
             if currentConversation?.id == conversationId {
                 currentConversation = conversation
             }
+            cacheUpdateTitle(title, for: conversationId)
+        }
+    }
+
+    // MARK: - SwiftData persistence
+
+    /// Call once from CAIApp after ModelContainer is ready.
+    func configureStorage(_ context: ModelContext) {
+        modelContext = context
+        loadCachedConversations()
+    }
+
+    /// Pre-populates the sidebar from the local cache before the API responds.
+    private func loadCachedConversations() {
+        guard let ctx = modelContext else { return }
+        var desc = FetchDescriptor<PersistedConversation>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        desc.fetchLimit = 200
+        guard let cached = try? ctx.fetch(desc), !cached.isEmpty else { return }
+        conversations = cached.map { Conversation(from: $0) }
+    }
+
+    /// Upserts conversation metadata (title, model) — does not touch messages.
+    private func cacheConversations(_ convs: [Conversation]) {
+        guard let ctx = modelContext else { return }
+        for conv in convs {
+            let id = conv.id
+            let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
+            if let existing = try? ctx.fetch(desc).first {
+                existing.title = conv.title
+                existing.model = conv.model
+            } else {
+                ctx.insert(PersistedConversation(id: conv.id, title: conv.title,
+                                                  model: conv.model, createdAt: conv.createdAt))
+            }
+        }
+        try? ctx.save()
+    }
+
+    /// Upserts messages for a conversation — adds new ones without duplicating.
+    private func cacheMessages(_ messages: [ChatMessage], for conversationId: String) {
+        guard let ctx = modelContext else { return }
+        let convId = conversationId
+        let convDesc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
+        guard let persisted = try? ctx.fetch(convDesc).first else { return }
+        let existingIds = Set(persisted.messages.map(\.id))
+        for msg in messages where !existingIds.contains(msg.id) {
+            let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
+                                      roleRaw: msg.role.rawValue, content: msg.content,
+                                      timestamp: msg.timestamp)
+            pm.conversation = persisted
+            ctx.insert(pm)
+        }
+        try? ctx.save()
+    }
+
+    private func cacheUpdateTitle(_ title: String, for conversationId: String) {
+        guard let ctx = modelContext else { return }
+        let id = conversationId
+        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
+        if let existing = try? ctx.fetch(desc).first {
+            existing.title = title
+            try? ctx.save()
+        }
+    }
+
+    private func deleteFromCache(_ conversation: Conversation) {
+        guard let ctx = modelContext else { return }
+        let id = conversation.id
+        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
+        if let existing = try? ctx.fetch(desc).first {
+            ctx.delete(existing)
+            try? ctx.save()
         }
     }
 }
@@ -494,6 +600,19 @@ struct Conversation: Identifiable, Equatable {
             out += "**\(who):** \(message.content)\n\n"
         }
         return out
+    }
+
+}
+
+extension Conversation {
+    init(from persisted: PersistedConversation) {
+        self.id = persisted.id
+        self.title = persisted.title
+        self.model = persisted.model
+        self.createdAt = persisted.createdAt
+        self.messages = persisted.messages
+            .sorted(by: { $0.timestamp < $1.timestamp })
+            .compactMap { ChatMessage(from: $0) }
     }
 }
 
