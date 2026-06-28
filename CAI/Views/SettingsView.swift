@@ -33,7 +33,7 @@ struct SettingsView: View {
                         HStack {
                             Label("Assistant", systemImage: "sparkles")
                             Spacer()
-                            Text(chatManager.selectedMCPServer?.name ?? "None")
+                            Text(chatManager.selectedMCPServer?.displayName ?? "None")
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -301,7 +301,7 @@ struct MCPServerSelectionView: View {
     @EnvironmentObject var chatManager: ChatManager
     @Environment(\.dismiss) private var dismiss
 
-    private let noneServer = MCPServer(id: "none", name: "None", url: "", description: "No assistant")
+    private let noneServer = MCPServer(id: "none", name: "None", url: "", description: nil)
 
     private var displayServers: [MCPServer] {
         [noneServer] + chatManager.availableMCPServers
@@ -315,23 +315,10 @@ struct MCPServerSelectionView: View {
                     dismiss()
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(server.name)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(server.displayName)
                                 .foregroundColor(.primary)
                                 .fontWeight(isSelected(server) ? .semibold : .regular)
-
-                            if let desc = server.description, !desc.isEmpty {
-                                Text(desc)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            if server.id != "none", !server.url.isEmpty {
-                                Text(server.url)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
                         }
 
                         Spacer()

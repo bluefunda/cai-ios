@@ -549,9 +549,20 @@ struct LLMModel: Identifiable, Hashable {
 
 struct MCPServer: Identifiable, Hashable {
     let id: String
-    let name: String
+    let name: String        // technical ID sent to backend (e.g. "abaper-mcp")
     let url: String
     let description: String?
+
+    /// User-facing label: shortDescription from BFF when set, otherwise the
+    /// technical name cleaned up (strip "-mcp", title-case each word).
+    var displayName: String {
+        if let d = description, !d.isEmpty { return d }
+        return name
+            .replacingOccurrences(of: "-mcp", with: "")
+            .split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
 }
 
 struct RateLimitInfo {

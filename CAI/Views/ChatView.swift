@@ -531,7 +531,7 @@ struct ModeModelPicker: View {
     }
 
     private var label: String {
-        if let agent = chatManager.selectedMCPServer { return agent.name }
+        if let agent = chatManager.selectedMCPServer { return agent.displayName }
         if chatManager.userPickedModel { return chatManager.selectedModel.name }
         return chatManager.thinkingMode.label
     }
@@ -575,9 +575,9 @@ struct ModeModelPicker: View {
                 }
             }
 
-            // Agents (MCP servers)
+            // Assistants (MCP servers)
             if !chatManager.availableMCPServers.isEmpty {
-                Section("Agents") {
+                Section("Assistants") {
                     // "None" option to clear agent selection
                     Button {
                         chatManager.selectedMCPServer = nil
@@ -595,9 +595,9 @@ struct ModeModelPicker: View {
                             chatManager.userPickedModel = false
                         } label: {
                             if agentIsActive(server) {
-                                Label(server.name, systemImage: "checkmark")
+                                Label(server.displayName, systemImage: "checkmark")
                             } else {
-                                Text(server.name)
+                                Text(server.displayName)
                             }
                         }
                     }
