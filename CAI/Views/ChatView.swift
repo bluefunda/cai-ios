@@ -183,16 +183,18 @@ struct ChatView: View {
             guard let id = chatManager.currentConversation?.id else { return }
             await chatManager.loadMessages(for: id)
         }
-        // Auto-focus the input on new / empty chats (ChatGPT / Claude behaviour)
-        .onChange(of: chatManager.currentConversation?.id) { _, _ in
-            guard chatManager.currentConversation?.messages.isEmpty ?? true else { return }
+        // Auto-focus only for new drafts, not when selecting history chats
+        .onChange(of: chatManager.shouldAutoFocusInput) { _, should in
+            guard should else { return }
+            chatManager.shouldAutoFocusInput = false
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(150))
                 isInputFocused = true
             }
         }
         .onAppear {
-            guard chatManager.currentConversation?.messages.isEmpty ?? true else { return }
+            guard chatManager.shouldAutoFocusInput else { return }
+            chatManager.shouldAutoFocusInput = false
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
                 isInputFocused = true

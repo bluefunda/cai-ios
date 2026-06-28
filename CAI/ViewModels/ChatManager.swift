@@ -54,6 +54,8 @@ final class ChatManager: ObservableObject {
 
     @Published var rateLimit: RateLimitInfo?
     @Published var greeting: String = ""
+    /// True only when a fresh draft was just created via newConversation(). Cleared on first use.
+    @Published var shouldAutoFocusInput: Bool = false
 
     // MARK: - Private
 
@@ -294,10 +296,12 @@ final class ChatManager: ObservableObject {
             model: selectedModel.id,
             createdAt: Date()
         )
+        shouldAutoFocusInput = true
     }
 
     func selectConversation(_ conversation: Conversation) {
         Haptic.selection()
+        shouldAutoFocusInput = false
         currentConversation = conversation
         Task { await loadMessages(for: conversation.id) }
     }
