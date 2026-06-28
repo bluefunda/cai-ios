@@ -327,13 +327,15 @@ struct RateLimitDTO: Codable {
 
 // MARK: - MCP Servers (/mcp, /mcp/user)
 
+/// Backend returns {"mcpInfo": [{server_id, name, mcp_server_url, ...}]}
 struct MCPListResponse: Codable {
     let servers: [MCPServerDTO]
 
     init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           let servers = try? container.decode([MCPServerDTO].self, forKey: .servers) {
-            self.servers = servers; return
+        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+            if let s = try? container.decode([MCPServerDTO].self, forKey: .mcpInfo)    { self.servers = s; return }
+            if let s = try? container.decode([MCPServerDTO].self, forKey: .mcpForUser) { self.servers = s; return }
+            if let s = try? container.decode([MCPServerDTO].self, forKey: .servers)    { self.servers = s; return }
         }
         let container = try decoder.singleValueContainer()
         self.servers = (try? container.decode([MCPServerDTO].self)) ?? []
@@ -344,22 +346,53 @@ struct MCPListResponse: Codable {
         try container.encode(servers, forKey: .servers)
     }
 
-    enum CodingKeys: String, CodingKey { case servers }
+    enum CodingKeys: String, CodingKey { case servers, mcpInfo, mcpForUser }
 }
 
+/// Backend MCPInfo: {server_id (int), name, mcp_server_url, shortDescription, isAvailable}
 struct MCPServerDTO: Codable, Identifiable {
-    let id: String
+    let id: String           // derived from server_id (int → string)
     let name: String
     let url: String?
-    let mcpServerUrl: String?
     let description: String?
     let enabled: Bool?
 
-    var resolvedURL: String { url ?? mcpServerUrl ?? "" }
+    var resolvedURL: String { url ?? "" }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // server_id is an int in the new backend format; fall back to string "id"
+        if let intId = try? c.decode(Int.self, forKey: .serverId) {
+            self.id = String(intId)
+        } else {
+            self.id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        }
+        self.name        = (try? c.decode(String.self, forKey: .name)) ?? ""
+        // mcp_server_url is the canonical URL field; fall back to "url"
+        self.url         = (try? c.decode(String.self, forKey: .mcpServerUrl))
+                        ?? (try? c.decode(String.self, forKey: .url))
+        // shortDescription is the canonical description field
+        self.description = (try? c.decode(String.self, forKey: .shortDescription))
+                        ?? (try? c.decode(String.self, forKey: .description))
+        self.enabled     = (try? c.decode(Bool.self, forKey: .isAvailable))
+                        ?? (try? c.decode(Bool.self, forKey: .enabled))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id,   forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(url,         forKey: .url)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(enabled,     forKey: .enabled)
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, name, url, description, enabled
-        case mcpServerUrl = "mcp_server_url"
+        case serverId        = "server_id"
+        case mcpServerUrl    = "mcp_server_url"
+        case shortDescription = "shortDescription"
+        case isAvailable     = "isAvailable"
     }
 }
 
