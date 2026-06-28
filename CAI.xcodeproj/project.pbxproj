@@ -32,6 +32,7 @@
 		H1000011201BCDEF /* SAPSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000001201BCDEF /* SAPSystem.swift */; };
 		H1000012201BCDEF /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000002201BCDEF /* KeychainStore.swift */; };
 		K1000011201BCDEF /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = K1000001201BCDEF /* HapticManager.swift */; };
+		FF000011201BCDEF /* BFFeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000001201BCDEF /* BFFeatureFlags.swift */; };
 		H1000013201BCDEF /* SAPSystemStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000003201BCDEF /* SAPSystemStore.swift */; };
 		H1000014201BCDEF /* CodeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000004201BCDEF /* CodeAPIService.swift */; };
 		H1000015201BCDEF /* SystemManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000005201BCDEF /* SystemManagerView.swift */; };
@@ -82,6 +83,7 @@
 		H1000001201BCDEF /* SAPSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystem.swift; sourceTree = "<group>"; };
 		H1000002201BCDEF /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		K1000001201BCDEF /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
+		FF000001201BCDEF /* BFFeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFeatureFlags.swift; sourceTree = "<group>"; };
 		H1000003201BCDEF /* SAPSystemStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystemStore.swift; sourceTree = "<group>"; };
 		H1000004201BCDEF /* CodeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAPIService.swift; sourceTree = "<group>"; };
 		H1000005201BCDEF /* SystemManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SystemManagerView.swift; sourceTree = "<group>"; };
@@ -239,6 +241,7 @@
 				B1000003201BCDEF /* Extensions.swift */,
 				H1000002201BCDEF /* KeychainStore.swift */,
 				K1000001201BCDEF /* HapticManager.swift */,
+				FF000001201BCDEF /* BFFeatureFlags.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -373,6 +376,7 @@
 				H1000011201BCDEF /* SAPSystem.swift in Sources */,
 				H1000012201BCDEF /* KeychainStore.swift in Sources */,
 				K1000011201BCDEF /* HapticManager.swift in Sources */,
+				FF000011201BCDEF /* BFFeatureFlags.swift in Sources */,
 				H1000013201BCDEF /* SAPSystemStore.swift in Sources */,
 				H1000014201BCDEF /* CodeAPIService.swift in Sources */,
 				H1000015201BCDEF /* SystemManagerView.swift in Sources */,

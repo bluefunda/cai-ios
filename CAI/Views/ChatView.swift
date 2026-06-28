@@ -153,8 +153,8 @@ struct ChatView: View {
                 onSend: sendMessage,
                 onStop: stopStreaming,
                 onClearAttachment: clearAttachment,
-                onPickPhoto: { showPhotoPicker = true },
-                onPickFile: { showFileImporter = true }
+                onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
+                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
             )
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, item in
@@ -472,10 +472,12 @@ struct ChatInputView: View {
     let onSend: () -> Void
     let onStop: () -> Void
     let onClearAttachment: () -> Void
-    let onPickPhoto: () -> Void
-    let onPickFile: () -> Void
+    /// nil = file upload feature disabled; non-nil = show the attach button
+    let onPickPhoto: (() -> Void)?
+    let onPickFile: (() -> Void)?
 
     private var canSend: Bool { !text.isEmpty || attachmentFilename != nil }
+    private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -494,21 +496,27 @@ struct ChatInputView: View {
             }
 
             HStack(alignment: .bottom, spacing: 8) {
-                // Attach button — photo library or file picker
-                Menu {
-                    Button { onPickPhoto() } label: {
-                        Label("Photo Library", systemImage: "photo")
+                // Attach button — only rendered when the feature flag is on
+                if attachEnabled {
+                    Menu {
+                        if let pickPhoto = onPickPhoto {
+                            Button { pickPhoto() } label: {
+                                Label("Photo Library", systemImage: "photo")
+                            }
+                        }
+                        if let pickFile = onPickFile {
+                            Button { pickFile() } label: {
+                                Label("Browse Files", systemImage: "folder")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44)
                     }
-                    Button { onPickFile() } label: {
-                        Label("Browse Files", systemImage: "folder")
-                    }
-                } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                    .disabled(isStreaming)
                 }
-                .disabled(isStreaming)
 
                 TextField("Message...", text: $text, axis: .vertical)
                     .font(BFFont.body)
