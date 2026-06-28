@@ -493,7 +493,23 @@ struct ChatInputView: View {
                 .background(Color(.systemGray6))
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
+            HStack(alignment: .bottom, spacing: 8) {
+                // Attach button — photo library or file picker
+                Menu {
+                    Button { onPickPhoto() } label: {
+                        Label("Photo Library", systemImage: "photo")
+                    }
+                    Button { onPickFile() } label: {
+                        Label("Browse Files", systemImage: "folder")
+                    }
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .disabled(isStreaming)
+
                 TextField("Message...", text: $text, axis: .vertical)
                     .font(BFFont.body)
                     .textFieldStyle(.plain)
