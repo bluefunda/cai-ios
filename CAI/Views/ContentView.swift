@@ -286,33 +286,44 @@ struct SidebarContent: View {
                 SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
                     currentMode = .code
                 }
-
-                SidebarNavButton(icon: "gear", label: "Settings") {
-                    onOpenSettings()
-                }
-
-                SidebarNavButton(icon: "questionmark.circle", label: "Help & Support") {
-                    onOpenURL(helpURL)
-                }
             }
-            .padding(.bottom, 8)
-        }
-        .navigationTitle("Chats")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+
+            Divider()
+
+            // Profile row — bottom left, menu contains Settings + Help
+            Menu {
                 Button { onOpenSettings() } label: {
+                    Label("Settings", systemImage: "gear")
+                }
+                Button { onOpenURL(helpURL) } label: {
+                    Label("Help & Support", systemImage: "questionmark.circle")
+                }
+            } label: {
+                HStack(spacing: 10) {
                     Circle()
                         .fill(BFColor.primary.gradient)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 34, height: 34)
                         .overlay {
                             Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.white)
+                                .font(.subheadline).fontWeight(.semibold).foregroundStyle(.white)
                         }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(authManager.currentUser?.name ?? "Account")
+                            .font(.subheadline).fontWeight(.medium)
+                            .foregroundStyle(.primary).lineLimit(1)
+                        if let email = authManager.currentUser?.email {
+                            Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "ellipsis").foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
+            .buttonStyle(.plain)
         }
+        .navigationTitle("Chats")
     }
 
     private var groupedConversations: [ConversationGroup] {
@@ -440,26 +451,12 @@ struct SidebarDrawer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Header: title + user avatar (top-right) ───
+            // ── Header: title only ───────────────────────
             HStack {
                 Text("Chats")
                     .font(.title3)
                     .fontWeight(.semibold)
                 Spacer()
-                Button {
-                    withAnimation { isOpen = false }
-                    onOpenSettings()
-                } label: {
-                    Circle()
-                        .fill(BFColor.primary.gradient)
-                        .frame(width: 36, height: 36)
-                        .overlay {
-                            Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.white)
-                        }
-                }
             }
             .padding(.horizontal)
             .padding(.top, 16)
@@ -559,18 +556,48 @@ struct SidebarDrawer: View {
                     currentMode = .code
                     withAnimation { isOpen = false }
                 }
+            }
 
-                SidebarNavButton(icon: "gear", label: "Settings") {
+            Divider()
+
+            // Profile row — bottom left, menu contains Settings + Help
+            Menu {
+                Button {
                     withAnimation { isOpen = false }
                     onOpenSettings()
+                } label: {
+                    Label("Settings", systemImage: "gear")
                 }
-
-                SidebarNavButton(icon: "questionmark.circle", label: "Help & Support") {
+                Button {
                     withAnimation { isOpen = false }
                     onOpenURL(helpURL)
+                } label: {
+                    Label("Help & Support", systemImage: "questionmark.circle")
                 }
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(BFColor.primary.gradient)
+                        .frame(width: 34, height: 34)
+                        .overlay {
+                            Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                                .font(.subheadline).fontWeight(.semibold).foregroundStyle(.white)
+                        }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(authManager.currentUser?.name ?? "Account")
+                            .font(.subheadline).fontWeight(.medium)
+                            .foregroundStyle(.primary).lineLimit(1)
+                        if let email = authManager.currentUser?.email {
+                            Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "ellipsis").foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
-            .padding(.bottom, 8)
+            .buttonStyle(.plain)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))

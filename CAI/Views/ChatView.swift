@@ -63,11 +63,8 @@ struct ChatView: View {
                                         .padding(.top, 40)
                                         .frame(maxWidth: .infinity)
                                 } else {
-                                    EmptyStateView(greeting: greetingText) { prompt in
-                                        inputText = prompt
-                                        isInputFocused = true
-                                    }
-                                    .frame(maxWidth: .infinity, minHeight: 300)
+                                    EmptyStateView(greeting: greetingText)
+                                        .frame(maxWidth: .infinity, minHeight: 300)
                                 }
 
                                 // Scroll anchor + bottom-visibility probe (works iOS 17+)
@@ -185,6 +182,21 @@ struct ChatView: View {
         .task(id: chatManager.currentConversation?.id) {
             guard let id = chatManager.currentConversation?.id else { return }
             await chatManager.loadMessages(for: id)
+        }
+        // Auto-focus the input on new / empty chats (ChatGPT / Claude behaviour)
+        .onChange(of: chatManager.currentConversation?.id) { _, _ in
+            guard chatManager.currentConversation?.messages.isEmpty ?? true else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                isInputFocused = true
+            }
+        }
+        .onAppear {
+            guard chatManager.currentConversation?.messages.isEmpty ?? true else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                isInputFocused = true
+            }
         }
         .alert("Error", isPresented: .constant(chatManager.error != nil)) {
             Button("OK") { chatManager.error = nil }
@@ -396,66 +408,22 @@ struct StreamingIndicator: View {
     }
 }
 
-// MARK: - Empty State (greeting + suggested prompts)
+// MARK: - Empty State
 
 struct EmptyStateView: View {
     let greeting: String
-    let onSelectPrompt: (String) -> Void
-
-    private struct Suggestion: Identifiable {
-        let id = UUID()
-        let icon: String
-        let label: String
-        let prompt: String
-    }
-
-    private let suggestions: [Suggestion] = [
-        .init(icon: "chevron.left.forwardslash.chevron.right", label: "Explain ABAP", prompt: "Explain what this ABAP code does:\n\n"),
-        .init(icon: "doc.text", label: "Write a report", prompt: "Write an ABAP report that "),
-        .init(icon: "ladybug", label: "Debug an error", prompt: "Help me debug this error: "),
-        .init(icon: "magnifyingglass", label: "SELECT help", prompt: "Write an ABAP SQL SELECT that "),
-        .init(icon: "envelope", label: "Draft an email", prompt: "Help me draft a professional email about: "),
-        .init(icon: "text.append", label: "Summarize", prompt: "Summarize the following: ")
-    ]
-
-    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
-        VStack(spacing: BFSpacing._6) {
-            VStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 48))
-                    .foregroundStyle(BFColor.primary.gradient)
-                Text(greeting)
-                    .font(BFFont.h4)
-                    .multilineTextAlignment(.center)
-                Text("How can I help you today?")
-                    .font(BFFont.body).foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(suggestions) { suggestion in
-                    Button {
-                        onSelectPrompt(suggestion.prompt)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: suggestion.icon)
-                                .font(BFFont.bodySmall)
-                                .foregroundStyle(BFColor.primary)
-                            Text(suggestion.label)
-                                .font(BFFont.body)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, BFSpacing._4)
-                        .padding(.vertical, 14)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, BFSpacing._4)
+        VStack(spacing: 14) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 52))
+                .foregroundStyle(BFColor.primary.gradient)
+            Text(greeting)
+                .font(BFFont.h4)
+                .multilineTextAlignment(.center)
+            Text("How can I help you today?")
+                .font(BFFont.body)
+                .foregroundStyle(.secondary)
         }
         .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
