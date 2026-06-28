@@ -324,7 +324,8 @@ final class ChatManager: ObservableObject {
             mcpServerURL: selectedMCPServer?.url,
             thinkingMode: thinkingMode.rawValue,
             modelExplicit: userPickedModel,
-            fileUrl: fileUrl
+            fileUrl: fileUrl,
+            agentName: agentNameForSelectedServer
         )
 
         isStreaming = true
@@ -389,6 +390,16 @@ final class ChatManager: ObservableObject {
 
             isStreaming = false
         }
+    }
+
+    /// Maps the selected MCP server to a backend agent name.
+    /// Convention: strip the "-mcp" suffix (e.g. "abaper-mcp" → "abaper").
+    private var agentNameForSelectedServer: String? {
+        guard let server = selectedMCPServer else { return nil }
+        if server.name.hasSuffix("-mcp") {
+            return String(server.name.dropLast(4))
+        }
+        return server.name
     }
 
     func uploadAttachment(data: Data, filename: String, mimeType: String) async throws -> String? {

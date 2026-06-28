@@ -66,6 +66,7 @@ final class BFFChatService: ChatServiceProtocol {
                 if let mcpName = request.mcpServerName { payload["mcp_server_name"] = mcpName }
                 if let mcpURL  = request.mcpServerURL  { payload["mcp_server_url"]  = mcpURL  }
                 if let fileUrl = request.fileUrl        { payload["fileUrl"]         = fileUrl  }
+                if let agent   = request.agentName      { payload["agentName"]       = agent    }
 
                 do {
                     urlRequest.httpBody = try JSONSerialization.data(withJSONObject: payload)

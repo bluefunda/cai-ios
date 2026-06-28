@@ -93,6 +93,9 @@ struct ChatRequest {
     let modelExplicit: Bool
     /// Storage URL of an uploaded file attachment; passed as `fileUrl` to the backend.
     let fileUrl: String?
+    /// Explicit agent name for routing (e.g. "abaper"). When set, cai-llm-router routes
+    /// to the named agent rather than the default MCP agent.
+    let agentName: String?
 
     init(
         chatId: String,
@@ -104,7 +107,8 @@ struct ChatRequest {
         messages: [ChatMessage]? = nil,
         thinkingMode: String = "auto",
         modelExplicit: Bool = false,
-        fileUrl: String? = nil
+        fileUrl: String? = nil,
+        agentName: String? = nil
     ) {
         self.chatId = chatId
         self.prompt = prompt
@@ -116,6 +120,7 @@ struct ChatRequest {
         self.thinkingMode = thinkingMode
         self.modelExplicit = modelExplicit
         self.fileUrl = fileUrl
+        self.agentName = agentName
     }
 
     /// Convert to JSON payload for NATS/BFF
@@ -129,12 +134,9 @@ struct ChatRequest {
             "modelExplicit": modelExplicit
         ]
 
-        if let mcpName = mcpServerName {
-            json["mcp_server_name"] = mcpName
-        }
-        if let mcpURL = mcpServerURL {
-            json["mcp_server_url"] = mcpURL
-        }
+        if let mcpName = mcpServerName { json["mcp_server_name"] = mcpName }
+        if let mcpURL  = mcpServerURL  { json["mcp_server_url"]  = mcpURL  }
+        if let agent   = agentName     { json["agentName"]        = agent   }
 
         return json
     }

@@ -521,18 +521,32 @@ struct ChatInputView: View {
 
 // MARK: - Mode + Model Picker
 
-/// Single dropdown combining the thinking mode (Auto / Quick Response /
-/// Think Deeper) and the LLM, mirroring the cai web app.
+/// Unified dropdown for thinking mode, LLM, and agent selection — mirrors the
+/// cai web UnifiedModeSelector / AgentMCPSelector.
 struct ModeModelPicker: View {
     @EnvironmentObject var chatManager: ChatManager
 
-    // Exactly one of {a thinking mode, an explicit LLM} is active, mirroring
-    // the cai web UnifiedModeSelector.
     private func modeIsActive(_ mode: ThinkingMode) -> Bool {
-        !chatManager.userPickedModel && chatManager.thinkingMode == mode
+        chatManager.selectedMCPServer == nil && !chatManager.userPickedModel
+            && chatManager.thinkingMode == mode
     }
     private func modelIsActive(_ model: LLMModel) -> Bool {
-        chatManager.userPickedModel && chatManager.selectedModel.id == model.id
+        chatManager.selectedMCPServer == nil
+            && chatManager.userPickedModel && chatManager.selectedModel.id == model.id
+    }
+    private func agentIsActive(_ server: MCPServer) -> Bool {
+        chatManager.selectedMCPServer?.id == server.id
+    }
+
+    private var label: String {
+        if let agent = chatManager.selectedMCPServer { return agent.name }
+        if chatManager.userPickedModel { return chatManager.selectedModel.name }
+        return chatManager.thinkingMode.label
+    }
+    private var icon: String {
+        if chatManager.selectedMCPServer != nil { return "cpu.fill" }
+        if chatManager.userPickedModel { return "cpu" }
+        return chatManager.thinkingMode.icon
     }
 
     var body: some View {
@@ -541,6 +555,7 @@ struct ModeModelPicker: View {
             Section {
                 ForEach(ThinkingMode.allCases) { mode in
                     Button {
+                        chatManager.selectedMCPServer = nil
                         chatManager.selectThinkingMode(mode)
                     } label: {
                         if modeIsActive(mode) {
@@ -556,6 +571,7 @@ struct ModeModelPicker: View {
             Section("LLM") {
                 ForEach(chatManager.availableModels) { model in
                     Button {
+                        chatManager.selectedMCPServer = nil
                         chatManager.selectModel(model)
                     } label: {
                         if modelIsActive(model) {
@@ -566,13 +582,39 @@ struct ModeModelPicker: View {
                     }
                 }
             }
+
+            // Agents (MCP servers)
+            if !chatManager.availableMCPServers.isEmpty {
+                Section("Agents") {
+                    // "None" option to clear agent selection
+                    Button {
+                        chatManager.selectedMCPServer = nil
+                    } label: {
+                        if chatManager.selectedMCPServer == nil {
+                            Label("None", systemImage: "checkmark")
+                        } else {
+                            Text("None")
+                        }
+                    }
+
+                    ForEach(chatManager.availableMCPServers) { server in
+                        Button {
+                            chatManager.selectedMCPServer = server
+                            chatManager.userPickedModel = false
+                        } label: {
+                            if agentIsActive(server) {
+                                Label(server.name, systemImage: "checkmark")
+                            } else {
+                                Text(server.name)
+                            }
+                        }
+                    }
+                }
+            }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: chatManager.userPickedModel ? "cpu" : chatManager.thinkingMode.icon)
-                    .font(.caption)
-                Text(chatManager.userPickedModel
-                     ? chatManager.selectedModel.name
-                     : chatManager.thinkingMode.label)
+                Image(systemName: icon).font(.caption)
+                Text(label)
                     .font(BFFont.bodySmall).fontWeight(.medium)
                     .lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption)
