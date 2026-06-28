@@ -204,10 +204,9 @@ struct ChatView: View {
             let d = data; let f = filename; let m = mime
             clearAttachment()
             Task {
-                let url = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
-                let prompt = url.map { text.isEmpty ? "I've attached a file: \($0)" : "\(text)\n\n[Attached: \($0)]" }
-                    ?? (text.isEmpty ? "I've attached a file." : text)
-                await chatManager.sendMessage(prompt)
+                let fileUrl = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
+                let prompt = text.isEmpty ? "Analyze the attached file." : text
+                await chatManager.sendMessage(prompt, fileUrl: fileUrl)
             }
         } else {
             Task { await chatManager.sendMessage(text) }

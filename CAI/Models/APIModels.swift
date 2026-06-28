@@ -2,18 +2,18 @@ import Foundation
 
 // MARK: - LLM Models (/models)
 
-/// Flexible container for /models response which may be array or wrapped object.
+/// Flexible container for /models response.
+/// Backend returns {"llmInfo": [{name, label, modelId}]} or {"llmModels": [...]}
+/// or legacy {"models": [...]} or a flat array.
 struct ModelsResponse: Codable {
     let models: [LLMModelDTO]
 
     init(from decoder: Decoder) throws {
-        // Try wrapped: {"models": [...]}
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           let models = try? container.decode([LLMModelDTO].self, forKey: .models) {
-            self.models = models
-            return
+        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+            if let m = try? container.decode([LLMModelDTO].self, forKey: .llmInfo)   { self.models = m; return }
+            if let m = try? container.decode([LLMModelDTO].self, forKey: .llmModels) { self.models = m; return }
+            if let m = try? container.decode([LLMModelDTO].self, forKey: .models)    { self.models = m; return }
         }
-        // Try flat array: [...]
         let container = try decoder.singleValueContainer()
         self.models = try container.decode([LLMModelDTO].self)
     }
@@ -24,18 +24,47 @@ struct ModelsResponse: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case models
+        case models, llmInfo, llmModels
     }
 }
 
+/// Backend format: {name: "deepseek", label: "DeepSeek", modelId: 1}
+/// Legacy iOS format: {id: "deepseek", name: "DeepSeek", provider: "..."}
 struct LLMModelDTO: Codable, Identifiable {
-    let id: String
-    let name: String
+    let id: String       // alias sent to backend
+    let name: String     // display name
     let provider: String?
     let description: String?
 
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let rawId    = try? c.decode(String.self, forKey: .id)
+        let rawName  = try? c.decode(String.self, forKey: .name)
+        let rawLabel = try? c.decode(String.self, forKey: .label)
+
+        if rawId == nil, let alias = rawName {
+            // Backend format: name is the alias/ID, label is the display name
+            self.id   = alias
+            self.name = rawLabel.flatMap { $0.isEmpty ? nil : $0 } ?? alias.capitalized
+        } else {
+            // Legacy format: id and name are already separated
+            self.id   = rawId ?? rawName ?? UUID().uuidString
+            self.name = rawLabel ?? rawName ?? ""
+        }
+        self.provider    = try? c.decode(String.self, forKey: .provider)
+        self.description = try? c.decode(String.self, forKey: .description)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id,   forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(provider,    forKey: .provider)
+        try c.encodeIfPresent(description, forKey: .description)
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id, name, provider, description
+        case id, name, label, provider, description
     }
 }
 

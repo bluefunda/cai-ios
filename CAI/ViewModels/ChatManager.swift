@@ -287,7 +287,7 @@ final class ChatManager: ObservableObject {
 
     // MARK: - Messaging
 
-    func sendMessage(_ text: String) async {
+    func sendMessage(_ text: String, fileUrl: String? = nil) async {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
 
@@ -323,7 +323,8 @@ final class ChatManager: ObservableObject {
             mcpServerName: selectedMCPServer?.name,
             mcpServerURL: selectedMCPServer?.url,
             thinkingMode: thinkingMode.rawValue,
-            modelExplicit: userPickedModel
+            modelExplicit: userPickedModel,
+            fileUrl: fileUrl
         )
 
         isStreaming = true
@@ -523,12 +524,15 @@ struct LLMModel: Identifiable, Hashable {
     let name: String
     let provider: String
 
-    static let defaultModel = LLMModel(id: "groq", name: "Groq (Llama 3.3 70B)", provider: "Groq")
+    static let defaultModel = LLMModel(id: "deepseek", name: "DeepSeek", provider: "DeepSeek")
 
     static let defaultModels: [LLMModel] = [
-        LLMModel(id: "groq", name: "Groq (Llama 3.3 70B)", provider: "Groq"),
-        LLMModel(id: "openai", name: "OpenAI GPT-4o", provider: "OpenAI"),
-        LLMModel(id: "deepseek", name: "DeepSeek Chat", provider: "DeepSeek"),
+        LLMModel(id: "deepseek",  name: "DeepSeek",  provider: "DeepSeek"),
+        LLMModel(id: "gemini",    name: "Gemini",    provider: "Gemini"),
+        LLMModel(id: "anthropic", name: "Anthropic", provider: "Anthropic"),
+        LLMModel(id: "llama",     name: "Llama",     provider: "Groq"),
+        LLMModel(id: "sarvam",    name: "Sarvam",    provider: "Sarvam"),
+        LLMModel(id: "openai",    name: "OpenAI",    provider: "OpenAI"),
     ]
 }
 

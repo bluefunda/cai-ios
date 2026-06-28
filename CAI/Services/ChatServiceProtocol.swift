@@ -91,6 +91,8 @@ struct ChatRequest {
     /// True when the user explicitly picked a model; the backend then uses
     /// `model` and ignores `thinkingMode`.
     let modelExplicit: Bool
+    /// Storage URL of an uploaded file attachment; passed as `fileUrl` to the backend.
+    let fileUrl: String?
 
     init(
         chatId: String,
@@ -101,7 +103,8 @@ struct ChatRequest {
         mcpServerURL: String? = nil,
         messages: [ChatMessage]? = nil,
         thinkingMode: String = "auto",
-        modelExplicit: Bool = false
+        modelExplicit: Bool = false,
+        fileUrl: String? = nil
     ) {
         self.chatId = chatId
         self.prompt = prompt
@@ -112,6 +115,7 @@ struct ChatRequest {
         self.messages = messages
         self.thinkingMode = thinkingMode
         self.modelExplicit = modelExplicit
+        self.fileUrl = fileUrl
     }
 
     /// Convert to JSON payload for NATS/BFF
