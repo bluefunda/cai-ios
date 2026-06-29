@@ -53,6 +53,28 @@ enum BFFont {
     static var sidebarMeta:    Font    { font(size: 12 * macScale, weight: .regular)  }
     static var toolbarIconPt:  CGFloat { 19 * macScale }
 
+    // MARK: - Response content tokens
+    //
+    // Controls all fonts inside AI response bubbles.
+    // No macScale — response content renders in Mac Idiom at 100 % scale.
+    //
+    //   responseBody        — paragraphs, list items          (16 pt regular)
+    //   responseBodyBold    — used by bold spans in lists     (16 pt semibold)
+    //   responseH1/2/3/4    — in-response headings            (22/18/16/15 pt)
+    //   responseTable       — table data cells                (14 pt regular)
+    //   responseTableHeader — table header row                (14 pt semibold)
+    //   responseCode        — fenced code blocks              (13 pt mono)
+
+    static var responseBody:        Font { font(size: 16, weight: .regular)  }
+    static var responseBodyBold:    Font { font(size: 16, weight: .semibold) }
+    static var responseH1:          Font { font(size: 22, weight: .semibold) }
+    static var responseH2:          Font { font(size: 18, weight: .semibold) }
+    static var responseH3:          Font { font(size: 16, weight: .semibold) }
+    static var responseH4:          Font { font(size: 15, weight: .medium)   }
+    static var responseTable:       Font { font(size: 14, weight: .regular)  }
+    static var responseTableHeader: Font { font(size: 14, weight: .semibold) }
+    static var responseCode:        Font { .system(size: 13, design: .monospaced) }
+
     // MARK: - Type Scale
 
     static let display = font(size: 50, weight: .bold)

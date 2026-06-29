@@ -241,7 +241,7 @@ struct MarkdownView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                 switch segment {
                 case .single(let block):
@@ -251,6 +251,7 @@ struct MarkdownView: View {
                 }
             }
         }
+        .font(BFFont.responseBody)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -301,16 +302,18 @@ private struct InlineMarkdownText: View {
                 options: .init(interpretedSyntax: .inlineOnly)
             ) {
                 Text(attr)
+                    .font(BFFont.responseBody)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(2)
+                    .lineSpacing(4)
             } else {
                 Text(text)
+                    .font(BFFont.responseBody)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(2)
+                    .lineSpacing(4)
             }
         }
     }
@@ -325,18 +328,17 @@ private struct HeadingView: View {
     var body: some View {
         Text(text)
             .font(headingFont)
-            .fontWeight(.semibold)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, level == 1 ? 6 : 2)
+            .padding(.top, level <= 2 ? 6 : 2)
     }
 
     private var headingFont: Font {
         switch level {
-        case 1: return .title2
-        case 2: return .title3
-        case 3: return .headline
-        default: return .subheadline
+        case 1: return BFFont.responseH1
+        case 2: return BFFont.responseH2
+        case 3: return BFFont.responseH3
+        default: return BFFont.responseH4
         }
     }
 }
@@ -421,7 +423,7 @@ private struct UnorderedListView: View {
     let items: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("•")
@@ -440,7 +442,7 @@ private struct OrderedListView: View {
     let items: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("\(idx + 1).")
@@ -527,19 +529,18 @@ private struct DefinitionListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(row.first ?? "")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(BFFont.responseTableHeader)
                     if row.count > 1 {
                         Text(row[1])
-                            .font(.subheadline)
+                            .font(BFFont.responseTable)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 9)
+                .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(rowIdx % 2 == 0 ? Color.secondary.opacity(0.05) : Color.clear)
 
@@ -557,24 +558,23 @@ private struct WrappingTableView: View {
     let headers: [String]
     let rows: [[String]]
 
-    private let minColWidth: CGFloat = 90
+    private let minColWidth: CGFloat = 140
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 // Header row
                 HStack(alignment: .top, spacing: 0) {
                     ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
                         Text(header)
-                            .font(.caption)
-                            .fontWeight(.semibold)
+                            .font(BFFont.responseTableHeader)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
                             .frame(minWidth: minColWidth, alignment: .leading)
                     }
                 }
-                .background(Color.secondary.opacity(0.12))
+                .background(Color.secondary.opacity(0.18))
 
                 Divider()
 
@@ -583,19 +583,19 @@ private struct WrappingTableView: View {
                     HStack(alignment: .top, spacing: 0) {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(cell)
-                                .font(.caption)
+                                .font(BFFont.responseTable)
                                 .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
                                 .frame(minWidth: minColWidth, alignment: .leading)
                         }
                         if row.count < headers.count {
                             ForEach(row.count..<headers.count, id: \.self) { _ in
                                 Text("—")
-                                    .font(.caption)
+                                    .font(BFFont.responseTable)
                                     .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
                                     .frame(minWidth: minColWidth, alignment: .leading)
                             }
                         }
