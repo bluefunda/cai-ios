@@ -219,6 +219,11 @@ struct ChatView: View {
 
     private func sendMessage() {
         guard !inputText.isEmpty || attachmentData != nil else { return }
+        // Dismiss keyboard immediately — don't wait for isStreaming to flip
+        isInputFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
         let text = inputText
         inputText = ""
 
