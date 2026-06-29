@@ -103,7 +103,7 @@ struct AppShell: View {
     private var iPadTopBar: some View {
         switch mode {
         case .chat:
-            ChatTopBar(sidebarOpen: .constant(false), onNewChat: { chatManager.newConversation() }, showHamburger: false)
+            ChatTopBar(sidebarOpen: .constant(false), onNewChat: { chatManager.newConversation() }, showHamburger: false, showNewChat: false)
         case .code:
             CodeTopBar(sidebarOpen: .constant(false), onSystems: { showSystems = true }, showHamburger: false)
         }
@@ -204,23 +204,25 @@ struct SidebarContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Button {
-                currentMode = .chat
-                chatManager.newConversation()
-            } label: {
-                HStack {
+            // ── Sidebar header: brand + new chat ────────
+            HStack(spacing: 0) {
+                Text("BlueFunda AI")
+                    .font(BFFont.sidebarHeader)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button {
+                    currentMode = .chat
+                    chatManager.newConversation()
+                } label: {
                     Image(systemName: "square.and.pencil")
-                    Text("New Chat")
-                    Spacer()
+                        .font(.system(size: BFFont.toolbarIconPt - 2))
+                        .foregroundStyle(BFColor.primary)
                 }
-                .font(BFFont.sidebarItem)
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
 
             HStack {
                 Image(systemName: "magnifyingglass")
@@ -230,7 +232,7 @@ struct SidebarContent: View {
             }
             .padding(8)
             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
             .padding(.bottom, 8)
 
             if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
@@ -327,7 +329,7 @@ struct SidebarContent: View {
             }
             .buttonStyle(.plain)
         }
-        .navigationTitle("BlueFunda AI")
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var groupedConversations: [ConversationGroup] {
@@ -380,6 +382,11 @@ struct ChatTopBar: View {
     @Binding var sidebarOpen: Bool
     let onNewChat: () -> Void
     var showHamburger: Bool = true
+    var showNewChat: Bool = true
+
+    private var chatTitle: String {
+        chatManager.currentConversation?.title ?? "New Chat"
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -387,11 +394,19 @@ struct ChatTopBar: View {
                 HamburgerButton(sidebarOpen: $sidebarOpen)
             }
 
-            Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: BFFont.toolbarIconPt))
+            if showNewChat {
+                Button(action: onNewChat) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: BFFont.toolbarIconPt))
+                }
+                .foregroundStyle(BFColor.primary)
+            } else {
+                // iPad/Mac: show conversation title instead
+                Text(chatTitle)
+                    .font(BFFont.sidebarItemMed)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .foregroundStyle(BFColor.primary)
 
             Spacer()
 
@@ -458,35 +473,26 @@ struct SidebarDrawer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Header ──────────────────────────────────
-            HStack {
+            // ── Sidebar header: brand + new chat ────────
+            HStack(spacing: 0) {
                 Text("BlueFunda AI")
                     .font(BFFont.sidebarHeader)
+                    .foregroundStyle(.primary)
                 Spacer()
-            }
-            .padding(.horizontal)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
-
-            // New chat row
-            Button {
-                currentMode = .chat
-                chatManager.newConversation()
-                withAnimation { isOpen = false }
-            } label: {
-                HStack {
+                Button {
+                    currentMode = .chat
+                    chatManager.newConversation()
+                    withAnimation { isOpen = false }
+                } label: {
                     Image(systemName: "square.and.pencil")
-                    Text("New Chat")
-                    Spacer()
+                        .font(.system(size: BFFont.toolbarIconPt - 2))
+                        .foregroundStyle(BFColor.primary)
                 }
-                .font(BFFont.sidebarItem)
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
 
             // Search
             HStack {
@@ -497,7 +503,7 @@ struct SidebarDrawer: View {
             }
             .padding(8)
             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
             .padding(.bottom, 8)
 
             // ── Conversation list ─────────────────────────
