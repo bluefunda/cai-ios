@@ -213,7 +213,7 @@ struct SidebarContent: View {
                     Text("New Chat")
                     Spacer()
                 }
-                .font(.subheadline)
+                .font(BFFont.sidebarItem)
                 .padding(.horizontal)
                 .padding(.vertical, 10)
                 .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
@@ -226,7 +226,7 @@ struct SidebarContent: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Search conversations", text: $searchText)
-                    .font(.subheadline)
+                    .font(BFFont.sidebarItem)
             }
             .padding(8)
             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
@@ -239,10 +239,10 @@ struct SidebarContent: View {
             } else if filteredConversations.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "bubble.left")
-                        .font(.system(size: 40))
+                        .font(.system(size: 36))
                         .foregroundStyle(.secondary.opacity(0.4))
                     Text(searchText.isEmpty ? "No conversations yet" : "No results")
-                        .font(.subheadline)
+                        .font(BFFont.sidebarItem)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -251,8 +251,7 @@ struct SidebarContent: View {
                     LazyVStack(spacing: 2) {
                         ForEach(groupedConversations) { group in
                             Text(group.title)
-                                .font(.caption)
-                                .fontWeight(.semibold)
+                                .font(BFFont.sidebarSection)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 12)
@@ -310,14 +309,14 @@ struct SidebarContent: View {
                         .frame(width: 34, height: 34)
                         .overlay {
                             Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                                .font(.subheadline).fontWeight(.semibold).foregroundStyle(.white)
+                                .font(BFFont.sidebarItemMed).foregroundStyle(.white)
                         }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(authManager.currentUser?.name ?? "Account")
-                            .font(.subheadline).fontWeight(.medium)
+                            .font(BFFont.sidebarItemMed)
                             .foregroundStyle(.primary).lineLimit(1)
                         if let email = authManager.currentUser?.email {
-                            Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                     Spacer()
@@ -389,7 +388,8 @@ struct ChatTopBar: View {
             }
 
             Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil").font(.system(size: 20))
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: BFFont.toolbarIconPt))
             }
             .foregroundStyle(BFColor.primary)
 
@@ -423,7 +423,8 @@ struct CodeTopBar: View {
             Spacer()
 
             Button(action: onSystems) {
-                Image(systemName: "server.rack").font(.system(size: 20))
+                Image(systemName: "server.rack")
+                    .font(.system(size: BFFont.toolbarIconPt))
             }
         }
         .padding(.horizontal, BFSpacing._4)
@@ -460,8 +461,7 @@ struct SidebarDrawer: View {
             // ── Header ──────────────────────────────────
             HStack {
                 Text("BlueFunda AI")
-                    .font(.title3)
-                    .fontWeight(.semibold)
+                    .font(BFFont.sidebarHeader)
                 Spacer()
             }
             .padding(.horizontal)
@@ -479,7 +479,7 @@ struct SidebarDrawer: View {
                     Text("New Chat")
                     Spacer()
                 }
-                .font(.subheadline)
+                .font(BFFont.sidebarItem)
                 .padding(.horizontal)
                 .padding(.vertical, 10)
                 .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
@@ -493,7 +493,7 @@ struct SidebarDrawer: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Search conversations", text: $searchText)
-                    .font(.subheadline)
+                    .font(BFFont.sidebarItem)
             }
             .padding(8)
             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
@@ -507,10 +507,10 @@ struct SidebarDrawer: View {
             } else if filteredConversations.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "bubble.left")
-                        .font(.system(size: 40))
+                        .font(.system(size: 36))
                         .foregroundStyle(.secondary.opacity(0.4))
                     Text(searchText.isEmpty ? "No conversations yet" : "No results")
-                        .font(.subheadline)
+                        .font(BFFont.sidebarItem)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -519,8 +519,7 @@ struct SidebarDrawer: View {
                     LazyVStack(spacing: 2) {
                         ForEach(groupedConversations) { group in
                             Text(group.title)
-                                .font(.caption)
-                                .fontWeight(.semibold)
+                                .font(BFFont.sidebarSection)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 12)
@@ -587,14 +586,14 @@ struct SidebarDrawer: View {
                         .frame(width: 34, height: 34)
                         .overlay {
                             Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                                .font(.subheadline).fontWeight(.semibold).foregroundStyle(.white)
+                                .font(BFFont.sidebarItemMed).foregroundStyle(.white)
                         }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(authManager.currentUser?.name ?? "Account")
-                            .font(.subheadline).fontWeight(.medium)
+                            .font(BFFont.sidebarItemMed)
                             .foregroundStyle(.primary).lineLimit(1)
                         if let email = authManager.currentUser?.email {
-                            Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                     Spacer()
@@ -658,11 +657,11 @@ struct SidebarConversationRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "bubble.left")
-                .font(.caption)
+                .font(BFFont.sidebarSection)
                 .foregroundStyle(.secondary)
 
             Text(conversation.title)
-                .font(.subheadline)
+                .font(BFFont.sidebarItem)
                 .lineLimit(1)
                 .foregroundStyle(.primary)
 
@@ -693,7 +692,7 @@ struct SidebarNavButton: View {
                 Image(systemName: icon)
                     .frame(width: 20)
                 Text(label)
-                    .font(.subheadline)
+                    .font(BFFont.sidebarItem)
                 Spacer()
             }
             .padding(.horizontal, 16)

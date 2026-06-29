@@ -12,6 +12,47 @@ enum BFFont {
     // Fallback: if General Sans is not registered, use the system font.
     // General Sans requires license confirmation for iOS bundle distribution.
 
+    // MARK: - Platform scale
+    //
+    // Mac Catalyst has two idioms:
+    //   • Mac Idiom  (TARGETED_DEVICE_FAMILY includes 6) — 100 % scale, no adjustment.
+    //   • iPad Idiom (default)                           — 77 % scale, multiply to compensate.
+    //
+    // This single var is the ONE knob to turn when the user says "make sidebar
+    // text bigger / smaller on Mac".  Change the `1.3` below and every sidebar
+    // token updates automatically.
+    //
+    //   Current effective sizes on Mac with macScale:
+    //     sidebarItem    13 × 1.3 × 0.77 ≈ 13 pt  (iPad idiom)
+    //     sidebarItem    13 × 1.0        = 13 pt  (Mac  idiom)
+
+    static var macScale: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return UIDevice.current.userInterfaceIdiom == .mac ? 1.0 : 1.3
+        #else
+        return 1.0
+        #endif
+    }
+
+    // MARK: - Sidebar tokens
+    //
+    // Edit ONLY these base sizes to reshape the entire sidebar typography.
+    // The macScale multiplier above handles platform compensation automatically.
+    //
+    //   sidebarHeader  — drawer title "BlueFunda AI"               (16 pt base)
+    //   sidebarItem    — conversation rows, buttons, search field   (13 pt base)
+    //   sidebarItemMed — profile name (medium weight variant)       (13 pt base)
+    //   sidebarSection — group labels: Today / Yesterday            (11 pt base)
+    //   sidebarMeta    — email, timestamps                          (12 pt base)
+    //   toolbarIconPt  — pencil / hamburger / server SF Symbol size (19 pt base)
+
+    static var sidebarHeader:  Font    { font(size: 16 * macScale, weight: .semibold) }
+    static var sidebarItem:    Font    { font(size: 13 * macScale, weight: .regular)  }
+    static var sidebarItemMed: Font    { font(size: 13 * macScale, weight: .medium)   }
+    static var sidebarSection: Font    { font(size: 11 * macScale, weight: .semibold) }
+    static var sidebarMeta:    Font    { font(size: 12 * macScale, weight: .regular)  }
+    static var toolbarIconPt:  CGFloat { 19 * macScale }
+
     // MARK: - Type Scale
 
     static let display = font(size: 50, weight: .bold)
