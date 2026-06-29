@@ -32,8 +32,9 @@ struct ChatView: View {
     // Scroll management
     @State private var isAtBottom = true
     @State private var showScrollButton = false
-    // Captured proxy for the scroll button tap
     @State private var scrollProxy: ScrollViewProxy?
+    // Keyboard: focus only fires once per session on first launch
+    @State private var hasTriggeredInitialFocus = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +44,7 @@ struct ChatView: View {
             }
 
             // Messages + scroll-down button overlay
-            ZStack(alignment: .bottomTrailing) {
+            ZStack(alignment: .bottom) {
                 GeometryReader { outer in
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -115,23 +116,22 @@ struct ChatView: View {
                     }
                 }
 
-                // Scroll-to-bottom button (shown when scrolled up / response overflows)
+                // Scroll-to-bottom button — centred at the bottom, Claude/ChatGPT style
                 if showScrollButton {
                     Button {
                         isAtBottom = true
                         showScrollButton = false
-                        if let proxy = scrollProxy {
-                            scrollToBottom(proxy: proxy)
-                        }
+                        if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
                     } label: {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundStyle(BFColor.textInverse)
-                            .background(BFColor.primary, in: Circle())
-                            .bfShadow(BFShadow.md)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 34, height: 34)
+                            .background(.regularMaterial, in: Circle())
+                            .overlay(Circle().stroke(Color.secondary.opacity(0.18), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
                     }
-                    .padding(.bottom, 12)
-                    .padding(.trailing, 16)
+                    .padding(.bottom, 10)
                     .transition(.scale.combined(with: .opacity))
                     .animation(.spring(duration: 0.2), value: showScrollButton)
                 }
@@ -178,21 +178,32 @@ struct ChatView: View {
             guard let id = chatManager.currentConversation?.id else { return }
             await chatManager.loadMessages(for: id)
         }
-        // Auto-focus only for new drafts, not when selecting history chats
+        // Auto-focus for new drafts (shouldAutoFocusInput) or first-launch empty state
         .onChange(of: chatManager.shouldAutoFocusInput) { _, should in
             guard should else { return }
             chatManager.shouldAutoFocusInput = false
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(150))
-                isInputFocused = true
-            }
+            hasTriggeredInitialFocus = true
+            triggerFocus(delay: 150)
+        }
+        // First-launch: conversations finish loading and there is nothing to show
+        .onChange(of: chatManager.isLoadingChats) { _, loading in
+            guard !loading, !hasTriggeredInitialFocus else { return }
+            guard chatManager.currentConversation == nil,
+                  chatManager.conversations.isEmpty else { return }
+            hasTriggeredInitialFocus = true
+            triggerFocus(delay: 300)
         }
         .onAppear {
-            guard chatManager.shouldAutoFocusInput else { return }
-            chatManager.shouldAutoFocusInput = false
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(300))
-                isInputFocused = true
+            if chatManager.shouldAutoFocusInput {
+                chatManager.shouldAutoFocusInput = false
+                hasTriggeredInitialFocus = true
+                triggerFocus(delay: 300)
+            } else if !hasTriggeredInitialFocus,
+                      !chatManager.isLoadingChats,
+                      chatManager.currentConversation == nil,
+                      chatManager.conversations.isEmpty {
+                hasTriggeredInitialFocus = true
+                triggerFocus(delay: 500)
             }
         }
         .alert("Error", isPresented: .constant(chatManager.error != nil)) {
@@ -270,6 +281,13 @@ struct ChatView: View {
         }
     }
 
+    private func triggerFocus(delay milliseconds: Int) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(milliseconds))
+            isInputFocused = true
+        }
+    }
+
 }
 
 // MARK: - Connection Banner
@@ -313,17 +331,44 @@ struct MessageView: View {
     @State private var didCopy = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if message.role == .user {
+        if message.role == .user {
+            userBubble
+        } else {
+            assistantContent
+        }
+    }
+
+    // Right-aligned bubble — matches ChatGPT / Claude iOS style
+    private var userBubble: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            Spacer(minLength: 56)
+            VStack(alignment: .trailing, spacing: 3) {
                 Text(message.content)
                     .font(BFFont.body)
                     .foregroundStyle(.primary)
                     .textSelection(.enabled)
-            } else {
-                MarkdownView(content: message.content)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        BFColor.primary.opacity(0.13),
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    )
+                Text(message.timestamp, style: .time)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
+        }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 6)
+    }
 
-            if message.role == .assistant, !message.content.isEmpty {
+    // Left-aligned response — full width, no background
+    private var assistantContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MarkdownView(content: message.content)
+                .font(BFFont.body)
+
+            if !message.content.isEmpty {
                 HStack(spacing: 20) {
                     Button {
                         UIPasteboard.general.string = message.content
@@ -346,41 +391,36 @@ struct MessageView: View {
                     .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 4)
             }
 
             Text(message.timestamp, style: .time)
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
-        .background(message.role == .user ? BFColor.primary.opacity(0.08) : Color.clear)
     }
 }
 
 // MARK: - Streaming Indicator
 
 struct StreamingIndicator: View {
-    @State private var dotCount = 0
-    let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @State private var phase = 0
+    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Circle()
-                .fill(BFColor.success)
-                .frame(width: 36, height: 36)
-                .overlay {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 16)).foregroundStyle(BFColor.textInverse)
-                }
-            Text("Thinking" + String(repeating: ".", count: dotCount + 1))
-                .foregroundStyle(.secondary).font(BFFont.body)
-            Spacer()
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color.secondary.opacity(phase == i ? 0.85 : 0.25))
+                    .frame(width: 7, height: 7)
+                    .animation(.easeInOut(duration: 0.3), value: phase)
+            }
         }
         .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 12)
-        .onReceive(timer) { _ in dotCount = (dotCount + 1) % 3 }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
     }
 }
 

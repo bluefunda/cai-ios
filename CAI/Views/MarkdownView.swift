@@ -221,7 +221,7 @@ struct MarkdownView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 MarkdownBlockView(block: block)
             }
@@ -272,11 +272,13 @@ private struct InlineMarkdownText: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(2)
             } else {
                 Text(text)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(2)
             }
         }
     }
@@ -387,12 +389,12 @@ private struct UnorderedListView: View {
     let items: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("•")
                         .foregroundStyle(.secondary)
-                        .frame(width: 12, alignment: .center)
+                        .frame(width: 14, alignment: .center)
                     InlineMarkdownText(text: item)
                 }
             }
@@ -406,9 +408,9 @@ private struct OrderedListView: View {
     let items: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("\(idx + 1).")
                         .foregroundStyle(.secondary)
                         .frame(minWidth: 24, alignment: .trailing)

@@ -56,6 +56,30 @@ struct ConversationsView: View {
 
 // MARK: - Conversation Row
 
+extension ConversationRow {
+    func formattedDate(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            let f = DateFormatter()
+            f.dateStyle = .none; f.timeStyle = .short
+            return f.string(from: date)
+        }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+        let daysAgo = cal.dateComponents([.day], from: date, to: Date()).day ?? 0
+        let f = DateFormatter()
+        if daysAgo < 7 {
+            f.dateFormat = "EEEE"          // "Monday"
+        } else if cal.component(.year, from: date) == cal.component(.year, from: Date()) {
+            f.dateFormat = "MMM d"         // "Jun 25"
+        } else {
+            f.dateFormat = "MMM d, yyyy"   // "Jun 25, 2024"
+        }
+        return f.string(from: date)
+    }
+}
+
+// MARK: - Conversation Row
+
 struct ConversationRow: View {
     let conversation: Conversation
     @EnvironmentObject var chatManager: ChatManager
@@ -92,18 +116,9 @@ struct ConversationRow: View {
                         .lineLimit(2)
                 }
 
-                HStack {
-                    Text(conversation.createdAt, style: .relative)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Text("•")
-                        .foregroundColor(.secondary)
-
-                    Text("\(conversation.messages.count) messages")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                Text(formattedDate(conversation.createdAt))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Spacer()
