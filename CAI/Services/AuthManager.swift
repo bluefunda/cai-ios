@@ -18,6 +18,9 @@ enum SessionKind: String, Codable {
 final class AuthManager: NSObject, ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = false
+    /// True from init until the first restoreSession() completes. Prevents
+    /// the login screen flashing before the Keychain check finishes.
+    @Published var isRestoringSession = true
     @Published var currentUser: User?
     @Published var accessToken: String?
     @Published var error: AuthError?
@@ -342,6 +345,7 @@ final class AuthManager: NSObject, ObservableObject {
     // MARK: - Session Restore
 
     func restoreSession() async {
+        defer { isRestoringSession = false }
         if let appleUserID = KeychainStore.loadString(Config.appleUserIDKey, service: Config.keychainService) {
             let state = await checkAppleCredentialState(userID: appleUserID)
             if state == .revoked || state == .notFound {

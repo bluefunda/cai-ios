@@ -9,7 +9,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if authManager.isLoading {
+            if authManager.isRestoringSession || authManager.isLoading {
                 LoadingView()
             } else if authManager.isAuthenticated {
                 AuthenticatedRoot()
