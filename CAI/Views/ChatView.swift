@@ -92,34 +92,30 @@ struct ChatView: View {
                             .padding(.vertical)
                         }
                         .coordinateSpace(name: "chatScroll")
-                        .defaultScrollAnchor(.bottom)
                         .scrollDismissesKeyboard(.interactively)
                         .onPreferenceChange(AtBottomPreferenceKey.self) { atBottom in
                             isAtBottom = atBottom
                             showScrollButton = !atBottom
                         }
-                        // Scroll to bottom when a new conversation message arrives
-                        // (e.g. loading history) but not while streaming — let the
-                        // response build naturally so the down-arrow drives navigation.
+                        // Scroll to bottom when history loads (not streaming).
                         .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
                             if isAtBottom && !chatManager.isStreaming { scrollToBottom(proxy: proxy) }
                         }
-                        // When streaming starts, pin the user's prompt at the top.
-                        // The response grows below it; the down-arrow appears once it
-                        // overflows. No auto-chasing of the bottom during streaming.
-                        .onChange(of: chatManager.isStreaming) { _, streaming in
-                            if streaming {
-                                isAtBottom = false
-                                showScrollButton = false
-                                if let uid = chatManager.currentConversation?.messages
-                                    .last(where: { $0.role == .user })?.id {
-                                    withAnimation(.easeOut(duration: 0.25)) {
-                                        proxy.scrollTo(uid, anchor: .top)
-                                    }
-                                }
+                        // Jump to the latest messages when a different conversation is opened.
+                        .onChange(of: chatManager.currentConversation?.id) { _, _ in
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(50))
+                                scrollToBottom(proxy: proxy)
                             }
                         }
-                        .onAppear { scrollProxy = proxy }
+                        .onAppear {
+                            scrollProxy = proxy
+                            // Scroll to bottom on first appear so history starts at the latest message.
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(50))
+                                scrollToBottom(proxy: proxy)
+                            }
+                        }
                     }
                 }
 
@@ -236,6 +232,9 @@ struct ChatView: View {
         )
         let text = inputText
         inputText = ""
+
+        // Scroll to bottom so the user's prompt is visible when streaming starts.
+        if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
 
         if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
             let d = data; let f = filename; let m = mime
