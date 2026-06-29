@@ -284,7 +284,7 @@ final class ChatManager: ObservableObject {
 
     // MARK: - Conversations
 
-    func newConversation() {
+    func newConversation(focus: Bool = true) {
         // Create a draft only — it is NOT added to history until the first
         // message is sent (see sendMessage → upsertConversation). This keeps
         // empty "New Chat" entries out of the sidebar when the user taps New
@@ -296,7 +296,7 @@ final class ChatManager: ObservableObject {
             model: selectedModel.id,
             createdAt: Date()
         )
-        shouldAutoFocusInput = true
+        if focus { shouldAutoFocusInput = true }
     }
 
     func selectConversation(_ conversation: Conversation) {
@@ -321,7 +321,7 @@ final class ChatManager: ObservableObject {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
 
-        if currentConversation == nil { newConversation() }
+        if currentConversation == nil { newConversation(focus: false) }
         guard var conversation = currentConversation else { return }
 
         let isFirstMessage = conversation.messages.isEmpty
