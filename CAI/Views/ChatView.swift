@@ -90,21 +90,19 @@ struct ChatView: View {
                             isAtBottom = atBottom
                             showScrollButton = !atBottom
                         }
-                        // Follow the growing answer only while pinned to the bottom.
-                        // (Not during the send itself — that pins the prompt to the top.)
+                        // Scroll to bottom when a new conversation message arrives
+                        // (e.g. loading history) but not while streaming — let the
+                        // response build naturally so the down-arrow drives navigation.
                         .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
                             if isAtBottom && !chatManager.isStreaming { scrollToBottom(proxy: proxy) }
                         }
-                        .onChange(of: chatManager.currentConversation?.messages.last?.content.count) { _, _ in
-                            if isAtBottom { scrollToBottom(proxy: proxy) }
-                        }
-                        // ChatGPT-style: when a response starts, pin the user's prompt
-                        // near the top and let the answer stream below without chasing
-                        // the bottom. Once it overflows the screen the down-arrow shows;
-                        // short answers that fit stay followed automatically.
+                        // When streaming starts, pin the user's prompt at the top.
+                        // The response grows below it; the down-arrow appears once it
+                        // overflows. No auto-chasing of the bottom during streaming.
                         .onChange(of: chatManager.isStreaming) { _, streaming in
                             if streaming {
                                 isAtBottom = false
+                                showScrollButton = false
                                 if let uid = chatManager.currentConversation?.messages
                                     .last(where: { $0.role == .user })?.id {
                                     withAnimation(.easeOut(duration: 0.25)) {
@@ -173,10 +171,7 @@ struct ChatView: View {
         }
         // Dismiss keyboard when AI starts responding
         .onChange(of: chatManager.isStreaming) { _, streaming in
-            if streaming {
-                isInputFocused = false
-                dismissKeyboard()
-            }
+            if streaming { isInputFocused = false }
         }
         // Load messages when active conversation changes (fixes history)
         .task(id: chatManager.currentConversation?.id) {
@@ -275,12 +270,6 @@ struct ChatView: View {
         }
     }
 
-    private func dismissKeyboard() {
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder),
-            to: nil, from: nil, for: nil
-        )
-    }
 }
 
 // MARK: - Connection Banner
@@ -324,61 +313,46 @@ struct MessageView: View {
     @State private var didCopy = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Circle()
-                .fill(message.role == .user ? BFColor.primary : BFColor.success)
-                .frame(width: 36, height: 36)
-                .overlay {
-                    Image(systemName: message.role == .user ? "person.fill" : "brain.head.profile")
-                        .font(.system(size: 16))
-                        .foregroundStyle(BFColor.textInverse)
-                }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(message.role.displayName)
-                    .font(BFFont.bodySmall).fontWeight(.semibold).foregroundStyle(.secondary)
-
-                if message.role == .user {
-                    Text(message.content)
-                        .font(BFFont.body)
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                } else {
-                    MarkdownView(content: message.content)
-                }
-
-                if message.role == .assistant, !message.content.isEmpty {
-                    HStack(spacing: 20) {
-                        Button {
-                            UIPasteboard.general.string = message.content
-                            didCopy = true
-                            Task {
-                                try? await Task.sleep(for: .seconds(1.5))
-                                didCopy = false
-                            }
-                        } label: {
-                            Label(didCopy ? "Copied" : "Copy",
-                                  systemImage: didCopy ? "checkmark" : "doc.on.doc")
-                                .font(.caption)
-                        }
-                        .foregroundStyle(.secondary)
-
-                        ShareLink(item: message.content) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                                .font(.caption)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
-                }
-
-                Text(message.timestamp, style: .time)
-                    .font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            if message.role == .user {
+                Text(message.content)
+                    .font(BFFont.body)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+            } else {
+                MarkdownView(content: message.content)
             }
 
-            Spacer()
+            if message.role == .assistant, !message.content.isEmpty {
+                HStack(spacing: 20) {
+                    Button {
+                        UIPasteboard.general.string = message.content
+                        didCopy = true
+                        Task {
+                            try? await Task.sleep(for: .seconds(1.5))
+                            didCopy = false
+                        }
+                    } label: {
+                        Label(didCopy ? "Copied" : "Copy",
+                              systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+
+                    ShareLink(item: message.content) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
+
+            Text(message.timestamp, style: .time)
+                .font(.caption).foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
         .background(message.role == .user ? BFColor.primary.opacity(0.08) : Color.clear)
