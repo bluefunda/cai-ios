@@ -85,13 +85,18 @@ struct AppShell: View {
                 onOpenSettings: { activeSheet = .settings },
                 onOpenURL: { safariURL = $0 }
             )
+            // Pin sidebar to a desktop-comfortable width; the detail column
+            // gets the rest, which is where the 800-pt chat column lives.
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             VStack(spacing: 0) {
                 iPadTopBar
                 content
             }
         }
-        .navigationSplitViewStyle(.balanced)
+        // prominentDetail keeps the sidebar visible but gives the chat area
+        // the dominant portion of the window — matches ChatGPT / Claude layout.
+        .navigationSplitViewStyle(.prominentDetail)
     }
 
     @ViewBuilder

@@ -36,6 +36,10 @@ struct ChatView: View {
     // Keyboard: focus only fires once per session on first launch
     @State private var hasTriggeredInitialFocus = false
 
+    // Max readable width, centred — matches ChatGPT / Claude desktop.
+    // On iPhone the screen is narrower so the constraint never triggers.
+    private let maxChatWidth: CGFloat = 800
+
     var body: some View {
         VStack(spacing: 0) {
             // Connection banner
@@ -82,6 +86,9 @@ struct ChatView: View {
                                         }
                                     )
                             }
+                            // Centre content at desktop-comfortable width
+                            .frame(maxWidth: maxChatWidth)
+                            .frame(maxWidth: .infinity)
                             .padding(.vertical)
                         }
                         .coordinateSpace(name: "chatScroll")
@@ -139,35 +146,38 @@ struct ChatView: View {
 
             Divider()
 
-            // Input
-            ChatInputView(
-                text: $inputText,
-                isStreaming: chatManager.isStreaming,
-                attachmentFilename: attachmentFilename,
-                isFocused: $isInputFocused,
-                onSend: sendMessage,
-                onStop: stopStreaming,
-                onClearAttachment: clearAttachment,
-                onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
-                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
-            )
-            .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
-            .onChange(of: selectedPhotoItem) { _, item in
-                Task { await loadAttachment(from: item) }
-            }
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: importableTypes,
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result)
-            }
+            // Input — centred at the same max width as the message column
+            VStack(spacing: 0) {
+                ChatInputView(
+                    text: $inputText,
+                    isStreaming: chatManager.isStreaming,
+                    attachmentFilename: attachmentFilename,
+                    isFocused: $isInputFocused,
+                    onSend: sendMessage,
+                    onStop: stopStreaming,
+                    onClearAttachment: clearAttachment,
+                    onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
+                    onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
+                )
+                .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
+                .onChange(of: selectedPhotoItem) { _, item in
+                    Task { await loadAttachment(from: item) }
+                }
+                .fileImporter(
+                    isPresented: $showFileImporter,
+                    allowedContentTypes: importableTypes,
+                    allowsMultipleSelection: false
+                ) { result in
+                    handleFileImport(result)
+                }
 
-            Text("AI responses may be inaccurate. Verify important information.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 4)
+                Text("AI responses may be inaccurate. Verify important information.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 4)
+            }
+            .frame(maxWidth: maxChatWidth)
+            .frame(maxWidth: .infinity)
         }
         // Dismiss keyboard the moment the response starts rendering
         .onChange(of: chatManager.isStreaming) { _, streaming in
@@ -526,6 +536,8 @@ struct ChatInputView: View {
                         .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
                 }
                 .disabled(!isStreaming && !canSend)
+                // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
+                .keyboardShortcut(.return, modifiers: .command)
             }
             .padding(.horizontal, BFSpacing._4)
             .padding(.vertical, 10)
