@@ -44,7 +44,7 @@ final class AuthManager: NSObject, ObservableObject {
     // MARK: - Configuration
 
     struct Config {
-        static let keycloakBaseURL = "https://auth.bluefunda.com"
+        static let keycloakBaseURL = AppConfig.authBaseURL
         static let clientId = "cai-ios"
         static let redirectScheme = "cai"
         static let redirectURI = "cai://auth/callback"
@@ -54,7 +54,7 @@ final class AuthManager: NSObject, ObservableObject {
         static let appleUserIDKey = "apple_user_id"
     }
 
-    static let bffBaseURL = "https://api.bluefunda.com/ai"
+    static let bffBaseURL = AppConfig.bffBaseURL
 
     var realm: String = "individual"
 
@@ -338,7 +338,7 @@ final class AuthManager: NSObject, ObservableObject {
             accessToken: token,
             natsURL: nil,
             natsCredentials: nil,
-            bffBaseURL: "https://api.bluefunda.com/ai"
+            bffBaseURL: AppConfig.bffBaseURL
         )
     }
 

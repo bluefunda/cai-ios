@@ -12,7 +12,7 @@ final class BFFChatService: ChatServiceProtocol {
 
     // MARK: - Configuration
     struct Config {
-        static let defaultBFFURL = "https://api.bluefunda.com/ai"
+        static let defaultBFFURL = AppConfig.bffBaseURL
         static let chatsPath = "/chats"  // POST /chats/{chat_id} for streaming
         static let requestTimeout: TimeInterval = 120
     }
