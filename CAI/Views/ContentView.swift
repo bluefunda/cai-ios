@@ -1,6 +1,10 @@
 import SwiftUI
 import AuthenticationServices
 
+extension Notification.Name {
+    static let newChatRequested = Notification.Name("newChatRequested")
+}
+
 // MARK: - Root
 
 struct ContentView: View {
@@ -72,6 +76,10 @@ struct AppShell: View {
         .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
         .sheet(isPresented: $showSystems) {
             SystemManagerView(store: systemStore).environmentObject(authManager)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
+            modeRaw = AppMode.chat.rawValue
+            chatManager.newConversation()
         }
     }
 
@@ -394,14 +402,15 @@ struct ChatTopBar: View {
                 HamburgerButton(sidebarOpen: $sidebarOpen)
             }
 
-            if showNewChat {
-                Button(action: onNewChat) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: BFFont.toolbarIconPt))
-                }
-                .foregroundStyle(BFColor.primary)
-            } else {
-                // iPad/Mac: show conversation title instead
+            // New chat button — always visible
+            Button(action: onNewChat) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: BFFont.toolbarIconPt))
+            }
+            .foregroundStyle(BFColor.primary)
+
+            if !showNewChat {
+                // iPad/Mac: show current conversation title next to pencil
                 Text(chatTitle)
                     .font(BFFont.sidebarItemMed)
                     .foregroundStyle(.secondary)

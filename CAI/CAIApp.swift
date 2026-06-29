@@ -54,5 +54,14 @@ struct CAIApp: App {
                     }
                 }
         }
+        // Replace ⌘N "New Window" with "New Chat" in the File menu
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Chat") {
+                    NotificationCenter.default.post(name: .newChatRequested, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+        }
     }
 }
