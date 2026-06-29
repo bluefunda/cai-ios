@@ -169,9 +169,14 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 4)
         }
-        // Dismiss keyboard when AI starts responding
+        // Dismiss keyboard the moment the response starts rendering
         .onChange(of: chatManager.isStreaming) { _, streaming in
-            if streaming { isInputFocused = false }
+            guard streaming else { return }
+            isInputFocused = false
+            // FocusState alone doesn't always force UIKit to resign; do it explicitly
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+            )
         }
         // Load messages when active conversation changes (fixes history)
         .task(id: chatManager.currentConversation?.id) {
