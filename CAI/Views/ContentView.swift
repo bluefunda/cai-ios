@@ -364,7 +364,7 @@ struct HamburgerButton: View {
                 Capsule().frame(width: 22, height: 2)
                 Capsule().frame(width: 22, height: 2)
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(BFColor.primary)
         }
     }
 }
@@ -386,6 +386,7 @@ struct ChatTopBar: View {
             Button(action: onNewChat) {
                 Image(systemName: "square.and.pencil").font(.system(size: 20))
             }
+            .foregroundStyle(BFColor.primary)
 
             Spacer()
 

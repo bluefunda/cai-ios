@@ -185,11 +185,11 @@ struct ChatView: View {
             hasTriggeredInitialFocus = true
             triggerFocus(delay: 150)
         }
-        // First-launch: conversations finish loading and there is nothing to show
+        // Focus whenever showing the empty / new-chat state (no conversation open).
+        // Guards with hasTriggeredInitialFocus so it fires at most once per session.
         .onChange(of: chatManager.isLoadingChats) { _, loading in
             guard !loading, !hasTriggeredInitialFocus else { return }
-            guard chatManager.currentConversation == nil,
-                  chatManager.conversations.isEmpty else { return }
+            guard chatManager.currentConversation == nil else { return }
             hasTriggeredInitialFocus = true
             triggerFocus(delay: 300)
         }
@@ -198,10 +198,7 @@ struct ChatView: View {
                 chatManager.shouldAutoFocusInput = false
                 hasTriggeredInitialFocus = true
                 triggerFocus(delay: 300)
-            } else if !hasTriggeredInitialFocus,
-                      !chatManager.isLoadingChats,
-                      chatManager.currentConversation == nil,
-                      chatManager.conversations.isEmpty {
+            } else if !hasTriggeredInitialFocus, chatManager.currentConversation == nil {
                 hasTriggeredInitialFocus = true
                 triggerFocus(delay: 500)
             }
@@ -516,7 +513,7 @@ struct ChatInputView: View {
                 } label: {
                     Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
                         .font(.system(size: 36))
-                        .foregroundStyle(isStreaming ? BFColor.error : (canSend ? BFColor.primary : .secondary))
+                        .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
                 }
                 .disabled(!isStreaming && !canSend)
             }
