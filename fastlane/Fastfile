@@ -1,36 +1,101 @@
-# This file contains the fastlane.tools configuration
-# You can find the documentation at https://docs.fastlane.tools
+# fastlane/Fastfile
 #
-# For a list of all available actions, check out
+# Lanes:
+#   ios_beta     — build iOS + upload to TestFlight
+#   ios_release  — build iOS + upload to App Store (NO auto-submit)
+#   mac_beta     — build Mac Catalyst + upload to TestFlight
+#   mac_release  — build Mac Catalyst + upload to Mac App Store (NO auto-submit)
+#   meta         — push metadata only, no binary
 #
-#     https://docs.fastlane.tools/actions
-#
-# For a list of all available plugins, check out
-#
-#     https://docs.fastlane.tools/plugins/available-plugins
-#
-
-# Uncomment the line if you want fastlane to automatically update itself
-# update_fastlane
-# Uncomment the line if you want fastlane to automatically update itself
-# update_fastlane
+# IMPORTANT: submit_for_review is explicitly false in every lane.
+# To submit, do it manually in App Store Connect after all checks pass.
 
 default_platform(:ios)
 
 platform :ios do
-  desc "Push a new release build to the App Store"
-  lane :release do
-    increment_build_number(xcodeproj: "CAI.xcodeproj")
-    build_app(scheme: "CAI")
-    upload_to_app_store
-  end
 
-  desc "Upload metadata only (no build required)"
-  lane :metadata do
-    deliver(
-      skip_binary_upload: true,
-      skip_screenshots: true,
-      force: true
+  # ── iOS ──────────────────────────────────────────────────────────────────
+
+  desc "Build iOS archive and upload to TestFlight"
+  lane :ios_beta do
+    increment_build_number(xcodeproj: "CAI.xcodeproj")
+    build_ios
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
     )
   end
+
+  desc "Build iOS archive and upload to App Store — does NOT submit for review"
+  lane :ios_release do
+    increment_build_number(xcodeproj: "CAI.xcodeproj")
+    build_ios
+    upload_to_app_store(
+      platform:             "ios",
+      submit_for_review:    false,
+      automatic_release:    false,
+      skip_screenshots:     true,
+      skip_metadata:        false,
+      force:                true
+    )
+  end
+
+  # ── Mac Catalyst ─────────────────────────────────────────────────────────
+
+  desc "Build Mac Catalyst archive and upload to TestFlight"
+  lane :mac_beta do
+    increment_build_number(xcodeproj: "CAI.xcodeproj")
+    build_mac
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+
+  desc "Build Mac Catalyst archive and upload to Mac App Store — does NOT submit for review"
+  lane :mac_release do
+    increment_build_number(xcodeproj: "CAI.xcodeproj")
+    build_mac
+    upload_to_app_store(
+      platform:             "osx",
+      submit_for_review:    false,
+      automatic_release:    false,
+      skip_screenshots:     true,
+      skip_metadata:        false,
+      force:                true
+    )
+  end
+
+  # ── Metadata only ────────────────────────────────────────────────────────
+
+  desc "Push App Store metadata only (no build, no screenshots)"
+  lane :meta do
+    deliver(
+      skip_binary_upload: true,
+      skip_screenshots:   true,
+      submit_for_review:  false,
+      force:              true
+    )
+  end
+
+  # ── Private helpers ──────────────────────────────────────────────────────
+
+  private_lane :build_ios do
+    build_app(
+      scheme:         "CAI",
+      destination:    "generic/platform=iOS",
+      export_method:  "app-store",
+      xcargs:         "-allowProvisioningUpdates"
+    )
+  end
+
+  private_lane :build_mac do
+    build_app(
+      scheme:         "CAI",
+      destination:    "generic/platform=macOS,variant=Mac Catalyst",
+      export_method:  "app-store",
+      xcargs:         "-allowProvisioningUpdates"
+    )
+  end
+
 end
