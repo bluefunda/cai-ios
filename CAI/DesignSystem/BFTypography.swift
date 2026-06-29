@@ -47,8 +47,8 @@ enum BFFont {
     //   toolbarIconPt  — pencil / hamburger / server SF Symbol size (19 pt base)
 
     static var sidebarHeader:  Font    { font(size: 16 * macScale, weight: .semibold) }
-    static var sidebarItem:    Font    { font(size: 13 * macScale, weight: .regular)  }
-    static var sidebarItemMed: Font    { font(size: 13 * macScale, weight: .medium)   }
+    static var sidebarItem:    Font    { font(size: 14 * macScale, weight: .regular)  }
+    static var sidebarItemMed: Font    { font(size: 14 * macScale, weight: .medium)   }
     static var sidebarSection: Font    { font(size: 11 * macScale, weight: .semibold) }
     static var sidebarMeta:    Font    { font(size: 12 * macScale, weight: .regular)  }
     static var toolbarIconPt:  CGFloat { 19 * macScale }
