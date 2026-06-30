@@ -766,7 +766,7 @@ struct LoginView: View {
                     }
 
                     VStack(spacing: 6) {
-                        Text("BlueFunda AI")
+                        Text("BlueFunda")
                             .font(BFFont.h3)
                         Text("Your intelligent AI assistant")
                             .font(BFFont.bodySmall)
@@ -794,8 +794,6 @@ struct LoginView: View {
 
                         SignInWithAppleButton(.continue) { request in
                             request.requestedScopes = [.fullName, .email]
-                            // Generate a fresh nonce per attempt; hash sent to Apple,
-                            // plain forwarded to the backend for replay-attack prevention.
                             let nonce = makeAuthNonce()
                             appleNonce = nonce
                             request.nonce = nonce?.hashed

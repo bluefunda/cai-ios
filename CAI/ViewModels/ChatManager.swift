@@ -334,6 +334,8 @@ final class ChatManager: ObservableObject {
         var assistantMessage = ChatMessage(role: .assistant, content: "")
         conversation.messages.append(assistantMessage)
 
+        // Show truncated prompt immediately so sidebar isn't blank while API generates a real title.
+        if isFirstMessage { conversation.title = text.truncated(to: 50) }
         currentConversation = conversation
         // Insert the draft into history now that it has its first message.
         upsertConversation(conversation)
@@ -360,12 +362,6 @@ final class ChatManager: ObservableObject {
 
         isStreaming = true
         error = nil
-
-        // Fire-and-forget title generation for new chats — runs in parallel
-        // with streaming, not gated on stream_end (matches web app behavior).
-        if isFirstMessage {
-            updateConversationTitle(conversation.id, from: text)
-        }
 
         streamingTask = Task {
             var finalContent = ""
@@ -419,6 +415,13 @@ final class ChatManager: ObservableObject {
             }
 
             isStreaming = false
+
+            // Now that the chat exists on the server (stream_start has fired),
+            // call the title API. This avoids a 404 when the POST /title fires
+            // before the backend has created the chat record.
+            if isFirstMessage {
+                updateConversationTitle(conversation.id, from: text)
+            }
 
             // Persist the completed exchange locally
             if let conv = currentConversation {

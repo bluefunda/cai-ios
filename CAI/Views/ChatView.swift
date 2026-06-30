@@ -657,7 +657,10 @@ struct ModeModelPicker: View {
 
 /// True when the bottom anchor is at/near the visible bottom of the scroll view.
 private struct AtBottomPreferenceKey: PreferenceKey {
-    static var defaultValue: Bool = true
+    // false = not at bottom. When LazyVStack destroys the off-screen bottom
+    // marker, the preference falls back to this default — correctly triggering
+    // the scroll button rather than hiding it.
+    static var defaultValue: Bool = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = nextValue()
     }
