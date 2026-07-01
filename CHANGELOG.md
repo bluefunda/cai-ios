@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0](https://github.com/bluefunda/cai-ios/compare/v1.1.1...v1.2.0) (2026-07-01)
+
+
+### Features
+
+* **auth:** harden Apple Sign In with PKCE, nonce, state, and reviewer fallback ([#88](https://github.com/bluefunda/cai-ios/issues/88)) ([d3fa7e8](https://github.com/bluefunda/cai-ios/commit/d3fa7e8065d50ddad0fb40b09258fdf85054bdd2))
+* **brand:** add BFLogo component, button styles, and logo asset catalog ([#83](https://github.com/bluefunda/cai-ios/issues/83)) ([07af071](https://github.com/bluefunda/cai-ios/commit/07af071104194df6e3b445ae9beca230363ed457))
+* **brand:** add design token system and migrate views to brand colors ([#80](https://github.com/bluefunda/cai-ios/issues/80)) ([873bf28](https://github.com/bluefunda/cai-ios/commit/873bf28296c75c2c7833dfedf8f083900170fcb9))
+* **chat:** send file attachment as fileUrl in request payload instead of embedding URL in prompt text ([#98](https://github.com/bluefunda/cai-ios/issues/98)) ([046c5dc](https://github.com/bluefunda/cai-ios/commit/046c5dc126eeb559cde268c9fad6b1d655e03277))
+* iPad layout, Mac Catalyst, native Apple Sign In, ABAP system management ([#104](https://github.com/bluefunda/cai-ios/issues/104)) ([046c5dc](https://github.com/bluefunda/cai-ios/commit/046c5dc126eeb559cde268c9fad6b1d655e03277))
+
+
+### Bug Fixes
+
+* App Store review resubmission — auth, version, and UI fixes ([#95](https://github.com/bluefunda/cai-ios/issues/95)) ([8a2a2d7](https://github.com/bluefunda/cai-ios/commit/8a2a2d7167277c34704000ca059badf9de1c43e2))
+* **chat:** fire title generation in parallel, not gated on stream_end ([#84](https://github.com/bluefunda/cai-ios/issues/84)) ([94973a1](https://github.com/bluefunda/cai-ios/commit/94973a1b899740040d337e49540a588ee8fbbc28))
+* **chat:** fix invisible user messages in dark mode ([#85](https://github.com/bluefunda/cai-ios/issues/85)) ([ba33731](https://github.com/bluefunda/cai-ios/commit/ba33731e72048c998184249d66acda44937905fc))
+* **chat:** use adaptive .primary for user message text in dark mode ([#86](https://github.com/bluefunda/cai-ios/issues/86)) ([da669c5](https://github.com/bluefunda/cai-ios/commit/da669c505670275eefad602eb84c28980eaf034a))
+
 ## [1.1.1](https://github.com/bluefunda/cai-ios/compare/v1.1.0...v1.1.1) (2026-06-24)
 
 
