@@ -88,6 +88,7 @@ enum BFFont {
     static let bodyMedium = font(size: 18, weight: .medium)
     static let body = font(size: 18, weight: .regular)
     static let bodySmall = font(size: 15, weight: .regular)
+    static let idpButton = font(size: 16, weight: .medium)
     static let caption = font(size: 13, weight: .semibold)
     static let micro = font(size: 12, weight: .regular)
     static let code = Font.system(size: 14, design: .monospaced)

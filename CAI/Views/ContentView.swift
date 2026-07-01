@@ -736,7 +736,7 @@ struct LoginView: View {
     @State private var selectedRealm = "individual"
     @State private var logoTapCount = 0
     @State private var showRealmPicker = false
-    @State private var appleNonce: (plain: String, hashed: String)?
+    @State private var appleSignInCoordinator: AppleSignInCoordinator?
 
     var body: some View {
         ZStack {
@@ -792,35 +792,16 @@ struct LoginView: View {
                             MicrosoftLogoView()
                         }
 
-                        SignInWithAppleButton(.continue) { request in
-                            request.requestedScopes = [.fullName, .email]
-                            let nonce = makeAuthNonce()
-                            appleNonce = nonce
-                            request.nonce = nonce?.hashed
-                        } onCompletion: { result in
-                            switch result {
-                            case .success(let authorization):
-                                let plain = appleNonce?.plain
-                                appleNonce = nil
-                                Task {
-                                    await authManager.handleAppleAuthorization(
-                                        authorization,
-                                        realm: selectedRealm,
-                                        nonce: plain
-                                    )
-                                }
-                            case .failure(let error):
-                                appleNonce = nil
-                                if (error as? ASAuthorizationError)?.code != .canceled {
-                                    authManager.error = .authenticationFailed(error.localizedDescription)
-                                }
-                            }
+                        SocialSignInButton(label: "Continue with Apple", style: .filled) {
+                            let coordinator = AppleSignInCoordinator(realm: selectedRealm, authManager: authManager)
+                            self.appleSignInCoordinator = coordinator
+                            coordinator.start()
+                        } icon: {
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 20))
                         }
-                        .signInWithAppleButtonStyle(.black)
-                        .frame(height: 50)
-                        .cornerRadius(9999)
-                        .bfShadow(BFShadow.sm)
                     }
+                    .frame(maxWidth: 340)
                     .padding(.horizontal, 32)
                 }
 
@@ -889,18 +870,21 @@ private struct SocialSignInButton<Icon: View>: View {
             ZStack {
                 Capsule()
                     .fill(backgroundColor)
-                Capsule()
-                    .stroke(borderColor, lineWidth: 1)
+                if style == .outlined {
+                    Capsule()
+                        .stroke(borderColor, lineWidth: 1)
+                }
 
                 HStack {
                     Spacer()
 
                     HStack(spacing: 12) {
                         icon
-                            .frame(width: 26, height: 26)
+                            .frame(width: 22, height: 22)
+                            .foregroundColor(foregroundColor)
 
                         Text(label)
-                            .font(BFFont.bodySmall)
+                            .font(BFFont.idpButton)
                             .foregroundColor(foregroundColor)
                             .lineLimit(1)
                     }
@@ -1060,24 +1044,78 @@ private struct GoogleLogoView: View {
                 .fill(Color(red: 0.098, green: 0.463, blue: 0.824))
             }
         }
-        .frame(width: 28, height: 28)
     }
 }
 
 private struct MicrosoftLogoView: View {
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
+        VStack(spacing: 2) {
+            HStack(spacing: 2) {
                 Color(red: 1, green: 87/255, blue: 34/255)
                 Color(red: 76/255, green: 175/255, blue: 80/255)
             }
-            HStack(spacing: 0) {
+            HStack(spacing: 2) {
                 Color(red: 3/255, green: 169/255, blue: 244/255)
                 Color(red: 1, green: 193/255, blue: 7/255)
             }
         }
-        .frame(width: 28, height: 28)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+}
+
+// MARK: - Apple Sign In Coordinator
+
+private class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private var nonce: (plain: String, hashed: String)?
+    private var realm: String
+    private var authManager: AuthManager
+
+    init(realm: String, authManager: AuthManager) {
+        self.realm = realm
+        self.authManager = authManager
+        super.init()
+    }
+
+    func start() {
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+
+        let noncePair = makeAuthNonce()
+        self.nonce = noncePair
+        request.nonce = noncePair?.hashed
+
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequests()
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        let plain = nonce?.plain
+        nonce = nil
+        Task {
+            await authManager.handleAppleAuthorization(
+                authorization,
+                realm: realm,
+                nonce: plain
+            )
+        }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        nonce = nil
+        if (error as? ASAuthorizationError)?.code != .canceled {
+            authManager.error = .authenticationFailed(error.localizedDescription)
+        }
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let window = windowScene.windows.first(where: { $0.isKeyWindow }) else {
+            return UIWindow()
+        }
+        return window
     }
 }
 
