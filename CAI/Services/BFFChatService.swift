@@ -12,7 +12,7 @@ final class BFFChatService: ChatServiceProtocol {
 
     // MARK: - Configuration
     struct Config {
-        static let defaultBFFURL = "https://api.bluefunda.com/ai"
+        static let defaultBFFURL = AppConfig.bffBaseURL
         static let chatsPath = "/chats"  // POST /chats/{chat_id} for streaming
         static let requestTimeout: TimeInterval = 120
     }
@@ -65,6 +65,8 @@ final class BFFChatService: ChatServiceProtocol {
                 ]
                 if let mcpName = request.mcpServerName { payload["mcp_server_name"] = mcpName }
                 if let mcpURL  = request.mcpServerURL  { payload["mcp_server_url"]  = mcpURL  }
+                if let fileUrl = request.fileUrl        { payload["fileUrl"]         = fileUrl  }
+                if let agent   = request.agentName      { payload["agentName"]       = agent    }
 
                 do {
                     urlRequest.httpBody = try JSONSerialization.data(withJSONObject: payload)

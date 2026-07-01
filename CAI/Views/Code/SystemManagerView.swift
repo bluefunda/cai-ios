@@ -9,8 +9,9 @@ struct SystemManagerView: View {
 
     @State private var showAdd = false
     @State private var editing: SAPSystem?
-    @State private var testing = false
+    @State private var testTarget: SAPSystem?
     @State private var testResult: String?
+    @State private var testing = false
 
     var body: some View {
         NavigationStack {
@@ -26,61 +27,7 @@ struct SystemManagerView: View {
                 } else {
                     Section("Systems") {
                         ForEach(store.systems) { system in
-                            Button {
-                                store.activeSystemID = system.id
-                                testResult = nil
-                            } label: {
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(system.name).foregroundStyle(.primary)
-                                        Text("\(system.displayHost) · client \(system.client) · \(system.username)")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer()
-                                    if store.activeSystemID == system.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    store.delete(system)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                                Button {
-                                    editing = system
-                                } label: {
-                                    Label("Edit", systemImage: "pencil")
-                                }
-                                .tint(.blue)
-                            }
-                        }
-                    }
-
-                    if let active = store.activeSystem {
-                        Section {
-                            Button {
-                                testConnection(active)
-                            } label: {
-                                HStack {
-                                    Label("Test Connection", systemImage: "bolt.horizontal.circle")
-                                    Spacer()
-                                    if testing { ProgressView() }
-                                }
-                            }
-                            .disabled(testing)
-
-                            if let result = testResult {
-                                Text(result)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } header: {
-                            Text("Active — \(active.name)")
+                            systemRow(system)
                         }
                     }
                 }
@@ -101,18 +48,100 @@ struct SystemManagerView: View {
             .sheet(item: $editing) { system in
                 AddSystemView(existing: system) { store.update($0) }
             }
+            .alert(
+                "Test Connection — \(testTarget?.name ?? "")",
+                isPresented: Binding(get: { testTarget != nil }, set: { if !$0 { testTarget = nil; testResult = nil } })
+            ) {
+                Button("OK", role: .cancel) { testTarget = nil; testResult = nil }
+            } message: {
+                if testing {
+                    Text("Testing connection…")
+                } else {
+                    Text(testResult ?? "")
+                }
+            }
         }
     }
 
-    private func testConnection(_ system: SAPSystem) {
-        testing = true
+    @ViewBuilder
+    private func systemRow(_ system: SAPSystem) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(system.name).foregroundStyle(.primary)
+                Text("\(system.displayHost) · client \(system.client) · \(system.username)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if store.activeSystemID == system.id {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.blue)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            store.activeSystemID = system.id
+        }
+        // iOS: swipe actions
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                store.delete(system)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Button {
+                editing = system
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(.blue)
+            Button {
+                beginTest(system)
+            } label: {
+                Label("Test", systemImage: "bolt.horizontal.circle")
+            }
+            .tint(.orange)
+        }
+        // macOS + iOS long-press: context menu
+        .contextMenu {
+            if store.activeSystemID != system.id {
+                Button {
+                    store.activeSystemID = system.id
+                } label: {
+                    Label("Set Active", systemImage: "checkmark.circle")
+                }
+                Divider()
+            }
+            Button {
+                editing = system
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Button {
+                beginTest(system)
+            } label: {
+                Label("Test Connection", systemImage: "bolt.horizontal.circle")
+            }
+            Divider()
+            Button(role: .destructive) {
+                store.delete(system)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func beginTest(_ system: SAPSystem) {
+        testTarget = system
         testResult = nil
+        testing = true
         let api = CodeAPIService.make(authManager: authManager, system: system)
         Task {
             do {
                 let result = try await api.testConnection()
                 if result.authenticated == true || result.status?.lowercased() == "connected" {
-                    testResult = "✓ Connected"
+                    testResult = "✓ Connected to \(system.name)"
                 } else {
                     testResult = "Reached server: \(result.status ?? result.message ?? "unknown")"
                 }
@@ -128,6 +157,7 @@ struct SystemManagerView: View {
 
 struct AddSystemView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var authManager: AuthManager
     let onSave: (SAPSystem) -> Void
 
     private let editingID: UUID?
@@ -136,6 +166,8 @@ struct AddSystemView: View {
     @State private var client: String
     @State private var username: String
     @State private var password: String
+    @State private var testing = false
+    @State private var testResult: String?
 
     init(existing: SAPSystem? = nil, onSave: @escaping (SAPSystem) -> Void) {
         self.onSave = onSave
@@ -149,6 +181,17 @@ struct AddSystemView: View {
 
     private var isValid: Bool {
         !name.isBlank && !host.isBlank && !client.isBlank && !username.isBlank && !password.isBlank
+    }
+
+    private var draft: SAPSystem {
+        SAPSystem(
+            id: editingID ?? UUID(),
+            name: name.trimmingCharacters(in: .whitespaces),
+            host: host.trimmingCharacters(in: .whitespaces),
+            client: client.trimmingCharacters(in: .whitespaces),
+            username: username.trimmingCharacters(in: .whitespaces),
+            password: password
+        )
     }
 
     var body: some View {
@@ -169,6 +212,24 @@ struct AddSystemView: View {
                         .autocorrectionDisabled()
                     SecureField("Password", text: $password)
                 }
+                Section {
+                    Button {
+                        testConnection()
+                    } label: {
+                        HStack {
+                            Label("Test Connection", systemImage: "bolt.horizontal.circle")
+                            Spacer()
+                            if testing { ProgressView() }
+                        }
+                    }
+                    .disabled(!isValid || testing)
+
+                    if let result = testResult {
+                        Text(result)
+                            .font(.caption)
+                            .foregroundStyle(result.hasPrefix("✓") ? .green : .secondary)
+                    }
+                }
             }
             .navigationTitle(editingID == nil ? "Add System" : "Edit System")
             .navigationBarTitleDisplayMode(.inline)
@@ -178,20 +239,31 @@ struct AddSystemView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
-                        let system = SAPSystem(
-                            id: editingID ?? UUID(),
-                            name: name.trimmingCharacters(in: .whitespaces),
-                            host: host.trimmingCharacters(in: .whitespaces),
-                            client: client.trimmingCharacters(in: .whitespaces),
-                            username: username.trimmingCharacters(in: .whitespaces),
-                            password: password
-                        )
-                        onSave(system)
+                        onSave(draft)
                         dismiss()
                     }
                     .disabled(!isValid)
                 }
             }
+        }
+    }
+
+    private func testConnection() {
+        testing = true
+        testResult = nil
+        let api = CodeAPIService.make(authManager: authManager, system: draft)
+        Task {
+            do {
+                let result = try await api.testConnection()
+                if result.authenticated == true || result.status?.lowercased() == "connected" {
+                    testResult = "✓ Connected"
+                } else {
+                    testResult = "Reached server: \(result.status ?? result.message ?? "unknown")"
+                }
+            } catch {
+                testResult = "✗ \(error.localizedDescription)"
+            }
+            testing = false
         }
     }
 }

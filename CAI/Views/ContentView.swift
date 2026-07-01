@@ -1,6 +1,10 @@
 import SwiftUI
 import AuthenticationServices
 
+extension Notification.Name {
+    static let newChatRequested = Notification.Name("newChatRequested")
+}
+
 // MARK: - Root
 
 struct ContentView: View {
@@ -9,7 +13,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if authManager.isLoading {
+            if authManager.isRestoringSession || authManager.isLoading {
                 LoadingView()
             } else if authManager.isAuthenticated {
                 AuthenticatedRoot()
@@ -36,11 +40,13 @@ struct AuthenticatedRoot: View {
 struct AppShell: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
     @State private var safariURL: URL?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
 
     // Code mode
     @StateObject private var systemStore = SAPSystemStore()
@@ -56,16 +62,71 @@ struct AppShell: View {
         Binding(get: { mode }, set: { modeRaw = $0.rawValue })
     }
 
+    private var isRegular: Bool { sizeClass == .regular }
+
     var body: some View {
+        Group {
+            if isRegular {
+                iPadLayout
+            } else {
+                iPhoneLayout
+            }
+        }
+        .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
+        .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
+        .sheet(isPresented: $showSystems) {
+            SystemManagerView(store: systemStore).environmentObject(authManager)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
+            modeRaw = AppMode.chat.rawValue
+            chatManager.newConversation()
+        }
+    }
+
+    // MARK: - iPad: NavigationSplitView
+
+    private var iPadLayout: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            SidebarContent(
+                currentMode: modeBinding,
+                onOpenStorage: { activeSheet = .storage },
+                onOpenSettings: { activeSheet = .settings },
+                onOpenURL: { safariURL = $0 }
+            )
+            // Pin sidebar to a desktop-comfortable width; the detail column
+            // gets the rest, which is where the 800-pt chat column lives.
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+        } detail: {
+            VStack(spacing: 0) {
+                iPadTopBar
+                content
+            }
+        }
+        // prominentDetail keeps the sidebar visible but gives the chat area
+        // the dominant portion of the window — matches ChatGPT / Claude layout.
+        .navigationSplitViewStyle(.prominentDetail)
+    }
+
+    @ViewBuilder
+    private var iPadTopBar: some View {
+        switch mode {
+        case .chat:
+            ChatTopBar(sidebarOpen: .constant(false), onNewChat: { chatManager.newConversation() }, showHamburger: false, showNewChat: false)
+        case .code:
+            CodeTopBar(sidebarOpen: .constant(false), onSystems: { showSystems = true }, showHamburger: false)
+        }
+    }
+
+    // MARK: - iPhone: ZStack drawer
+
+    private var iPhoneLayout: some View {
         ZStack(alignment: .leading) {
-            // ── Main content ──────────────────────────────
             VStack(spacing: 0) {
                 topBar
                 content
             }
             .zIndex(0)
 
-            // ── Dim overlay ───────────────────────────────
             if sidebarOpen {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
@@ -76,7 +137,6 @@ struct AppShell: View {
                     .transition(.opacity)
             }
 
-            // ── Sidebar drawer (shared by both modes) ─────
             SidebarDrawer(
                 isOpen: $sidebarOpen,
                 currentMode: modeBinding,
@@ -97,11 +157,6 @@ struct AppShell: View {
                     to: nil, from: nil, for: nil
                 )
             }
-        }
-        .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
-        .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
-        .sheet(isPresented: $showSystems) {
-            SystemManagerView(store: systemStore).environmentObject(authManager)
         }
     }
 
@@ -134,6 +189,183 @@ struct AppShell: View {
     }
 }
 
+// MARK: - Sidebar Content (shared between iPad split view and iPhone drawer)
+
+struct SidebarContent: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
+    @Binding var currentMode: AppMode
+    let onOpenStorage: () -> Void
+    let onOpenSettings: () -> Void
+    let onOpenURL: (URL) -> Void
+
+    @State private var searchText = ""
+
+    private let helpURL = URL(string: "https://docs.bluefunda.com/")!
+
+    private var filteredConversations: [Conversation] {
+        guard !searchText.isEmpty else { return chatManager.conversations }
+        return chatManager.conversations.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // ── Sidebar header: brand + new chat ────────
+            HStack(spacing: 0) {
+                Text("BlueFunda AI")
+                    .font(BFFont.sidebarHeader)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button {
+                    currentMode = .chat
+                    chatManager.newConversation()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: BFFont.toolbarIconPt - 2))
+                        .foregroundStyle(BFColor.primary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
+
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search conversations", text: $searchText)
+                    .font(BFFont.sidebarItem)
+            }
+            .padding(8)
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+
+            if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredConversations.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "bubble.left")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                    Text(searchText.isEmpty ? "No conversations yet" : "No results")
+                        .font(BFFont.sidebarItem)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(groupedConversations) { group in
+                            Text(group.title)
+                                .font(BFFont.sidebarSection)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 12)
+                                .padding(.bottom, 2)
+
+                            ForEach(group.conversations) { convo in
+                                SidebarConversationRow(
+                                    conversation: convo,
+                                    isSelected: chatManager.currentConversation?.id == convo.id
+                                )
+                                .onTapGesture {
+                                    currentMode = .chat
+                                    chatManager.selectConversation(convo)
+                                }
+                                .contextMenu {
+                                    ShareLink(item: convo.markdownExport) {
+                                        Label("Share", systemImage: "square.and.arrow.up")
+                                    }
+                                    Button(role: .destructive) {
+                                        chatManager.deleteConversation(convo)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+            }
+
+            Divider()
+
+            VStack(spacing: 0) {
+                SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
+                    currentMode = .code
+                }
+            }
+
+            Divider()
+
+            // Profile row — bottom left, menu contains Settings + Help
+            Menu {
+                Button { onOpenSettings() } label: {
+                    Label("Settings", systemImage: "gear")
+                }
+                Button { onOpenURL(helpURL) } label: {
+                    Label("Help & Support", systemImage: "questionmark.circle")
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(BFColor.primary.gradient)
+                        .frame(width: 34, height: 34)
+                        .overlay {
+                            Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                                .font(BFFont.sidebarItemMed).foregroundStyle(.white)
+                        }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(authManager.currentUser?.name ?? "Account")
+                            .font(BFFont.sidebarItemMed)
+                            .foregroundStyle(.primary).lineLimit(1)
+                        if let email = authManager.currentUser?.email {
+                            Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "ellipsis").foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+        }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var groupedConversations: [ConversationGroup] {
+        let now = Date()
+        let cal = Calendar.current
+
+        var today: [Conversation] = []
+        var yesterday: [Conversation] = []
+        var thisWeek: [Conversation] = []
+        var older: [Conversation] = []
+
+        for c in filteredConversations {
+            let days = cal.dateComponents([.day], from: c.createdAt, to: now).day ?? 0
+            if days == 0       { today.append(c) }
+            else if days == 1  { yesterday.append(c) }
+            else if days < 7   { thisWeek.append(c) }
+            else               { older.append(c) }
+        }
+
+        var result: [ConversationGroup] = []
+        if !today.isEmpty     { result.append(.init(title: "Today",     conversations: today)) }
+        if !yesterday.isEmpty { result.append(.init(title: "Yesterday", conversations: yesterday)) }
+        if !thisWeek.isEmpty  { result.append(.init(title: "This Week", conversations: thisWeek)) }
+        if !older.isEmpty     { result.append(.init(title: "Older",     conversations: older)) }
+        return result
+    }
+}
+
 // MARK: - Hamburger
 
 struct HamburgerButton: View {
@@ -146,7 +378,7 @@ struct HamburgerButton: View {
                 Capsule().frame(width: 22, height: 2)
                 Capsule().frame(width: 22, height: 2)
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(BFColor.primary)
         }
     }
 }
@@ -157,21 +389,40 @@ struct ChatTopBar: View {
     @EnvironmentObject var chatManager: ChatManager
     @Binding var sidebarOpen: Bool
     let onNewChat: () -> Void
+    var showHamburger: Bool = true
+    var showNewChat: Bool = true
+
+    private var chatTitle: String {
+        chatManager.currentConversation?.title ?? "New Chat"
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            HamburgerButton(sidebarOpen: $sidebarOpen)
+        HStack(spacing: 14) {
+            if showHamburger {
+                HamburgerButton(sidebarOpen: $sidebarOpen)
+            }
 
+            // New chat button — always visible
             Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil").font(.system(size: 18))
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: BFFont.toolbarIconPt))
+            }
+            .foregroundStyle(BFColor.primary)
+
+            if !showNewChat {
+                // iPad/Mac: show current conversation title next to pencil
+                Text(chatTitle)
+                    .font(BFFont.sidebarItemMed)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()
 
             ModeModelPicker()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .overlay(alignment: .bottom) { Divider() }
     }
@@ -182,22 +433,26 @@ struct ChatTopBar: View {
 struct CodeTopBar: View {
     @Binding var sidebarOpen: Bool
     let onSystems: () -> Void
+    var showHamburger: Bool = true
 
     var body: some View {
-        HStack(spacing: 12) {
-            HamburgerButton(sidebarOpen: $sidebarOpen)
+        HStack(spacing: 14) {
+            if showHamburger {
+                HamburgerButton(sidebarOpen: $sidebarOpen)
+            }
 
             Text("Code")
-                .font(.headline)
+                .font(BFFont.h5)
 
             Spacer()
 
             Button(action: onSystems) {
-                Image(systemName: "server.rack").font(.system(size: 17))
+                Image(systemName: "server.rack")
+                    .font(.system(size: BFFont.toolbarIconPt))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .overlay(alignment: .bottom) { Divider() }
     }
@@ -227,61 +482,37 @@ struct SidebarDrawer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Header: title + user avatar (top-right) ───
-            HStack {
-                Text("Chats")
-                    .font(.title3)
-                    .fontWeight(.semibold)
+            // ── Sidebar header: brand + new chat ────────
+            HStack(spacing: 0) {
+                Text("BlueFunda AI")
+                    .font(BFFont.sidebarHeader)
+                    .foregroundStyle(.primary)
                 Spacer()
                 Button {
+                    currentMode = .chat
+                    chatManager.newConversation()
                     withAnimation { isOpen = false }
-                    onOpenSettings()
                 } label: {
-                    Circle()
-                        .fill(BFColor.primary.gradient)
-                        .frame(width: 36, height: 36)
-                        .overlay {
-                            Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.white)
-                        }
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
-
-            // New chat row
-            Button {
-                currentMode = .chat
-                chatManager.newConversation()
-                withAnimation { isOpen = false }
-            } label: {
-                HStack {
                     Image(systemName: "square.and.pencil")
-                    Text("New Chat")
-                    Spacer()
+                        .font(.system(size: BFFont.toolbarIconPt - 2))
+                        .foregroundStyle(BFColor.primary)
                 }
-                .font(.subheadline)
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 12)
 
             // Search
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Search conversations", text: $searchText)
-                    .font(.subheadline)
+                    .font(BFFont.sidebarItem)
             }
             .padding(8)
             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
             .padding(.bottom, 8)
 
             // ── Conversation list ─────────────────────────
@@ -291,10 +522,10 @@ struct SidebarDrawer: View {
             } else if filteredConversations.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "bubble.left")
-                        .font(.system(size: 40))
+                        .font(.system(size: 36))
                         .foregroundStyle(.secondary.opacity(0.4))
                     Text(searchText.isEmpty ? "No conversations yet" : "No results")
-                        .font(.subheadline)
+                        .font(BFFont.sidebarItem)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -303,8 +534,7 @@ struct SidebarDrawer: View {
                     LazyVStack(spacing: 2) {
                         ForEach(groupedConversations) { group in
                             Text(group.title)
-                                .font(.caption)
-                                .fontWeight(.semibold)
+                                .font(BFFont.sidebarSection)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 12)
@@ -346,18 +576,48 @@ struct SidebarDrawer: View {
                     currentMode = .code
                     withAnimation { isOpen = false }
                 }
+            }
 
-                SidebarNavButton(icon: "gear", label: "Settings") {
+            Divider()
+
+            // Profile row — bottom left, menu contains Settings + Help
+            Menu {
+                Button {
                     withAnimation { isOpen = false }
                     onOpenSettings()
+                } label: {
+                    Label("Settings", systemImage: "gear")
                 }
-
-                SidebarNavButton(icon: "questionmark.circle", label: "Help & Support") {
+                Button {
                     withAnimation { isOpen = false }
                     onOpenURL(helpURL)
+                } label: {
+                    Label("Help & Support", systemImage: "questionmark.circle")
                 }
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(BFColor.primary.gradient)
+                        .frame(width: 34, height: 34)
+                        .overlay {
+                            Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                                .font(BFFont.sidebarItemMed).foregroundStyle(.white)
+                        }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(authManager.currentUser?.name ?? "Account")
+                            .font(BFFont.sidebarItemMed)
+                            .foregroundStyle(.primary).lineLimit(1)
+                        if let email = authManager.currentUser?.email {
+                            Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "ellipsis").foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
-            .padding(.bottom, 8)
+            .buttonStyle(.plain)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))
@@ -391,7 +651,7 @@ struct SidebarDrawer: View {
     }
 }
 
-private struct ConversationGroup: Identifiable {
+struct ConversationGroup: Identifiable {
     let id: String      // == title, always unique within a list
     let title: String
     let conversations: [Conversation]
@@ -405,18 +665,18 @@ private struct ConversationGroup: Identifiable {
 
 // MARK: - Sidebar Row
 
-private struct SidebarConversationRow: View {
+struct SidebarConversationRow: View {
     let conversation: Conversation
     let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "bubble.left")
-                .font(.caption)
+                .font(BFFont.sidebarSection)
                 .foregroundStyle(.secondary)
 
             Text(conversation.title)
-                .font(.subheadline)
+                .font(BFFont.sidebarItem)
                 .lineLimit(1)
                 .foregroundStyle(.primary)
 
@@ -436,7 +696,7 @@ private struct SidebarConversationRow: View {
 
 // MARK: - Sidebar Nav Button
 
-private struct SidebarNavButton: View {
+struct SidebarNavButton: View {
     let icon: String
     let label: String
     let action: () -> Void
@@ -447,7 +707,7 @@ private struct SidebarNavButton: View {
                 Image(systemName: icon)
                     .frame(width: 20)
                 Text(label)
-                    .font(.subheadline)
+                    .font(BFFont.sidebarItem)
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -506,7 +766,7 @@ struct LoginView: View {
                     }
 
                     VStack(spacing: 6) {
-                        Text("BlueFunda AI")
+                        Text("BlueFunda")
                             .font(BFFont.h3)
                         Text("Your intelligent AI assistant")
                             .font(BFFont.bodySmall)
@@ -534,8 +794,6 @@ struct LoginView: View {
 
                         SignInWithAppleButton(.continue) { request in
                             request.requestedScopes = [.fullName, .email]
-                            // Generate a fresh nonce per attempt; hash sent to Apple,
-                            // plain forwarded to the backend for replay-attack prevention.
                             let nonce = makeAuthNonce()
                             appleNonce = nonce
                             request.nonce = nonce?.hashed

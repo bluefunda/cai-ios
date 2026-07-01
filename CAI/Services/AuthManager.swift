@@ -2,26 +2,22 @@ import Foundation
 import AuthenticationServices
 import CryptoKit
 
-// MARK: - Session Kind
-
-enum SessionKind: String, Codable {
-    /// Full Keycloak-backed session used by real users.
-    case production
-    /// Restricted BFF-direct session issued when Keycloak is unreachable (App Store review).
-    case review
-}
-
 // MARK: - Authentication Manager
-// Handles Keycloak OAuth/OIDC authentication with Apple Sign In, PKCE, state, and nonce.
+// Handles Keycloak OAuth/OIDC with PKCE. All token POSTs go to auth-dev.bluefunda.com.
+// Apple Sign In uses the native ASAuthorizationAppleIDButton; the identity token is
+// exchanged directly with Keycloak (no BFF intermediary). Google and Microsoft use
+// ASWebAuthenticationSession → Keycloak IDP redirect.
 
 @MainActor
 final class AuthManager: NSObject, ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = false
+    /// True from init until the first restoreSession() completes. Prevents
+    /// the login screen flashing before the Keychain check finishes.
+    @Published var isRestoringSession = true
     @Published var currentUser: User?
     @Published var accessToken: String?
     @Published var error: AuthError?
-    @Published private(set) var sessionKind: SessionKind = .production
 
     private var refreshToken: String?
     private var tokenExpiresAt: Date?
@@ -41,7 +37,7 @@ final class AuthManager: NSObject, ObservableObject {
     // MARK: - Configuration
 
     struct Config {
-        static let keycloakBaseURL = "https://auth.bluefunda.com"
+        static let keycloakBaseURL = AppConfig.authBaseURL   // https://auth-dev.bluefunda.com
         static let clientId = "cai-ios"
         static let redirectScheme = "cai"
         static let redirectURI = "cai://auth/callback"
@@ -51,11 +47,9 @@ final class AuthManager: NSObject, ObservableObject {
         static let appleUserIDKey = "apple_user_id"
     }
 
-    static let bffBaseURL = "https://api.bluefunda.com/ai"
+    static let bffBaseURL = AppConfig.bffBaseURL
 
     var realm: String = "individual"
-
-    var isReviewSession: Bool { sessionKind == .review }
 
     // MARK: - URL Builders
 
@@ -87,7 +81,7 @@ final class AuthManager: NSObject, ObservableObject {
         URL(string: "\(Config.keycloakBaseURL)/realms/\(realm)/protocol/openid-connect/logout")!
     }
 
-    // MARK: - Web OAuth Login (Google, Microsoft, Apple web fallback)
+    // MARK: - Web OAuth Login (Google, Microsoft via Keycloak IDP)
 
     func login(realm: String = "individual", idpHint: String? = nil) {
         self.realm = realm
@@ -167,7 +161,7 @@ final class AuthManager: NSObject, ObservableObject {
 
         let email = UserDefaults.standard.string(forKey: "apple_email")
 
-        await exchangeAppleTokenWithBFF(
+        await exchangeAppleTokenWithKeycloak(
             identityToken: identityToken,
             authorizationCode: authCode,
             nonce: nonce,
@@ -176,12 +170,17 @@ final class AuthManager: NSObject, ObservableObject {
         )
     }
 
-    // MARK: - Keycloak Token Exchange
+    // MARK: - Keycloak Apple Token Exchange
+    // POST https://auth-dev.bluefunda.com/realms/{realm}/protocol/openid-connect/token
+    // grant_type=urn:ietf:params:oauth:grant-type:token-exchange
+    // Requires: token-exchange feature enabled + IDP permissions granted to cai-ios in Keycloak.
 
     private func exchangeAppleTokenWithKeycloak(
         identityToken: String,
         authorizationCode: String?,
-        nonce: String?
+        nonce: String?,
+        fullName: String? = nil,
+        email: String? = nil
     ) async {
         var request = URLRequest(url: tokenURL)
         request.httpMethod = "POST"
@@ -193,7 +192,7 @@ final class AuthManager: NSObject, ObservableObject {
             "client_id":          Config.clientId,
             "subject_token":      identityToken,
             "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-            "subject_issuer":     "apple",
+            "subject_issuer":     "apple-ios",
             "scope":              "openid profile email offline_access"
         ]
         if let code  = authorizationCode { body["authorization_code"] = code }
@@ -204,71 +203,24 @@ final class AuthManager: NSObject, ObservableObject {
             let (data, response) = try await session.data(for: request)
 
             guard let http = response as? HTTPURLResponse else {
-                // No HTTP response (e.g. TLS failure) — try review fallback
-                await exchangeAppleTokenWithBFF(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
+                error = .authenticationFailed("Could not reach authentication server")
+                isLoading = false
                 return
             }
 
             if http.statusCode == 200 {
                 let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
-                sessionKind = .production
-                await processTokenResponse(tokenResponse)
-            } else if (400...499).contains(http.statusCode) {
-                error = .tokenExchangeFailed
-                isLoading = false
+                await processTokenResponse(tokenResponse, appleFullName: fullName, appleEmail: email)
             } else {
-                // 5xx / server unavailable — try review fallback
-                await exchangeAppleTokenWithBFF(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
-            }
-        } catch {
-            // Network error — Keycloak unreachable, try review fallback
-            await exchangeAppleTokenWithBFF(identityToken: identityToken, authorizationCode: authorizationCode, nonce: nonce)
-        }
-    }
-
-    // MARK: - BFF Apple Token Exchange
-    //
-    // The BFF validates the Apple identity token directly (Apple JWKS) and
-    // issues a scoped, 24-hour session. Apple token is still validated
-    // server-side; session is time-bound, auditable, and scoped.
-
-    private func exchangeAppleTokenWithBFF(
-        identityToken: String,
-        authorizationCode: String?,
-        nonce: String?,
-        fullName: String? = nil,
-        email: String? = nil
-    ) async {
-        guard let url = URL(string: "\(Self.bffBaseURL)/auth/apple-direct") else {
-            error = .authenticationFailed("Service temporarily unavailable")
-            isLoading = false
-            return
-        }
-
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 15
-
-        var body: [String: String] = ["identity_token": identityToken, "client_id": Config.clientId]
-        if let code  = authorizationCode { body["authorization_code"] = code }
-        if let nonce = nonce             { body["nonce"] = nonce }
-        if let name  = fullName          { body["full_name"] = name }
-        if let email = email             { body["email"] = email }
-        req.httpBody = body.percentEncoded()
-
-        do {
-            let (data, response) = try await session.data(for: req)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                error = .authenticationFailed("Service temporarily unavailable. Please try again.")
+                let body = String(data: data, encoding: .utf8) ?? ""
+                print("[AuthManager] Keycloak exchange failed: HTTP \(http.statusCode)\n\(body)")
+                let kcError = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                    .flatMap { ($0["error_description"] as? String) ?? ($0["error"] as? String) }
+                error = .authenticationFailed("Keycloak \(http.statusCode): \(kcError ?? String(body.prefix(120)))")
                 isLoading = false
-                return
             }
-            let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
-            sessionKind = .review
-            await processTokenResponse(tokenResponse, appleFullName: fullName, appleEmail: email)
         } catch {
-            self.error = .authenticationFailed("Service temporarily unavailable. Please try again.")
+            self.error = .authenticationFailed("Could not reach authentication server. Please check your connection.")
             isLoading = false
         }
     }
@@ -276,10 +228,9 @@ final class AuthManager: NSObject, ObservableObject {
     // MARK: - Logout / Account Deletion
 
     func logout() async {
-        if let token = refreshToken, !isReviewSession {
+        if let token = refreshToken {
             await revokeToken(token)
         }
-
         clearKeychain()
         KeychainStore.delete(Config.appleUserIDKey, service: Config.keychainService)
         resetSession()
@@ -287,9 +238,7 @@ final class AuthManager: NSObject, ObservableObject {
 
     func deleteAccount() async throws {
         guard let existing = accessToken else { throw AuthError.notAuthenticated }
-        if !isReviewSession {
-            try? await refreshTokenIfNeeded()
-        }
+        try? await refreshTokenIfNeeded()
         let token = accessToken ?? existing
 
         guard let url = URL(string: "\(Self.bffBaseURL)/user") else {
@@ -319,11 +268,6 @@ final class AuthManager: NSObject, ObservableObject {
     func refreshTokenIfNeeded() async throws {
         guard let expiresAt = tokenExpiresAt else { return }
         guard Date().addingTimeInterval(Config.tokenRefreshThreshold) > expiresAt else { return }
-
-        if isReviewSession {
-            // Review sessions can't be refreshed via Keycloak; caller must re-auth.
-            throw AuthError.tokenRefreshFailed
-        }
         try await performTokenRefresh()
     }
 
@@ -335,13 +279,15 @@ final class AuthManager: NSObject, ObservableObject {
             accessToken: token,
             natsURL: nil,
             natsCredentials: nil,
-            bffBaseURL: "https://api.bluefunda.com/ai"
+            bffBaseURL: AppConfig.bffBaseURL
         )
     }
 
     // MARK: - Session Restore
 
     func restoreSession() async {
+        defer { isRestoringSession = false }
+
         if let appleUserID = KeychainStore.loadString(Config.appleUserIDKey, service: Config.keychainService) {
             let state = await checkAppleCredentialState(userID: appleUserID)
             if state == .revoked || state == .notFound {
@@ -354,35 +300,15 @@ final class AuthManager: NSObject, ObservableObject {
         guard let stored = loadTokensFromKeychain() else { return }
 
         self.realm = stored.realm
-        self.sessionKind = stored.sessionKind
-
-        if stored.sessionKind == .review {
-            // Review sessions store the access token in the "refreshToken" slot.
-            // Only restore if the token hasn't expired.
-            guard let expiresAt = stored.expiresAt, Date() < expiresAt else {
-                clearKeychain()
-                self.sessionKind = .production
-                return
-            }
-            self.accessToken = stored.refreshToken
-            self.tokenExpiresAt = expiresAt
-            if let user = decodeJWT(stored.refreshToken) {
-                self.currentUser = user
-            }
-            isAuthenticated = true
-            return
-        }
-
         self.refreshToken = stored.refreshToken
         do {
             try await performTokenRefresh()
         } catch {
             clearKeychain()
-            self.sessionKind = .production
         }
     }
 
-    // MARK: - Private: Callback Handling
+    // MARK: - Private: Web OAuth Callback
 
     private func handleAuthCallback(callbackURL: URL?, error: Error?) {
         defer {
@@ -392,6 +318,8 @@ final class AuthManager: NSObject, ObservableObject {
         isLoading = false
 
         if let error = error {
+            let asError = error as? ASWebAuthenticationSessionError
+            if asError?.code == .canceledLogin { return }
             self.error = .authenticationFailed(error.localizedDescription)
             return
         }
@@ -404,7 +332,6 @@ final class AuthManager: NSObject, ObservableObject {
 
         let params = components.queryItems ?? []
 
-        // CSRF: verify state parameter matches what we sent
         let returnedState = params.first(where: { $0.name == "state" })?.value
         guard let returnedState, returnedState == pendingState else {
             self.error = .stateMismatch
@@ -422,6 +349,7 @@ final class AuthManager: NSObject, ObservableObject {
         }
     }
 
+    // POST https://auth-dev.bluefunda.com/realms/{realm}/protocol/openid-connect/token
     private func exchangeCodeForToken(code: String, verifier: String?) async {
         isLoading = true
 
@@ -441,12 +369,13 @@ final class AuthManager: NSObject, ObservableObject {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                let body = String(data: data, encoding: .utf8) ?? ""
+                print("[AuthManager] Code exchange failed: \(body)")
                 error = .tokenExchangeFailed
                 isLoading = false
                 return
             }
             let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
-            sessionKind = .production
             await processTokenResponse(tokenResponse)
         } catch {
             self.error = .tokenExchangeFailed
@@ -454,6 +383,7 @@ final class AuthManager: NSObject, ObservableObject {
         }
     }
 
+    // POST https://auth-dev.bluefunda.com/realms/{realm}/protocol/openid-connect/token
     private func performTokenRefresh() async throws {
         guard let refreshToken = refreshToken else { throw AuthError.notAuthenticated }
 
@@ -485,28 +415,19 @@ final class AuthManager: NSObject, ObservableObject {
         tokenExpiresAt = Date().addingTimeInterval(TimeInterval(response.expiresIn))
 
         if var user = decodeJWT(response.accessToken) {
-            if user.name.isEmpty, let name = appleFullName { user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles) }
-            if user.email.isEmpty, let email = appleEmail { user = User(id: user.id, email: email, name: user.name, roles: user.roles) }
+            if user.name.isEmpty, let name = appleFullName {
+                user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles)
+            }
+            if user.email.isEmpty, let email = appleEmail {
+                user = User(id: user.id, email: email, name: user.name, roles: user.roles)
+            }
             currentUser = user
         } else if let appleFullName, let appleEmail {
             currentUser = User(id: "", email: appleEmail, name: appleFullName, roles: [])
         }
 
-        if sessionKind == .review {
-            // Review sessions have no Keycloak refresh token. Store the long-lived
-            // access token in the "refreshToken" slot so the session survives app restarts.
-            // On restore, expiry is checked before trusting this token.
-            refreshToken = nil
-            KeychainStore.saveAuthTokens(
-                refreshToken: response.accessToken,
-                realm: realm,
-                expiresAt: tokenExpiresAt,
-                sessionKind: sessionKind.rawValue
-            )
-        } else {
-            refreshToken = response.refreshToken
-            saveTokensToKeychain()
-        }
+        refreshToken = response.refreshToken
+        saveTokensToKeychain()
 
         isAuthenticated = true
         isLoading = false
@@ -519,12 +440,11 @@ final class AuthManager: NSObject, ObservableObject {
         KeychainStore.saveAuthTokens(
             refreshToken: rt,
             realm: realm,
-            expiresAt: tokenExpiresAt,
-            sessionKind: sessionKind.rawValue
+            expiresAt: tokenExpiresAt
         )
     }
 
-    private func loadTokensFromKeychain() -> (refreshToken: String, realm: String, expiresAt: Date?, sessionKind: SessionKind)? {
+    private func loadTokensFromKeychain() -> (refreshToken: String, realm: String, expiresAt: Date?)? {
         KeychainStore.loadAuthTokens()
     }
 
@@ -537,11 +457,10 @@ final class AuthManager: NSObject, ObservableObject {
         refreshToken = nil
         tokenExpiresAt = nil
         currentUser = nil
-        sessionKind = .production
         isAuthenticated = false
     }
 
-    // MARK: - Apple Credential
+    // MARK: - Apple Credential State
 
     private func checkAppleCredentialState(userID: String) async -> ASAuthorizationAppleIDProvider.CredentialState {
         await withCheckedContinuation { continuation in
@@ -551,6 +470,7 @@ final class AuthManager: NSObject, ObservableObject {
         }
     }
 
+    // POST https://auth-dev.bluefunda.com/realms/{realm}/protocol/openid-connect/logout
     private func revokeToken(_ token: String) async {
         var request = URLRequest(url: logoutURL)
         request.httpMethod = "POST"

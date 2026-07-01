@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 // MARK: - Chat Manager
 // Coordinates between UI, streaming chat service (BFFChatService), and REST API service (BFFAPIService).
@@ -53,12 +54,15 @@ final class ChatManager: ObservableObject {
 
     @Published var rateLimit: RateLimitInfo?
     @Published var greeting: String = ""
+    /// True only when a fresh draft was just created via newConversation(). Cleared on first use.
+    @Published var shouldAutoFocusInput: Bool = false
 
     // MARK: - Private
 
     private let service: ChatServiceProtocol
     var apiService: BFFAPIService?
     private var streamingTask: Task<Void, Never>?
+    private var modelContext: ModelContext?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
     private var currentBFFToken: String = ""
 
@@ -144,10 +148,18 @@ final class ChatManager: ObservableObject {
                     createdAt: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
                 )
             }
-            // Merge server-side chats with any in-memory ones not yet persisted
-            let existingIds = Set(loaded.map(\.id))
-            let localOnly = conversations.filter { !existingIds.contains($0.id) }
-            conversations = loaded + localOnly
+            // Merge: keep cached messages for conversations that were already loaded
+            let mergedIds = Set(conversations.map(\.id))
+            let merged = loaded.map { conv -> Conversation in
+                if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
+                    return Conversation(id: conv.id, title: conv.title,
+                                        messages: cached.messages, model: conv.model, createdAt: conv.createdAt)
+                }
+                return conv
+            }
+            let localOnly = conversations.filter { !mergedIds.contains($0.id) }
+            conversations = merged + localOnly
+            cacheConversations(loaded)
         } catch {
             // Don't surface load errors — user can still create new chats
             print("[ChatManager] loadChats error: \(error)")
@@ -250,14 +262,29 @@ final class ChatManager: ObservableObject {
             if currentConversation?.id == conversationId {
                 currentConversation = conversations[idx]
             }
+            cacheMessages(messages, for: conversationId)
         } catch {
+            // Offline fallback: show whatever is cached
+            if conversations[idx].messages.isEmpty {
+                let convId = conversationId
+                let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
+                if let persisted = try? modelContext?.fetch(desc).first, !persisted.messages.isEmpty {
+                    let cached = persisted.messages
+                        .sorted(by: { $0.timestamp < $1.timestamp })
+                        .compactMap { ChatMessage(from: $0) }
+                    conversations[idx].messages = cached
+                    if currentConversation?.id == conversationId {
+                        currentConversation = conversations[idx]
+                    }
+                }
+            }
             print("[ChatManager] loadMessages error: \(error)")
         }
     }
 
     // MARK: - Conversations
 
-    func newConversation() {
+    func newConversation(focus: Bool = true) {
         // Create a draft only — it is NOT added to history until the first
         // message is sent (see sendMessage → upsertConversation). This keeps
         // empty "New Chat" entries out of the sidebar when the user taps New
@@ -269,10 +296,12 @@ final class ChatManager: ObservableObject {
             model: selectedModel.id,
             createdAt: Date()
         )
+        if focus { shouldAutoFocusInput = true }
     }
 
     func selectConversation(_ conversation: Conversation) {
         Haptic.selection()
+        shouldAutoFocusInput = false
         currentConversation = conversation
         Task { await loadMessages(for: conversation.id) }
     }
@@ -283,15 +312,16 @@ final class ChatManager: ObservableObject {
         if currentConversation?.id == conversation.id {
             currentConversation = conversations.first
         }
+        deleteFromCache(conversation)
     }
 
     // MARK: - Messaging
 
-    func sendMessage(_ text: String) async {
+    func sendMessage(_ text: String, fileUrl: String? = nil) async {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
 
-        if currentConversation == nil { newConversation() }
+        if currentConversation == nil { newConversation(focus: false) }
         guard var conversation = currentConversation else { return }
 
         let isFirstMessage = conversation.messages.isEmpty
@@ -304,6 +334,8 @@ final class ChatManager: ObservableObject {
         var assistantMessage = ChatMessage(role: .assistant, content: "")
         conversation.messages.append(assistantMessage)
 
+        // Show truncated prompt immediately so sidebar isn't blank while API generates a real title.
+        if isFirstMessage { conversation.title = text.truncated(to: 50) }
         currentConversation = conversation
         // Insert the draft into history now that it has its first message.
         upsertConversation(conversation)
@@ -323,17 +355,13 @@ final class ChatManager: ObservableObject {
             mcpServerName: selectedMCPServer?.name,
             mcpServerURL: selectedMCPServer?.url,
             thinkingMode: thinkingMode.rawValue,
-            modelExplicit: userPickedModel
+            modelExplicit: userPickedModel,
+            fileUrl: fileUrl,
+            agentName: agentNameForSelectedServer
         )
 
         isStreaming = true
         error = nil
-
-        // Fire-and-forget title generation for new chats — runs in parallel
-        // with streaming, not gated on stream_end (matches web app behavior).
-        if isFirstMessage {
-            updateConversationTitle(conversation.id, from: text)
-        }
 
         streamingTask = Task {
             var finalContent = ""
@@ -387,7 +415,30 @@ final class ChatManager: ObservableObject {
             }
 
             isStreaming = false
+
+            // Now that the chat exists on the server (stream_start has fired),
+            // call the title API. This avoids a 404 when the POST /title fires
+            // before the backend has created the chat record.
+            if isFirstMessage {
+                updateConversationTitle(conversation.id, from: text)
+            }
+
+            // Persist the completed exchange locally
+            if let conv = currentConversation {
+                cacheConversations([conv])
+                cacheMessages(conv.messages, for: conv.id)
+            }
         }
+    }
+
+    /// Maps the selected MCP server to a backend agent name.
+    /// Convention: strip the "-mcp" suffix (e.g. "abaper-mcp" → "abaper").
+    private var agentNameForSelectedServer: String? {
+        guard let server = selectedMCPServer else { return nil }
+        if server.name.hasSuffix("-mcp") {
+            return String(server.name.dropLast(4))
+        }
+        return server.name
     }
 
     func uploadAttachment(data: Data, filename: String, mimeType: String) async throws -> String? {
@@ -459,6 +510,80 @@ final class ChatManager: ObservableObject {
             if currentConversation?.id == conversationId {
                 currentConversation = conversation
             }
+            cacheUpdateTitle(title, for: conversationId)
+        }
+    }
+
+    // MARK: - SwiftData persistence
+
+    /// Call once from CAIApp after ModelContainer is ready.
+    func configureStorage(_ context: ModelContext) {
+        modelContext = context
+        loadCachedConversations()
+    }
+
+    /// Pre-populates the sidebar from the local cache before the API responds.
+    private func loadCachedConversations() {
+        guard let ctx = modelContext else { return }
+        var desc = FetchDescriptor<PersistedConversation>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        desc.fetchLimit = 200
+        guard let cached = try? ctx.fetch(desc), !cached.isEmpty else { return }
+        conversations = cached.map { Conversation(from: $0) }
+    }
+
+    /// Upserts conversation metadata (title, model) — does not touch messages.
+    private func cacheConversations(_ convs: [Conversation]) {
+        guard let ctx = modelContext else { return }
+        for conv in convs {
+            let id = conv.id
+            let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
+            if let existing = try? ctx.fetch(desc).first {
+                existing.title = conv.title
+                existing.model = conv.model
+            } else {
+                ctx.insert(PersistedConversation(id: conv.id, title: conv.title,
+                                                  model: conv.model, createdAt: conv.createdAt))
+            }
+        }
+        try? ctx.save()
+    }
+
+    /// Upserts messages for a conversation — adds new ones without duplicating.
+    private func cacheMessages(_ messages: [ChatMessage], for conversationId: String) {
+        guard let ctx = modelContext else { return }
+        let convId = conversationId
+        let convDesc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
+        guard let persisted = try? ctx.fetch(convDesc).first else { return }
+        let existingIds = Set(persisted.messages.map(\.id))
+        for msg in messages where !existingIds.contains(msg.id) {
+            let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
+                                      roleRaw: msg.role.rawValue, content: msg.content,
+                                      timestamp: msg.timestamp)
+            pm.conversation = persisted
+            ctx.insert(pm)
+        }
+        try? ctx.save()
+    }
+
+    private func cacheUpdateTitle(_ title: String, for conversationId: String) {
+        guard let ctx = modelContext else { return }
+        let id = conversationId
+        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
+        if let existing = try? ctx.fetch(desc).first {
+            existing.title = title
+            try? ctx.save()
+        }
+    }
+
+    private func deleteFromCache(_ conversation: Conversation) {
+        guard let ctx = modelContext else { return }
+        let id = conversation.id
+        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
+        if let existing = try? ctx.fetch(desc).first {
+            ctx.delete(existing)
+            try? ctx.save()
         }
     }
 }
@@ -482,6 +607,19 @@ struct Conversation: Identifiable, Equatable {
             out += "**\(who):** \(message.content)\n\n"
         }
         return out
+    }
+
+}
+
+extension Conversation {
+    init(from persisted: PersistedConversation) {
+        self.id = persisted.id
+        self.title = persisted.title
+        self.model = persisted.model
+        self.createdAt = persisted.createdAt
+        self.messages = persisted.messages
+            .sorted(by: { $0.timestamp < $1.timestamp })
+            .compactMap { ChatMessage(from: $0) }
     }
 }
 
@@ -523,20 +661,34 @@ struct LLMModel: Identifiable, Hashable {
     let name: String
     let provider: String
 
-    static let defaultModel = LLMModel(id: "groq", name: "Groq (Llama 3.3 70B)", provider: "Groq")
+    static let defaultModel = LLMModel(id: "deepseek", name: "DeepSeek", provider: "DeepSeek")
 
     static let defaultModels: [LLMModel] = [
-        LLMModel(id: "groq", name: "Groq (Llama 3.3 70B)", provider: "Groq"),
-        LLMModel(id: "openai", name: "OpenAI GPT-4o", provider: "OpenAI"),
-        LLMModel(id: "deepseek", name: "DeepSeek Chat", provider: "DeepSeek"),
+        LLMModel(id: "deepseek",  name: "DeepSeek",  provider: "DeepSeek"),
+        LLMModel(id: "gemini",    name: "Gemini",    provider: "Gemini"),
+        LLMModel(id: "anthropic", name: "Anthropic", provider: "Anthropic"),
+        LLMModel(id: "llama",     name: "Llama",     provider: "Groq"),
+        LLMModel(id: "sarvam",    name: "Sarvam",    provider: "Sarvam"),
+        LLMModel(id: "openai",    name: "OpenAI",    provider: "OpenAI"),
     ]
 }
 
 struct MCPServer: Identifiable, Hashable {
     let id: String
-    let name: String
+    let name: String        // technical ID sent to backend (e.g. "abaper-mcp")
     let url: String
     let description: String?
+
+    /// User-facing label: shortDescription from BFF when set, otherwise the
+    /// technical name cleaned up (strip "-mcp", title-case each word).
+    var displayName: String {
+        if let d = description, !d.isEmpty { return d }
+        return name
+            .replacingOccurrences(of: "-mcp", with: "")
+            .split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
 }
 
 struct RateLimitInfo {

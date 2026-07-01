@@ -91,6 +91,11 @@ struct ChatRequest {
     /// True when the user explicitly picked a model; the backend then uses
     /// `model` and ignores `thinkingMode`.
     let modelExplicit: Bool
+    /// Storage URL of an uploaded file attachment; passed as `fileUrl` to the backend.
+    let fileUrl: String?
+    /// Explicit agent name for routing (e.g. "abaper"). When set, cai-llm-router routes
+    /// to the named agent rather than the default MCP agent.
+    let agentName: String?
 
     init(
         chatId: String,
@@ -101,7 +106,9 @@ struct ChatRequest {
         mcpServerURL: String? = nil,
         messages: [ChatMessage]? = nil,
         thinkingMode: String = "auto",
-        modelExplicit: Bool = false
+        modelExplicit: Bool = false,
+        fileUrl: String? = nil,
+        agentName: String? = nil
     ) {
         self.chatId = chatId
         self.prompt = prompt
@@ -112,6 +119,8 @@ struct ChatRequest {
         self.messages = messages
         self.thinkingMode = thinkingMode
         self.modelExplicit = modelExplicit
+        self.fileUrl = fileUrl
+        self.agentName = agentName
     }
 
     /// Convert to JSON payload for NATS/BFF
@@ -125,12 +134,9 @@ struct ChatRequest {
             "modelExplicit": modelExplicit
         ]
 
-        if let mcpName = mcpServerName {
-            json["mcp_server_name"] = mcpName
-        }
-        if let mcpURL = mcpServerURL {
-            json["mcp_server_url"] = mcpURL
-        }
+        if let mcpName = mcpServerName { json["mcp_server_name"] = mcpName }
+        if let mcpURL  = mcpServerURL  { json["mcp_server_url"]  = mcpURL  }
+        if let agent   = agentName     { json["agentName"]        = agent   }
 
         return json
     }
@@ -166,6 +172,17 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.role = role
         self.content = content
         self.timestamp = timestamp
+    }
+
+}
+
+extension ChatMessage {
+    init?(from persisted: PersistedMessage) {
+        guard let role = MessageRole(rawValue: persisted.roleRaw) else { return nil }
+        self.id = persisted.id
+        self.role = role
+        self.content = persisted.content
+        self.timestamp = persisted.timestamp
     }
 }
 

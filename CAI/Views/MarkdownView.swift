@@ -211,22 +211,55 @@ private enum MarkdownParser {
     }
 }
 
+// MARK: - Display segments (summary-card grouping)
+
+private enum DisplaySegment {
+    case single(MarkdownBlock)
+    case summaryCard(title: String, block: MarkdownBlock)
+}
+
 // MARK: - MarkdownView
 
 struct MarkdownView: View {
     let content: String
 
-    private var blocks: [MarkdownBlock] {
-        MarkdownParser.parse(content)
+    private var blocks: [MarkdownBlock] { MarkdownParser.parse(content) }
+
+    private var segments: [DisplaySegment] {
+        var result: [DisplaySegment] = []
+        var i = 0
+        while i < blocks.count {
+            if case .heading(_, let text) = blocks[i], isSummaryHeading(text), i + 1 < blocks.count {
+                result.append(.summaryCard(title: text, block: blocks[i + 1]))
+                i += 2
+            } else {
+                result.append(.single(blocks[i]))
+                i += 1
+            }
+        }
+        return result
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                MarkdownBlockView(block: block)
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case .single(let block):
+                    MarkdownBlockView(block: block)
+                case .summaryCard(let title, let block):
+                    SummaryCardView(title: title, block: block)
+                }
             }
         }
+        .font(BFFont.responseBody)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func isSummaryHeading(_ text: String) -> Bool {
+        let lower = text.lowercased().trimmingCharacters(in: .whitespaces)
+        return ["tl;dr", "tldr", "summary", "key takeaways", "key points",
+                "highlights", "in brief", "quick summary", "overview",
+                "bottom line", "conclusion"].contains(lower)
     }
 }
 
@@ -269,14 +302,18 @@ private struct InlineMarkdownText: View {
                 options: .init(interpretedSyntax: .inlineOnly)
             ) {
                 Text(attr)
+                    .font(BFFont.responseBody)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(4)
             } else {
                 Text(text)
+                    .font(BFFont.responseBody)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .lineSpacing(4)
             }
         }
     }
@@ -291,18 +328,17 @@ private struct HeadingView: View {
     var body: some View {
         Text(text)
             .font(headingFont)
-            .fontWeight(.semibold)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, level == 1 ? 6 : 2)
+            .padding(.top, level <= 2 ? 6 : 2)
     }
 
     private var headingFont: Font {
         switch level {
-        case 1: return .title2
-        case 2: return .title3
-        case 3: return .headline
-        default: return .subheadline
+        case 1: return BFFont.responseH1
+        case 2: return BFFont.responseH2
+        case 3: return BFFont.responseH3
+        default: return BFFont.responseH4
         }
     }
 }
@@ -387,12 +423,12 @@ private struct UnorderedListView: View {
     let items: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("•")
                         .foregroundStyle(.secondary)
-                        .frame(width: 12, alignment: .center)
+                        .frame(width: 14, alignment: .center)
                     InlineMarkdownText(text: item)
                 }
             }
@@ -406,9 +442,9 @@ private struct OrderedListView: View {
     let items: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("\(idx + 1).")
                         .foregroundStyle(.secondary)
                         .frame(minWidth: 24, alignment: .trailing)
@@ -436,50 +472,130 @@ private struct BlockquoteView: View {
     }
 }
 
-// MARK: - Table
+// MARK: - Summary Card (TL;DR / Summary heading + following block)
+
+private struct SummaryCardView: View {
+    let title: String
+    let block: MarkdownBlock
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            // Left accent bar
+            Capsule()
+                .fill(Color.accentColor.opacity(0.65))
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                MarkdownBlockView(block: block)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+// MARK: - Table (adaptive: definition list, wrapping, or scrollable)
 
 private struct TableBlockView: View {
     let headers: [String]
     let rows: [[String]]
 
-    private let minColWidth: CGFloat = 80
+    var body: some View {
+        if isDefinitionList {
+            DefinitionListView(headers: headers, rows: rows)
+        } else {
+            WrappingTableView(headers: headers, rows: rows)
+        }
+    }
+
+    /// 2-column tables with reasonably short cells render as key-value pairs.
+    private var isDefinitionList: Bool {
+        guard headers.count == 2 else { return false }
+        let maxLen = (rows.flatMap { $0 } + headers).map(\.count).max() ?? 0
+        return maxLen < 80
+    }
+}
+
+// MARK: - Definition List (2-column table → stacked key / value rows)
+
+private struct DefinitionListView: View {
+    let headers: [String]
+    let rows: [[String]]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(row.first ?? "")
+                        .font(BFFont.responseTableHeader)
+                    if row.count > 1 {
+                        Text(row[1])
+                            .font(BFFont.responseTable)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(rowIdx % 2 == 0 ? Color.secondary.opacity(0.05) : Color.clear)
+
+                if rowIdx < rows.count - 1 { Divider() }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+    }
+}
+
+// MARK: - Wrapping Table (3+ columns — horizontal scroll with text wrap)
+
+private struct WrappingTableView: View {
+    let headers: [String]
+    let rows: [[String]]
+
+    private let minColWidth: CGFloat = 140
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 // Header row
-                HStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
                     ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
                         Text(header)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
+                            .font(BFFont.responseTableHeader)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
                             .frame(minWidth: minColWidth, alignment: .leading)
                     }
                 }
-                .background(Color.secondary.opacity(0.12))
+                .background(Color.secondary.opacity(0.18))
 
                 Divider()
 
                 // Data rows
                 ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
-                    HStack(spacing: 0) {
+                    HStack(alignment: .top, spacing: 0) {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                             Text(cell)
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
+                                .font(BFFont.responseTable)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
                                 .frame(minWidth: minColWidth, alignment: .leading)
                         }
-                        // Pad missing columns
                         if row.count < headers.count {
                             ForEach(row.count..<headers.count, id: \.self) { _ in
                                 Text("—")
-                                    .font(.caption)
+                                    .font(BFFont.responseTable)
                                     .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
                                     .frame(minWidth: minColWidth, alignment: .leading)
                             }
                         }
@@ -491,10 +607,7 @@ private struct TableBlockView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
     }
 }
 

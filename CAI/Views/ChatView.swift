@@ -32,8 +32,13 @@ struct ChatView: View {
     // Scroll management
     @State private var isAtBottom = true
     @State private var showScrollButton = false
-    // Captured proxy for the scroll button tap
     @State private var scrollProxy: ScrollViewProxy?
+    // Keyboard: focus only fires once per session on first launch
+    @State private var hasTriggeredInitialFocus = false
+
+    // Max readable width, centred — matches ChatGPT / Claude desktop.
+    // On iPhone the screen is narrower so the constraint never triggers.
+    private let maxChatWidth: CGFloat = 800
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +48,7 @@ struct ChatView: View {
             }
 
             // Messages + scroll-down button overlay
-            ZStack(alignment: .bottomTrailing) {
+            ZStack(alignment: .bottom) {
                 GeometryReader { outer in
                     ScrollViewReader { proxy in
                         ScrollView {
@@ -63,11 +68,8 @@ struct ChatView: View {
                                         .padding(.top, 40)
                                         .frame(maxWidth: .infinity)
                                 } else {
-                                    EmptyStateView(greeting: greetingText) { prompt in
-                                        inputText = prompt
-                                        isInputFocused = true
-                                    }
-                                    .frame(maxWidth: .infinity, minHeight: 300)
+                                    EmptyStateView(greeting: greetingText)
+                                        .frame(maxWidth: .infinity, minHeight: 300)
                                 }
 
                                 // Scroll anchor + bottom-visibility probe (works iOS 17+)
@@ -84,59 +86,55 @@ struct ChatView: View {
                                         }
                                     )
                             }
+                            // Centre content at desktop-comfortable width
+                            .frame(maxWidth: maxChatWidth)
+                            .frame(maxWidth: .infinity)
                             .padding(.vertical)
                         }
                         .coordinateSpace(name: "chatScroll")
-                        .defaultScrollAnchor(.bottom)
                         .scrollDismissesKeyboard(.interactively)
                         .onPreferenceChange(AtBottomPreferenceKey.self) { atBottom in
                             isAtBottom = atBottom
                             showScrollButton = !atBottom
                         }
-                        // Follow the growing answer only while pinned to the bottom.
-                        // (Not during the send itself — that pins the prompt to the top.)
+                        // Scroll to bottom when history loads (not streaming).
                         .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
                             if isAtBottom && !chatManager.isStreaming { scrollToBottom(proxy: proxy) }
                         }
-                        .onChange(of: chatManager.currentConversation?.messages.last?.content.count) { _, _ in
-                            if isAtBottom { scrollToBottom(proxy: proxy) }
-                        }
-                        // ChatGPT-style: when a response starts, pin the user's prompt
-                        // near the top and let the answer stream below without chasing
-                        // the bottom. Once it overflows the screen the down-arrow shows;
-                        // short answers that fit stay followed automatically.
-                        .onChange(of: chatManager.isStreaming) { _, streaming in
-                            if streaming {
-                                isAtBottom = false
-                                if let uid = chatManager.currentConversation?.messages
-                                    .last(where: { $0.role == .user })?.id {
-                                    withAnimation(.easeOut(duration: 0.25)) {
-                                        proxy.scrollTo(uid, anchor: .top)
-                                    }
-                                }
+                        // Jump to the latest messages when a different conversation is opened.
+                        .onChange(of: chatManager.currentConversation?.id) { _, _ in
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(50))
+                                scrollToBottom(proxy: proxy)
                             }
                         }
-                        .onAppear { scrollProxy = proxy }
+                        .onAppear {
+                            scrollProxy = proxy
+                            // Scroll to bottom on first appear so history starts at the latest message.
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(50))
+                                scrollToBottom(proxy: proxy)
+                            }
+                        }
                     }
                 }
 
-                // Scroll-to-bottom button (shown when scrolled up / response overflows)
+                // Scroll-to-bottom button — centred at the bottom, Claude/ChatGPT style
                 if showScrollButton {
                     Button {
                         isAtBottom = true
                         showScrollButton = false
-                        if let proxy = scrollProxy {
-                            scrollToBottom(proxy: proxy)
-                        }
+                        if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
                     } label: {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundStyle(BFColor.textInverse)
-                            .background(BFColor.primary, in: Circle())
-                            .bfShadow(BFShadow.md)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 34, height: 34)
+                            .background(.regularMaterial, in: Circle())
+                            .overlay(Circle().stroke(Color.secondary.opacity(0.18), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
                     }
-                    .padding(.bottom, 12)
-                    .padding(.trailing, 16)
+                    .padding(.bottom, 10)
                     .transition(.scale.combined(with: .opacity))
                     .animation(.spring(duration: 0.2), value: showScrollButton)
                 }
@@ -144,47 +142,77 @@ struct ChatView: View {
 
             Divider()
 
-            // Input
-            ChatInputView(
-                text: $inputText,
-                isStreaming: chatManager.isStreaming,
-                attachmentFilename: attachmentFilename,
-                isFocused: $isInputFocused,
-                onSend: sendMessage,
-                onStop: stopStreaming,
-                onClearAttachment: clearAttachment,
-                onPickPhoto: { showPhotoPicker = true },
-                onPickFile: { showFileImporter = true }
-            )
-            .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
-            .onChange(of: selectedPhotoItem) { _, item in
-                Task { await loadAttachment(from: item) }
-            }
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: importableTypes,
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result)
-            }
+            // Input — centred at the same max width as the message column
+            VStack(spacing: 0) {
+                ChatInputView(
+                    text: $inputText,
+                    isStreaming: chatManager.isStreaming,
+                    attachmentFilename: attachmentFilename,
+                    isFocused: $isInputFocused,
+                    onSend: sendMessage,
+                    onStop: stopStreaming,
+                    onClearAttachment: clearAttachment,
+                    onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
+                    onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
+                )
+                .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
+                .onChange(of: selectedPhotoItem) { _, item in
+                    Task { await loadAttachment(from: item) }
+                }
+                .fileImporter(
+                    isPresented: $showFileImporter,
+                    allowedContentTypes: importableTypes,
+                    allowsMultipleSelection: false
+                ) { result in
+                    handleFileImport(result)
+                }
 
-            Text("AI responses may be inaccurate. Verify important information.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 4)
-        }
-        // Dismiss keyboard when AI starts responding
-        .onChange(of: chatManager.isStreaming) { _, streaming in
-            if streaming {
-                isInputFocused = false
-                dismissKeyboard()
+                Text("AI responses may be inaccurate. Verify important information.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 4)
             }
+            .frame(maxWidth: maxChatWidth)
+            .frame(maxWidth: .infinity)
+        }
+        // Dismiss keyboard the moment the response starts rendering
+        .onChange(of: chatManager.isStreaming) { _, streaming in
+            guard streaming else { return }
+            isInputFocused = false
+            // FocusState alone doesn't always force UIKit to resign; do it explicitly
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+            )
         }
         // Load messages when active conversation changes (fixes history)
         .task(id: chatManager.currentConversation?.id) {
             guard let id = chatManager.currentConversation?.id else { return }
             await chatManager.loadMessages(for: id)
+        }
+        // Auto-focus for new drafts (shouldAutoFocusInput) or first-launch empty state
+        .onChange(of: chatManager.shouldAutoFocusInput) { _, should in
+            guard should else { return }
+            chatManager.shouldAutoFocusInput = false
+            hasTriggeredInitialFocus = true
+            triggerFocus(delay: 150)
+        }
+        // Focus whenever showing the empty / new-chat state (no conversation open).
+        // Guards with hasTriggeredInitialFocus so it fires at most once per session.
+        .onChange(of: chatManager.isLoadingChats) { _, loading in
+            guard !loading, !hasTriggeredInitialFocus else { return }
+            guard chatManager.currentConversation == nil else { return }
+            hasTriggeredInitialFocus = true
+            triggerFocus(delay: 300)
+        }
+        .onAppear {
+            if chatManager.shouldAutoFocusInput {
+                chatManager.shouldAutoFocusInput = false
+                hasTriggeredInitialFocus = true
+                triggerFocus(delay: 300)
+            } else if !hasTriggeredInitialFocus, chatManager.currentConversation == nil {
+                hasTriggeredInitialFocus = true
+                triggerFocus(delay: 500)
+            }
         }
         .alert("Error", isPresented: .constant(chatManager.error != nil)) {
             Button("OK") { chatManager.error = nil }
@@ -197,17 +225,24 @@ struct ChatView: View {
 
     private func sendMessage() {
         guard !inputText.isEmpty || attachmentData != nil else { return }
+        // Dismiss keyboard immediately — don't wait for isStreaming to flip
+        isInputFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
         let text = inputText
         inputText = ""
+
+        // Scroll to bottom so the user's prompt is visible when streaming starts.
+        if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
 
         if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
             let d = data; let f = filename; let m = mime
             clearAttachment()
             Task {
-                let url = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
-                let prompt = url.map { text.isEmpty ? "I've attached a file: \($0)" : "\(text)\n\n[Attached: \($0)]" }
-                    ?? (text.isEmpty ? "I've attached a file." : text)
-                await chatManager.sendMessage(prompt)
+                let fileUrl = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
+                let prompt = text.isEmpty ? "Analyze the attached file." : text
+                await chatManager.sendMessage(prompt, fileUrl: fileUrl)
             }
         } else {
             Task { await chatManager.sendMessage(text) }
@@ -262,12 +297,13 @@ struct ChatView: View {
         }
     }
 
-    private func dismissKeyboard() {
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder),
-            to: nil, from: nil, for: nil
-        )
+    private func triggerFocus(delay milliseconds: Int) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(milliseconds))
+            isInputFocused = true
+        }
     }
+
 }
 
 // MARK: - Connection Banner
@@ -311,154 +347,117 @@ struct MessageView: View {
     @State private var didCopy = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(message.role == .user ? BFColor.primary : BFColor.success)
-                .frame(width: 32, height: 32)
-                .overlay {
-                    Image(systemName: message.role == .user ? "person.fill" : "brain.head.profile")
-                        .font(.system(size: 14))
-                        .foregroundStyle(BFColor.textInverse)
-                }
+        if message.role == .user {
+            userBubble
+        } else {
+            assistantContent
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(message.role.displayName)
-                    .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
-
-                if message.role == .user {
-                    Text(message.content)
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                } else {
-                    MarkdownView(content: message.content)
-                }
-
-                // Copy / Share actions on AI responses
-                if message.role == .assistant, !message.content.isEmpty {
-                    HStack(spacing: 16) {
-                        Button {
-                            UIPasteboard.general.string = message.content
-                            didCopy = true
-                            Task {
-                                try? await Task.sleep(for: .seconds(1.5))
-                                didCopy = false
-                            }
-                        } label: {
-                            Label(didCopy ? "Copied" : "Copy",
-                                  systemImage: didCopy ? "checkmark" : "doc.on.doc")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-
-                        ShareLink(item: message.content) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 2)
-                }
-
+    // Right-aligned bubble — matches ChatGPT / Claude iOS style
+    private var userBubble: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            Spacer(minLength: 56)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(message.content)
+                    .font(BFFont.body)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        BFColor.primary.opacity(0.13),
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    )
                 Text(message.timestamp, style: .time)
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 6)
+    }
+
+    // Left-aligned response — full width, no background
+    private var assistantContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MarkdownView(content: message.content)
+                .font(BFFont.body)
+
+            if !message.content.isEmpty {
+                HStack(spacing: 20) {
+                    Button {
+                        UIPasteboard.general.string = message.content
+                        didCopy = true
+                        Task {
+                            try? await Task.sleep(for: .seconds(1.5))
+                            didCopy = false
+                        }
+                    } label: {
+                        Label(didCopy ? "Copied" : "Copy",
+                              systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+
+                    ShareLink(item: message.content) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
 
-            Spacer()
+            Text(message.timestamp, style: .time)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(message.role == .user ? BFColor.primary.opacity(0.08) : Color.clear)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 12)
     }
 }
 
 // MARK: - Streaming Indicator
 
 struct StreamingIndicator: View {
-    @State private var dotCount = 0
-    let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @State private var phase = 0
+    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(BFColor.success)
-                .frame(width: 32, height: 32)
-                .overlay {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 14)).foregroundStyle(BFColor.textInverse)
-                }
-            Text("Thinking" + String(repeating: ".", count: dotCount + 1))
-                .foregroundStyle(.secondary).font(.subheadline)
-            Spacer()
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color.secondary.opacity(phase == i ? 0.85 : 0.25))
+                    .frame(width: 7, height: 7)
+                    .animation(.easeInOut(duration: 0.3), value: phase)
+            }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .onReceive(timer) { _ in dotCount = (dotCount + 1) % 3 }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
     }
 }
 
-// MARK: - Empty State (greeting + suggested prompts)
+// MARK: - Empty State
 
 struct EmptyStateView: View {
     let greeting: String
-    let onSelectPrompt: (String) -> Void
-
-    private struct Suggestion: Identifiable {
-        let id = UUID()
-        let icon: String
-        let label: String
-        let prompt: String
-    }
-
-    private let suggestions: [Suggestion] = [
-        .init(icon: "chevron.left.forwardslash.chevron.right", label: "Explain ABAP", prompt: "Explain what this ABAP code does:\n\n"),
-        .init(icon: "doc.text", label: "Write a report", prompt: "Write an ABAP report that "),
-        .init(icon: "ladybug", label: "Debug an error", prompt: "Help me debug this error: "),
-        .init(icon: "magnifyingglass", label: "SELECT help", prompt: "Write an ABAP SQL SELECT that "),
-        .init(icon: "envelope", label: "Draft an email", prompt: "Help me draft a professional email about: "),
-        .init(icon: "text.append", label: "Summarize", prompt: "Summarize the following: ")
-    ]
-
-    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
-        VStack(spacing: 22) {
-            VStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 44))
-                    .foregroundStyle(BFColor.primary.gradient)
-                Text(greeting)
-                    .font(.title2).fontWeight(.semibold)
-                    .multilineTextAlignment(.center)
-                Text("How can I help you today?")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(suggestions) { suggestion in
-                    Button {
-                        onSelectPrompt(suggestion.prompt)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: suggestion.icon)
-                                .font(.caption)
-                                .foregroundStyle(BFColor.primary)
-                            Text(suggestion.label)
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 12)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
+        VStack(spacing: 14) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 52))
+                .foregroundStyle(BFColor.primary.gradient)
+            Text(greeting)
+                .font(BFFont.h4)
+                .multilineTextAlignment(.center)
+            Text("How can I help you today?")
+                .font(BFFont.body)
+                .foregroundStyle(.secondary)
         }
-        .padding()
+        .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -473,48 +472,74 @@ struct ChatInputView: View {
     let onSend: () -> Void
     let onStop: () -> Void
     let onClearAttachment: () -> Void
-    let onPickPhoto: () -> Void
-    let onPickFile: () -> Void
+    /// nil = file upload feature disabled; non-nil = show the attach button
+    let onPickPhoto: (() -> Void)?
+    let onPickFile: (() -> Void)?
 
     private var canSend: Bool { !text.isEmpty || attachmentFilename != nil }
+    private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Attachment preview strip
             if let filename = attachmentFilename {
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     Image(systemName: "paperclip").foregroundStyle(BFColor.primary)
-                    Text(filename).font(.caption).lineLimit(1).foregroundStyle(.secondary)
+                    Text(filename).font(BFFont.bodySmall).lineLimit(1).foregroundStyle(.secondary)
                     Spacer()
                     Button(action: onClearAttachment) {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.vertical, 10)
                 .background(Color(.systemGray6))
             }
 
             HStack(alignment: .bottom, spacing: 8) {
+                // Attach button — only rendered when the feature flag is on
+                if attachEnabled {
+                    Menu {
+                        if let pickPhoto = onPickPhoto {
+                            Button { pickPhoto() } label: {
+                                Label("Photo Library", systemImage: "photo")
+                            }
+                        }
+                        if let pickFile = onPickFile {
+                            Button { pickFile() } label: {
+                                Label("Browse Files", systemImage: "folder")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .disabled(isStreaming)
+                }
+
                 TextField("Message...", text: $text, axis: .vertical)
+                    .font(BFFont.body)
                     .textFieldStyle(.plain)
                     .focused(isFocused)
-                    .padding(12)
+                    .padding(14)
                     .background(Color(.systemGray6))
-                    .cornerRadius(20)
+                    .cornerRadius(22)
                     .lineLimit(1...5)
 
                 Button {
                     isStreaming ? onStop() : onSend()
                 } label: {
                     Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(isStreaming ? BFColor.error : (canSend ? BFColor.primary : .secondary))
+                        .font(.system(size: 36))
+                        .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
                 }
                 .disabled(!isStreaming && !canSend)
+                // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
+                .keyboardShortcut(.return, modifiers: .command)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, BFSpacing._4)
+            .padding(.vertical, 10)
             .background(Color(.systemBackground))
         }
     }
@@ -522,18 +547,32 @@ struct ChatInputView: View {
 
 // MARK: - Mode + Model Picker
 
-/// Single dropdown combining the thinking mode (Auto / Quick Response /
-/// Think Deeper) and the LLM, mirroring the cai web app.
+/// Unified dropdown for thinking mode, LLM, and agent selection — mirrors the
+/// cai web UnifiedModeSelector / AgentMCPSelector.
 struct ModeModelPicker: View {
     @EnvironmentObject var chatManager: ChatManager
 
-    // Exactly one of {a thinking mode, an explicit LLM} is active, mirroring
-    // the cai web UnifiedModeSelector.
     private func modeIsActive(_ mode: ThinkingMode) -> Bool {
-        !chatManager.userPickedModel && chatManager.thinkingMode == mode
+        chatManager.selectedMCPServer == nil && !chatManager.userPickedModel
+            && chatManager.thinkingMode == mode
     }
     private func modelIsActive(_ model: LLMModel) -> Bool {
-        chatManager.userPickedModel && chatManager.selectedModel.id == model.id
+        chatManager.selectedMCPServer == nil
+            && chatManager.userPickedModel && chatManager.selectedModel.id == model.id
+    }
+    private func agentIsActive(_ server: MCPServer) -> Bool {
+        chatManager.selectedMCPServer?.id == server.id
+    }
+
+    private var label: String {
+        if let agent = chatManager.selectedMCPServer { return agent.displayName }
+        if chatManager.userPickedModel { return chatManager.selectedModel.name }
+        return chatManager.thinkingMode.label
+    }
+    private var icon: String {
+        if chatManager.selectedMCPServer != nil { return "cpu.fill" }
+        if chatManager.userPickedModel { return "cpu" }
+        return chatManager.thinkingMode.icon
     }
 
     var body: some View {
@@ -542,6 +581,7 @@ struct ModeModelPicker: View {
             Section {
                 ForEach(ThinkingMode.allCases) { mode in
                     Button {
+                        chatManager.selectedMCPServer = nil
                         chatManager.selectThinkingMode(mode)
                     } label: {
                         if modeIsActive(mode) {
@@ -557,6 +597,7 @@ struct ModeModelPicker: View {
             Section("LLM") {
                 ForEach(chatManager.availableModels) { model in
                     Button {
+                        chatManager.selectedMCPServer = nil
                         chatManager.selectModel(model)
                     } label: {
                         if modelIsActive(model) {
@@ -567,21 +608,47 @@ struct ModeModelPicker: View {
                     }
                 }
             }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: chatManager.userPickedModel ? "cpu" : chatManager.thinkingMode.icon)
-                    .font(.caption2)
-                Text(chatManager.userPickedModel
-                     ? chatManager.selectedModel.name
-                     : chatManager.thinkingMode.label)
-                    .font(.caption).fontWeight(.medium)
-                    .lineLimit(1)
-                Image(systemName: "chevron.down").font(.caption2)
+
+            // Assistants (MCP servers)
+            if !chatManager.availableMCPServers.isEmpty {
+                Section("Assistants") {
+                    // "None" option to clear agent selection
+                    Button {
+                        chatManager.selectedMCPServer = nil
+                    } label: {
+                        if chatManager.selectedMCPServer == nil {
+                            Label("None", systemImage: "checkmark")
+                        } else {
+                            Text("None")
+                        }
+                    }
+
+                    ForEach(chatManager.availableMCPServers) { server in
+                        Button {
+                            chatManager.selectedMCPServer = server
+                            chatManager.userPickedModel = false
+                        } label: {
+                            if agentIsActive(server) {
+                                Label(server.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(server.displayName)
+                            }
+                        }
+                    }
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.caption)
+                Text(label)
+                    .font(BFFont.bodySmall).fontWeight(.medium)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(BFColor.primaryTint)
-            .cornerRadius(8)
+            .cornerRadius(10)
         }
     }
 }
@@ -590,7 +657,10 @@ struct ModeModelPicker: View {
 
 /// True when the bottom anchor is at/near the visible bottom of the scroll view.
 private struct AtBottomPreferenceKey: PreferenceKey {
-    static var defaultValue: Bool = true
+    // false = not at bottom. When LazyVStack destroys the off-screen bottom
+    // marker, the preference falls back to this default — correctly triggering
+    // the scroll button rather than hiding it.
+    static var defaultValue: Bool = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = nextValue()
     }
