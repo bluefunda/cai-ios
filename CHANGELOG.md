@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/bluefunda/cai-ios/compare/v1.2.0...v1.2.1) (2026-07-01)
+
+
+### Bug Fixes
+
+* refactor IDP button styling and Apple Sign In coordinator ([976b473](https://github.com/bluefunda/cai-ios/commit/976b47368e7b257a18cf5333521dd9ee06c62c71))
+* updating login screen styling changes ([952d2a8](https://github.com/bluefunda/cai-ios/commit/952d2a8a8660145c1227d94de0ea290b66736056))
+
 ## [1.2.0](https://github.com/bluefunda/cai-ios/compare/v1.1.1...v1.2.0) (2026-07-01)
 
 
