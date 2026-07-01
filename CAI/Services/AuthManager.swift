@@ -414,16 +414,21 @@ final class AuthManager: NSObject, ObservableObject {
         accessToken = response.accessToken
         tokenExpiresAt = Date().addingTimeInterval(TimeInterval(response.expiresIn))
 
+        var needsProfileSync = false
+
         if var user = decodeJWT(response.accessToken) {
             if user.name.isEmpty, let name = appleFullName {
                 user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles)
+                needsProfileSync = true
             }
             if user.email.isEmpty, let email = appleEmail {
                 user = User(id: user.id, email: email, name: user.name, roles: user.roles)
+                needsProfileSync = true
             }
             currentUser = user
         } else if let appleFullName, let appleEmail {
             currentUser = User(id: "", email: appleEmail, name: appleFullName, roles: [])
+            needsProfileSync = true
         }
 
         refreshToken = response.refreshToken
@@ -431,6 +436,62 @@ final class AuthManager: NSObject, ObservableObject {
 
         isAuthenticated = true
         isLoading = false
+
+        // On first Apple Sign In, push the name/email Apple provided into Keycloak
+        // so the user record is populated for all downstream consumers.
+        if needsProfileSync {
+            await syncAppleProfileToKeycloak(
+                accessToken: response.accessToken,
+                fullName: appleFullName,
+                email: appleEmail
+            )
+        }
+    }
+
+    // MARK: - Keycloak Account Profile Sync
+
+    /// POST /realms/{realm}/account — updates the current user's firstName/lastName/email.
+    /// Apple only provides name and email on the very first authorization, so this is a
+    /// fire-and-forget call: failure is logged but does not block the sign-in flow.
+    private func syncAppleProfileToKeycloak(
+        accessToken: String,
+        fullName: String?,
+        email: String?
+    ) async {
+        guard fullName != nil || email != nil else { return }
+
+        guard let url = URL(string: "\(Config.keycloakBaseURL)/realms/\(realm)/account") else {
+            print("[AuthManager] syncAppleProfile: invalid account URL")
+            return
+        }
+
+        var parts = fullName?.components(separatedBy: " ").filter { !$0.isEmpty } ?? []
+        let firstName = parts.isEmpty ? nil : parts.removeFirst()
+        let lastName = parts.isEmpty ? nil : parts.joined(separator: " ")
+
+        var payload: [String: String] = [:]
+        if let fn = firstName { payload["firstName"] = fn }
+        if let ln = lastName  { payload["lastName"]  = ln }
+        if let em = email     { payload["email"]      = em }
+
+        guard !payload.isEmpty,
+              let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        request.timeoutInterval = 10
+
+        do {
+            let (_, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                print("[AuthManager] syncAppleProfile: HTTP \(http.statusCode)")
+            }
+        } catch {
+            print("[AuthManager] syncAppleProfile: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Keychain

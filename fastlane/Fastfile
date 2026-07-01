@@ -9,6 +9,10 @@
 #
 # IMPORTANT: submit_for_review is explicitly false in every lane.
 # To submit, do it manually in App Store Connect after all checks pass.
+#
+# CI distribution builds (ios_beta / ios_release) run via the ios-deploy job in
+# .github/workflows/release-please.yml using raw xcodebuild, not these lanes.
+# These lanes are for local one-off builds only.
 
 default_platform(:ios)
 

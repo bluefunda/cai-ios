@@ -1,4 +1,9 @@
 name: CI
+# Distribution builds run via the ios-deploy job in release-please.yml.
+# Required repository secrets for that job (not this file):
+#   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_KEYCHAIN_PASSWORD
+#   APPLE_PROVISIONING_PROFILE / APPLE_PROVISIONING_PROFILE_NAME
+#   APPLE_ASC_KEY_ID / APPLE_ASC_ISSUER_ID / APPLE_ASC_PRIVATE_KEY
 
 on:
   push:

@@ -59,6 +59,21 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
 
+      - name: Validate provisioning profile entitlements
+        env:
+          PROVISIONING_PROFILE_NAME: ${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}
+        run: |
+          PP_PATH=$RUNNER_TEMP/profile.mobileprovision
+          security cms -D -i "$PP_PATH" -o $RUNNER_TEMP/profile.plist
+          if ! /usr/libexec/PlistBuddy -c \
+            "Print :Entitlements:com.apple.developer.applesignin" \
+            $RUNNER_TEMP/profile.plist &>/dev/null; then
+            echo "::error::Profile '$PROVISIONING_PROFILE_NAME' is missing the Sign In with Apple entitlement."
+            echo "::error::Fix: developer.apple.com → Identifiers → com.bluefunda.ai → enable Sign In with Apple → Profiles → regenerate → update APPLE_PROVISIONING_PROFILE secret."
+            exit 1
+          fi
+          echo "✓ Profile includes com.apple.developer.applesignin"
+
       - name: Archive
         run: |
           xcodebuild \
