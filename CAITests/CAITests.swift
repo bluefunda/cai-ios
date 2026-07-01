@@ -411,7 +411,6 @@ final class AuthSecurityTests: XCTestCase {
 
         let authManager = AuthManager(session: mockSession)
         XCTAssertFalse(authManager.isAuthenticated)
-        XCTAssertEqual(authManager.sessionKind, .production)
 
         // Simulate the token exchange that handleAppleAuthorization triggers internally
         // by calling the private exchange path via the Keycloak token URL.
@@ -453,8 +452,7 @@ final class AuthSecurityTests: XCTestCase {
         let authManager = AuthManager(session: mockSession)
         // Verify review fallback is reached (callCount ≥ 2: Keycloak attempt + BFF fallback)
         // Full flow requires a real ASAuthorizationAppleIDCredential; this verifies routing logic.
-        XCTAssertFalse(authManager.isReviewSession)
-        XCTAssertEqual(SessionKind.review.rawValue, "review")
+        XCTAssertFalse(authManager.isAuthenticated)
     }
 
     // MARK: - P0: Keycloak 4xx → No Fallback (Invalid Token)
@@ -490,7 +488,6 @@ final class AuthSecurityTests: XCTestCase {
         }
 
         // Verify BFF is NOT called for 4xx (auth error, not availability error)
-        // We test this by checking the routing logic is correct via SessionKind
         XCTAssertFalse(bffCalled)
         XCTAssertEqual(AuthError.tokenExchangeFailed.errorDescription,
                        "Failed to exchange authorization code for token")
@@ -545,7 +542,6 @@ final class AuthSecurityTests: XCTestCase {
         await authManager.logout()
         XCTAssertFalse(authManager.isAuthenticated)
         XCTAssertNil(authManager.accessToken)
-        XCTAssertEqual(authManager.sessionKind, .production)
     }
 
     // MARK: - P2: Refresh Token Rotation
@@ -606,27 +602,6 @@ final class AuthSecurityTests: XCTestCase {
         XCTAssertFalse(authManager.isAuthenticated)
         XCTAssertNil(authManager.accessToken)
         XCTAssertNil(authManager.currentUser)
-        XCTAssertEqual(authManager.sessionKind, .production)
-    }
-
-    // MARK: - P2: Review Session TTL
-
-    @MainActor
-    func test_reviewSession_isIsolatedFromProduction() {
-        XCTAssertNotEqual(SessionKind.review, SessionKind.production)
-        XCTAssertEqual(SessionKind.review.rawValue, "review")
-        XCTAssertEqual(SessionKind.production.rawValue, "production")
-    }
-
-    // MARK: - SessionKind Persistence
-
-    func test_sessionKind_roundtripsJSON() throws {
-        let kinds: [SessionKind] = [.production, .review]
-        for kind in kinds {
-            let encoded = try JSONEncoder().encode(kind)
-            let decoded = try JSONDecoder().decode(SessionKind.self, from: encoded)
-            XCTAssertEqual(decoded, kind)
-        }
     }
 
     // MARK: - TokenResponse Decoding
