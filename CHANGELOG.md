@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/bluefunda/cai-ios/compare/v1.2.1...v1.2.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* rename 'Subscription' section headers to comply with App Store 3.1.1 ([#109](https://github.com/bluefunda/cai-ios/issues/109)) ([a6fd151](https://github.com/bluefunda/cai-ios/commit/a6fd1513e4660ff0fe974303b927b35f0459c97d)), closes [#108](https://github.com/bluefunda/cai-ios/issues/108)
+
 ## [1.2.1](https://github.com/bluefunda/cai-ios/compare/v1.2.0...v1.2.1) (2026-07-01)
 
 
