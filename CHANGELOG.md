@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/bluefunda/cai-ios/compare/v1.2.2...v1.2.3) (2026-07-02)
+
+
+### Bug Fixes
+
+* remove subscription tier indicators to comply with App Store guideline 3.1.1 ([#111](https://github.com/bluefunda/cai-ios/issues/111)) ([fbbc112](https://github.com/bluefunda/cai-ios/commit/fbbc1129099c76092b8090c42dcd3fa460dced72))
+
 ## [1.2.2](https://github.com/bluefunda/cai-ios/compare/v1.2.1...v1.2.2) (2026-07-02)
 
 
