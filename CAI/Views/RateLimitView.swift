@@ -63,7 +63,7 @@ struct RateLimitView: View {
                     }
                 }
             } header: {
-                Text("Subscription")
+                Text("Plan")
             }
 
             // Daily Usage

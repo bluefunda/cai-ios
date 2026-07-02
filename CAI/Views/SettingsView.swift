@@ -57,7 +57,7 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Subscription")
+                    Text("Usage")
                 }
 
                 // Connection Status — internal infra detail, trm realm only
