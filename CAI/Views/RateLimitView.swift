@@ -41,16 +41,11 @@ struct RateLimitView: View {
             // Plan Badge
             Section {
                 HStack {
-                    Label("Plan", systemImage: "creditcard")
+                    Label("Account", systemImage: "person.circle")
                     Spacer()
-                    Text(info.planName.uppercased())
+                    Text(info.planName.capitalized)
                         .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(planColor(info.planName).opacity(0.15))
-                        .foregroundColor(planColor(info.planName))
-                        .cornerRadius(6)
+                        .foregroundColor(.secondary)
                 }
 
                 if info.isBlocked {

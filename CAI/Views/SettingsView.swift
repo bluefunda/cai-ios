@@ -46,15 +46,7 @@ struct SettingsView: View {
                     NavigationLink {
                         RateLimitView()
                     } label: {
-                        HStack {
-                            Label("Usage & Limits", systemImage: "chart.bar")
-                            if let rl = chatManager.rateLimit {
-                                Spacer()
-                                Text(rl.planName.uppercased())
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
+                        Label("Usage & Limits", systemImage: "chart.bar")
                     }
                 } header: {
                     Text("Usage")
