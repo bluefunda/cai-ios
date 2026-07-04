@@ -30,5 +30,14 @@ fastlane/metadata/review_information/demo_user.txt
 fastlane/metadata/review_information/demo_password.txt
 fastlane/metadata/review_information/phone_number.txt
 
+# fastlane generated output / artifacts
+fastlane/README.md
+fastlane/report.xml
+fastlane/screenshots/
+fastlane/test_output/
+
+# Editor / network-mount temp files (e.g. .!12345!Foo.swift)
+.!*!*
+
 # Brand assets — large binary; extracted content lives in BRAND.md
 Brand_Guidelines.zip
