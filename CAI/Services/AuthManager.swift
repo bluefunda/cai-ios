@@ -271,6 +271,30 @@ final class AuthManager: NSObject, ObservableObject {
         try await performTokenRefresh()
     }
 
+    /// Returns a valid access token, refreshing first if it's near expiry.
+    /// If the session can no longer be refreshed (refresh/offline token expired
+    /// or revoked), it expires the session — flipping the UI back to sign-in —
+    /// and returns nil. Callers should treat nil as "session ended, stop here."
+    func validAccessToken() async -> String? {
+        do {
+            try await refreshTokenIfNeeded()
+            return accessToken
+        } catch {
+            expireSession()
+            return nil
+        }
+    }
+
+    /// Ends the current session and routes the app back to the sign-in screen
+    /// with a clear explanation. Idempotent — safe to call from multiple places
+    /// (e.g. both a proactive refresh failure and a mid-stream 401).
+    func expireSession() {
+        guard isAuthenticated else { return }
+        clearKeychain()
+        resetSession()
+        error = .tokenRefreshFailed   // "Session expired. Please sign in again."
+    }
+
     func getCredentials() -> ServiceCredentials? {
         guard let user = currentUser, let token = accessToken else { return nil }
         return ServiceCredentials(

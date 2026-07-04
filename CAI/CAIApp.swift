@@ -31,6 +31,7 @@ struct CAIApp: App {
                 }
                 .task {
                     chatManager.configureStorage(container.mainContext)
+                    chatManager.bind(authManager: authManager)
                     await authManager.restoreSession()
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in

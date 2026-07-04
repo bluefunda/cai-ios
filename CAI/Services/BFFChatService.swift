@@ -85,7 +85,7 @@ final class BFFChatService: ChatServiceProtocol {
                     }
 
                     if httpResponse.statusCode == 401 {
-                        continuation.finish(throwing: ChatServiceError.serverError("Session expired. Please sign in again."))
+                        continuation.finish(throwing: ChatServiceError.unauthorized)
                         return
                     }
                     guard httpResponse.statusCode == 200 else {

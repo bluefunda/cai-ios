@@ -65,6 +65,9 @@ final class ChatManager: ObservableObject {
     private var modelContext: ModelContext?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
     private var currentBFFToken: String = ""
+    /// Source of truth for auth. Used to refresh the access token before each
+    /// request and to expire the session when it can no longer be refreshed.
+    private weak var authManager: AuthManager?
 
     // MARK: - Init
 
@@ -72,15 +75,40 @@ final class ChatManager: ObservableObject {
         self.service = service
     }
 
-    // Called once by CAIApp to hand off the initial token and set up BFFAPIService.
+    // Called once by CAIApp to hand off the AuthManager, the source of truth for
+    // token refresh. Without it, ChatManager falls back to the last-known token.
     func bind(authManager: AuthManager) {
-        // No-op; kept for API compatibility if needed later.
-        // Token updates come via updateToken(_:).
+        self.authManager = authManager
     }
 
     /// Update the stored access token (called from CAIApp on auth state changes).
     func updateToken(_ token: String) {
         currentBFFToken = token
+    }
+
+    /// Returns a fresh, non-empty access token, refreshing via AuthManager when
+    /// one is bound. Returns nil only when there is no usable token (the caller
+    /// should treat that as an expired session).
+    private func freshToken() async -> String? {
+        if let auth = authManager, let token = await auth.validAccessToken() {
+            currentBFFToken = token
+            return token
+        }
+        return currentBFFToken.isEmpty ? nil : currentBFFToken
+    }
+
+    /// Refreshes the access token if needed and pushes it into the streaming
+    /// service before a send. Returns false when the session has expired — at
+    /// which point AuthManager has already flipped the app back to sign-in.
+    private func ensureFreshSession() async -> Bool {
+        // No AuthManager bound (e.g. unit tests) → proceed with existing token.
+        guard let auth = authManager else { return true }
+        guard let token = await auth.validAccessToken() else { return false }
+        currentBFFToken = token
+        if let credentials = auth.getCredentials() {
+            try? await service.connect(credentials: credentials)
+        }
+        return true
     }
 
     // MARK: - Connection
@@ -93,11 +121,12 @@ final class ChatManager: ObservableObject {
             try await service.connect(credentials: credentials)
             connectionStatus = .connected
 
-            // Wire up REST API service; token provider reads the latest stored token.
+            // Wire up REST API service; the token provider refreshes via
+            // AuthManager so long-lived sessions don't send a stale access token.
             if let bffURL = credentials.bffBaseURL {
                 apiService = BFFAPIService(baseURL: bffURL, tokenProvider: { [weak self] in
-                    let token = await MainActor.run { self?.currentBFFToken ?? "" }
-                    guard !token.isEmpty else { throw APIError.unauthorized }
+                    guard let self else { throw APIError.unauthorized }
+                    guard let token = await self.freshToken() else { throw APIError.unauthorized }
                     return token
                 })
             }
@@ -321,6 +350,11 @@ final class ChatManager: ObservableObject {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
 
+        // Refresh the session *before* touching the conversation. If it has
+        // expired, AuthManager routes the app back to sign-in — so we bail out
+        // instead of appending a doomed message and then surfacing an "LLM error".
+        guard await ensureFreshSession() else { return }
+
         if currentConversation == nil { newConversation(focus: false) }
         guard var conversation = currentConversation else { return }
 
@@ -410,8 +444,31 @@ final class ChatManager: ObservableObject {
                         self.error = message
                     }
                 }
+            } catch is CancellationError {
+                // User stopped the stream — not an error.
+            } catch ChatServiceError.unauthorized {
+                // Token was rejected mid-stream (expired/revoked). Route to
+                // sign-in rather than showing a generic error popup.
+                authManager?.expireSession()
             } catch {
                 self.error = error.localizedDescription
+            }
+
+            // The stream ended without any text and without an explicit error
+            // (e.g. the backend returned an empty completion). Don't leave a
+            // blank assistant bubble with nothing shown — surface a clear,
+            // retryable message. Skipped on user-stop and on session expiry.
+            if !Task.isCancelled,
+               finalContent.isEmpty,
+               self.error == nil,
+               authManager?.isAuthenticated != false {
+                assistantMessage = ChatMessage(
+                    id: assistantMessage.id,
+                    role: .assistant,
+                    content: "I couldn't generate a response for that. Please try rephrasing or send it again.",
+                    timestamp: assistantMessage.timestamp
+                )
+                updateLastMessage(assistantMessage, in: conversation.id)
             }
 
             isStreaming = false
