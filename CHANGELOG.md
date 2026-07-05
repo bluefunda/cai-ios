@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/bluefunda/cai-ios/compare/v1.2.3...v1.3.0) (2026-07-05)
+
+
+### Features
+
+* add copy/share actions to user prompts and assistant responses ([#118](https://github.com/bluefunda/cai-ios/issues/118)) ([79eed8b](https://github.com/bluefunda/cai-ios/commit/79eed8b2a7dd52a0c50449558084c9f5af8d8e8d))
+
+
+### Bug Fixes
+
+* refresh access token per request and handle expired sessions gracefully ([#115](https://github.com/bluefunda/cai-ios/issues/115)) ([cbd3b57](https://github.com/bluefunda/cai-ios/commit/cbd3b57a56aae345c75346c81cf6f4b49553b37b))
+
 ## [1.2.3](https://github.com/bluefunda/cai-ios/compare/v1.2.2...v1.2.3) (2026-07-02)
 
 
