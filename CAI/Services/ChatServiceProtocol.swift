@@ -207,6 +207,9 @@ enum ChatServiceError: LocalizedError {
     case timeout
     case invalidResponse
     case serverError(String)
+    /// The server rejected the request auth (HTTP 401). Callers should trigger
+    /// re-authentication rather than showing a generic error.
+    case unauthorized
 
     var errorDescription: String? {
         switch self {
@@ -220,6 +223,8 @@ enum ChatServiceError: LocalizedError {
             return "Invalid response from server"
         case .serverError(let message):
             return "Server error: \(message)"
+        case .unauthorized:
+            return "Your session has expired. Please sign in again."
         }
     }
 }

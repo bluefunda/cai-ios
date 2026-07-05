@@ -23,6 +23,12 @@ final class AuthManager: NSObject, ObservableObject {
     private var tokenExpiresAt: Date?
     private var webAuthSession: ASWebAuthenticationSession?
 
+    /// Background timer that refreshes the access token shortly before it
+    /// expires, keeping the session silently alive while the app is open
+    /// (the way ChatGPT/Claude behave). Re-armed after every token response
+    /// and cancelled when the session ends.
+    private var proactiveRefreshTask: Task<Void, Never>?
+
     // PKCE verifier and anti-CSRF state — never persisted, cleared after each flow.
     private var pendingVerifier: String?
     private var pendingState: String?
@@ -271,6 +277,68 @@ final class AuthManager: NSObject, ObservableObject {
         try await performTokenRefresh()
     }
 
+    /// Returns a valid access token, refreshing first if it's near expiry.
+    /// If the session can no longer be refreshed (refresh/offline token expired
+    /// or revoked), it expires the session — flipping the UI back to sign-in —
+    /// and returns nil. Callers should treat nil as "session ended, stop here."
+    func validAccessToken() async -> String? {
+        do {
+            try await refreshTokenIfNeeded()
+            return accessToken
+        } catch {
+            expireSession()
+            return nil
+        }
+    }
+
+    /// Ends the current session and routes the app back to the sign-in screen
+    /// with a clear explanation. Idempotent — safe to call from multiple places
+    /// (e.g. both a proactive refresh failure and a mid-stream 401).
+    func expireSession() {
+        guard isAuthenticated else { return }
+        clearKeychain()
+        resetSession()
+        error = .tokenRefreshFailed   // "Session expired. Please sign in again."
+    }
+
+    // MARK: - Proactive Refresh
+
+    /// (Re)schedules a background refresh to fire ~5 minutes before the current
+    /// access token expires. Each successful refresh re-arms the timer via
+    /// processTokenResponse, so the session stays alive indefinitely while the
+    /// app runs — with no user-visible stall — until the offline refresh token
+    /// itself expires (~31 days idle) or is revoked.
+    private func scheduleProactiveRefresh() {
+        proactiveRefreshTask?.cancel()
+        guard let expiresAt = tokenExpiresAt else { return }
+
+        let fireAt = expiresAt.addingTimeInterval(-Config.tokenRefreshThreshold)
+        let delay = max(fireAt.timeIntervalSinceNow, 0)
+
+        proactiveRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.performScheduledRefresh()
+        }
+    }
+
+    private func performScheduledRefresh() async {
+        do {
+            try await performTokenRefresh()   // re-arms the timer on success
+        } catch {
+            expireSession()
+        }
+    }
+
+    /// Called when the app returns to the foreground. The background timer can be
+    /// suspended while backgrounded, so top up the token if it's near/past expiry
+    /// and re-arm the timer against the (possibly new) expiry.
+    func refreshOnForeground() async {
+        guard isAuthenticated else { return }
+        _ = await validAccessToken()   // refreshes if needed; expires session on hard failure
+        scheduleProactiveRefresh()
+    }
+
     func getCredentials() -> ServiceCredentials? {
         guard let user = currentUser, let token = accessToken else { return nil }
         return ServiceCredentials(
@@ -431,6 +499,8 @@ final class AuthManager: NSObject, ObservableObject {
 
         isAuthenticated = true
         isLoading = false
+
+        scheduleProactiveRefresh()
     }
 
     // MARK: - Keychain
@@ -453,6 +523,8 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func resetSession() {
+        proactiveRefreshTask?.cancel()
+        proactiveRefreshTask = nil
         accessToken = nil
         refreshToken = nil
         tokenExpiresAt = nil
@@ -497,9 +569,29 @@ final class AuthManager: NSObject, ObservableObject {
         return User(
             id:    json["sub"] as? String ?? "",
             email: json["email"] as? String ?? "",
-            name:  json["preferred_username"] as? String ?? json["name"] as? String ?? "",
+            name:  Self.displayName(from: json),
             roles: (json["realm_access"] as? [String: Any])?["roles"] as? [String] ?? []
         )
+    }
+
+    /// Derives the user's display name from JWT claims, preferring real name
+    /// claims over `preferred_username` — which Keycloak sets to the email for
+    /// Google/Microsoft federated users, causing the greeting to show an email
+    /// (see cai-ios#116). Order: `name` → `given_name`+`family_name` →
+    /// `preferred_username` only if it isn't an email → "".
+    private static func displayName(from json: [String: Any]) -> String {
+        if let name = (json["name"] as? String)?.trimmingCharacters(in: .whitespaces),
+           !name.isEmpty {
+            return name
+        }
+        let given = (json["given_name"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let family = (json["family_name"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let full = "\(given) \(family)".trimmingCharacters(in: .whitespaces)
+        if !full.isEmpty { return full }
+        if let username = json["preferred_username"] as? String, !username.contains("@") {
+            return username
+        }
+        return ""
     }
 
     // MARK: - Crypto Helpers
