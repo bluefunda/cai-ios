@@ -569,9 +569,29 @@ final class AuthManager: NSObject, ObservableObject {
         return User(
             id:    json["sub"] as? String ?? "",
             email: json["email"] as? String ?? "",
-            name:  json["preferred_username"] as? String ?? json["name"] as? String ?? "",
+            name:  Self.displayName(from: json),
             roles: (json["realm_access"] as? [String: Any])?["roles"] as? [String] ?? []
         )
+    }
+
+    /// Derives the user's display name from JWT claims, preferring real name
+    /// claims over `preferred_username` — which Keycloak sets to the email for
+    /// Google/Microsoft federated users, causing the greeting to show an email
+    /// (see cai-ios#116). Order: `name` → `given_name`+`family_name` →
+    /// `preferred_username` only if it isn't an email → "".
+    private static func displayName(from json: [String: Any]) -> String {
+        if let name = (json["name"] as? String)?.trimmingCharacters(in: .whitespaces),
+           !name.isEmpty {
+            return name
+        }
+        let given = (json["given_name"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let family = (json["family_name"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let full = "\(given) \(family)".trimmingCharacters(in: .whitespaces)
+        if !full.isEmpty { return full }
+        if let username = json["preferred_username"] as? String, !username.contains("@") {
+            return username
+        }
+        return ""
     }
 
     // MARK: - Crypto Helpers
