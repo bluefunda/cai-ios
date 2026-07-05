@@ -354,6 +354,19 @@ struct MessageView: View {
         }
     }
 
+    // Long-press actions shared by user prompts and assistant responses.
+    @ViewBuilder
+    private var messageActions: some View {
+        Button {
+            UIPasteboard.general.string = message.content
+        } label: {
+            Label("Copy", systemImage: "doc.on.doc")
+        }
+        ShareLink(item: message.content) {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+    }
+
     // Right-aligned bubble — matches ChatGPT / Claude iOS style
     private var userBubble: some View {
         HStack(alignment: .bottom, spacing: 0) {
@@ -369,6 +382,7 @@ struct MessageView: View {
                         BFColor.primary.opacity(0.13),
                         in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                     )
+                    .contextMenu { messageActions }
                 Text(message.timestamp, style: .time)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
@@ -383,6 +397,7 @@ struct MessageView: View {
         VStack(alignment: .leading, spacing: 8) {
             MarkdownView(content: message.content)
                 .font(BFFont.body)
+                .contextMenu { if !message.content.isEmpty { messageActions } }
 
             if !message.content.isEmpty {
                 HStack(spacing: 20) {
