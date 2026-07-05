@@ -23,6 +23,12 @@ final class AuthManager: NSObject, ObservableObject {
     private var tokenExpiresAt: Date?
     private var webAuthSession: ASWebAuthenticationSession?
 
+    /// Background timer that refreshes the access token shortly before it
+    /// expires, keeping the session silently alive while the app is open
+    /// (the way ChatGPT/Claude behave). Re-armed after every token response
+    /// and cancelled when the session ends.
+    private var proactiveRefreshTask: Task<Void, Never>?
+
     // PKCE verifier and anti-CSRF state — never persisted, cleared after each flow.
     private var pendingVerifier: String?
     private var pendingState: String?
@@ -295,6 +301,44 @@ final class AuthManager: NSObject, ObservableObject {
         error = .tokenRefreshFailed   // "Session expired. Please sign in again."
     }
 
+    // MARK: - Proactive Refresh
+
+    /// (Re)schedules a background refresh to fire ~5 minutes before the current
+    /// access token expires. Each successful refresh re-arms the timer via
+    /// processTokenResponse, so the session stays alive indefinitely while the
+    /// app runs — with no user-visible stall — until the offline refresh token
+    /// itself expires (~31 days idle) or is revoked.
+    private func scheduleProactiveRefresh() {
+        proactiveRefreshTask?.cancel()
+        guard let expiresAt = tokenExpiresAt else { return }
+
+        let fireAt = expiresAt.addingTimeInterval(-Config.tokenRefreshThreshold)
+        let delay = max(fireAt.timeIntervalSinceNow, 0)
+
+        proactiveRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.performScheduledRefresh()
+        }
+    }
+
+    private func performScheduledRefresh() async {
+        do {
+            try await performTokenRefresh()   // re-arms the timer on success
+        } catch {
+            expireSession()
+        }
+    }
+
+    /// Called when the app returns to the foreground. The background timer can be
+    /// suspended while backgrounded, so top up the token if it's near/past expiry
+    /// and re-arm the timer against the (possibly new) expiry.
+    func refreshOnForeground() async {
+        guard isAuthenticated else { return }
+        _ = await validAccessToken()   // refreshes if needed; expires session on hard failure
+        scheduleProactiveRefresh()
+    }
+
     func getCredentials() -> ServiceCredentials? {
         guard let user = currentUser, let token = accessToken else { return nil }
         return ServiceCredentials(
@@ -455,6 +499,8 @@ final class AuthManager: NSObject, ObservableObject {
 
         isAuthenticated = true
         isLoading = false
+
+        scheduleProactiveRefresh()
     }
 
     // MARK: - Keychain
@@ -477,6 +523,8 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func resetSession() {
+        proactiveRefreshTask?.cancel()
+        proactiveRefreshTask = nil
         accessToken = nil
         refreshToken = nil
         tokenExpiresAt = nil

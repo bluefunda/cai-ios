@@ -6,6 +6,7 @@ import AuthenticationServices
 struct CAIApp: App {
     @StateObject private var authManager = AuthManager()
     @StateObject private var chatManager = ChatManager(service: BFFChatService())
+    @Environment(\.scenePhase) private var scenePhase
 
     private let container: ModelContainer = {
         let schema = Schema([PersistedConversation.self, PersistedMessage.self])
@@ -45,6 +46,13 @@ struct CAIApp: App {
                     if let token = newToken {
                         chatManager.updateToken(token)
                     }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Returning to the foreground can happen after the background
+                    // refresh timer was suspended — top up the token so the first
+                    // action after resuming never hits an expired session.
+                    guard phase == .active else { return }
+                    Task { await authManager.refreshOnForeground() }
                 }
                 .onReceive(NotificationCenter.default.publisher(
                     for: ASAuthorizationAppleIDProvider.credentialRevokedNotification
