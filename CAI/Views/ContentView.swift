@@ -53,7 +53,7 @@ struct AppShell: View {
     @State private var showSystems = false
 
     enum AppSheet: String, Identifiable {
-        case storage, settings
+        case storage, settings, subscription
         var id: String { rawValue }
     }
 
@@ -91,6 +91,7 @@ struct AppShell: View {
                 currentMode: modeBinding,
                 onOpenStorage: { activeSheet = .storage },
                 onOpenSettings: { activeSheet = .settings },
+                onOpenSubscription: { activeSheet = .subscription },
                 onOpenURL: { safariURL = $0 }
             )
             // Pin sidebar to a desktop-comfortable width; the detail column
@@ -142,6 +143,7 @@ struct AppShell: View {
                 currentMode: modeBinding,
                 onOpenStorage: { activeSheet = .storage },
                 onOpenSettings: { activeSheet = .settings },
+                onOpenSubscription: { activeSheet = .subscription },
                 onOpenURL: { safariURL = $0 }
             )
             .frame(width: 300)
@@ -185,6 +187,7 @@ struct AppShell: View {
         switch sheet {
         case .storage: StorageView()
         case .settings: SettingsView()
+        case .subscription: SubscriptionView()
         }
     }
 }
@@ -194,9 +197,11 @@ struct AppShell: View {
 struct SidebarContent: View {
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var iapManager: IAPManager
     @Binding var currentMode: AppMode
     let onOpenStorage: () -> Void
     let onOpenSettings: () -> Void
+    let onOpenSubscription: () -> Void
     let onOpenURL: (URL) -> Void
 
     @State private var searchText = ""
@@ -304,10 +309,42 @@ struct SidebarContent: View {
 
             Divider()
 
+            // Upgrade to Pro — individual free users only
+            if authManager.realm == "individual" && !iapManager.hasActiveSubscription {
+                Button(action: onOpenSubscription) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14))
+                            .frame(width: 20)
+                        Text("Upgrade to Pro")
+                            .font(BFFont.sidebarItemMed)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(BFColor.primaryTint, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(BFColor.primary)
+            }
+
             // Profile row — bottom left, menu contains Settings + Help
             Menu {
                 Button { onOpenSettings() } label: {
                     Label("Settings", systemImage: "gear")
+                }
+                if authManager.realm == "individual" {
+                    Button { onOpenSubscription() } label: {
+                        Label(
+                            iapManager.hasActiveSubscription ? "Manage Subscription" : "Upgrade to Pro",
+                            systemImage: iapManager.hasActiveSubscription ? "checkmark.seal" : "sparkles"
+                        )
+                    }
                 }
                 Button { onOpenURL(helpURL) } label: {
                     Label("Help & Support", systemImage: "questionmark.circle")
@@ -322,9 +359,19 @@ struct SidebarContent: View {
                                 .font(BFFont.sidebarItemMed).foregroundStyle(.white)
                         }
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(authManager.currentUser?.name ?? "Account")
-                            .font(BFFont.sidebarItemMed)
-                            .foregroundStyle(.primary).lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(authManager.currentUser?.name ?? "Account")
+                                .font(BFFont.sidebarItemMed)
+                                .foregroundStyle(.primary).lineLimit(1)
+                            if iapManager.hasActiveSubscription {
+                                Text("Pro")
+                                    .font(BFFont.micro.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(BFColor.primary, in: Capsule())
+                            }
+                        }
                         if let email = authManager.currentUser?.email {
                             Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -463,10 +510,12 @@ struct CodeTopBar: View {
 struct SidebarDrawer: View {
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var iapManager: IAPManager
     @Binding var isOpen: Bool
     @Binding var currentMode: AppMode
     let onOpenStorage: () -> Void
     let onOpenSettings: () -> Void
+    let onOpenSubscription: () -> Void
     let onOpenURL: (URL) -> Void
 
     @State private var searchText = ""
@@ -580,6 +629,33 @@ struct SidebarDrawer: View {
 
             Divider()
 
+            // Upgrade to Pro — individual free users only
+            if authManager.realm == "individual" && !iapManager.hasActiveSubscription {
+                Button {
+                    withAnimation { isOpen = false }
+                    onOpenSubscription()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14))
+                            .frame(width: 20)
+                        Text("Upgrade to Pro")
+                            .font(BFFont.sidebarItemMed)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(BFColor.primaryTint, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(BFColor.primary)
+            }
+
             // Profile row — bottom left, menu contains Settings + Help
             Menu {
                 Button {
@@ -587,6 +663,17 @@ struct SidebarDrawer: View {
                     onOpenSettings()
                 } label: {
                     Label("Settings", systemImage: "gear")
+                }
+                if authManager.realm == "individual" {
+                    Button {
+                        withAnimation { isOpen = false }
+                        onOpenSubscription()
+                    } label: {
+                        Label(
+                            iapManager.hasActiveSubscription ? "Manage Subscription" : "Upgrade to Pro",
+                            systemImage: iapManager.hasActiveSubscription ? "checkmark.seal" : "sparkles"
+                        )
+                    }
                 }
                 Button {
                     withAnimation { isOpen = false }
@@ -604,9 +691,19 @@ struct SidebarDrawer: View {
                                 .font(BFFont.sidebarItemMed).foregroundStyle(.white)
                         }
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(authManager.currentUser?.name ?? "Account")
-                            .font(BFFont.sidebarItemMed)
-                            .foregroundStyle(.primary).lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(authManager.currentUser?.name ?? "Account")
+                                .font(BFFont.sidebarItemMed)
+                                .foregroundStyle(.primary).lineLimit(1)
+                            if iapManager.hasActiveSubscription {
+                                Text("Pro")
+                                    .font(BFFont.micro.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(BFColor.primary, in: Capsule())
+                            }
+                        }
                         if let email = authManager.currentUser?.email {
                             Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
                         }

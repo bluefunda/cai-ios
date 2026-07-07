@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var iapManager: IAPManager
     @Environment(\.openURL) private var openURL
     @State private var showLogoutConfirmation = false
     @State private var showDeleteConfirmation = false
@@ -12,6 +13,7 @@ struct SettingsView: View {
     // Internal infra details (Connection, Build) are only shown to the
     // internal/employee realm; end users on `individual` don't see them.
     private var isTrmRealm: Bool { authManager.realm == "trm" }
+    private var isIndividualRealm: Bool { authManager.realm == "individual" }
 
     var body: some View {
         NavigationStack {
@@ -50,6 +52,28 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Usage")
+                }
+
+                // Subscription — individual users only
+                if isIndividualRealm {
+                    Section {
+                        NavigationLink {
+                            SubscriptionView()
+                                .environmentObject(iapManager)
+                        } label: {
+                            HStack {
+                                Label(
+                                    iapManager.hasActiveSubscription ? "BlueFunda AI Pro" : "Upgrade to Pro",
+                                    systemImage: iapManager.hasActiveSubscription ? "checkmark.seal.fill" : "sparkles"
+                                )
+                                Spacer()
+                                Text(iapManager.hasActiveSubscription ? "Active" : "Free")
+                                    .foregroundColor(iapManager.hasActiveSubscription ? BFColor.success : .secondary)
+                            }
+                        }
+                    } header: {
+                        Text("Subscription")
+                    }
                 }
 
                 // Connection Status — internal infra detail, trm realm only
@@ -346,4 +370,5 @@ struct MCPServerSelectionView: View {
     SettingsView()
         .environmentObject(AuthManager())
         .environmentObject(ChatManager(service: NATSChatService()))
+        .environmentObject(IAPManager())
 }

@@ -6,6 +6,7 @@ import AuthenticationServices
 struct CAIApp: App {
     @StateObject private var authManager = AuthManager()
     @StateObject private var chatManager = ChatManager(service: BFFChatService())
+    @StateObject private var iapManager = IAPManager()
     @Environment(\.scenePhase) private var scenePhase
 
     private let container: ModelContainer = {
@@ -20,6 +21,7 @@ struct CAIApp: App {
                 .modelContainer(container)
                 .environmentObject(authManager)
                 .environmentObject(chatManager)
+                .environmentObject(iapManager)
                 // Allow the window to shrink only so far on Mac.
                 // Never set an explicit frame here — it fights the window manager
                 // and breaks fullscreen.
