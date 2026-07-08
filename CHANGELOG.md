@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/bluefunda/cai-ios/compare/v1.4.0...v1.5.0) (2026-07-08)
+
+
+### Features
+
+* add In-App Purchase subscription for individual users ([#123](https://github.com/bluefunda/cai-ios/issues/123)) ([4a75021](https://github.com/bluefunda/cai-ios/commit/4a75021b02bf946503055cde8c7b92373288254e))
+
 ## [1.4.0](https://github.com/bluefunda/cai-ios/compare/v1.3.0...v1.4.0) (2026-07-07)
 
 
