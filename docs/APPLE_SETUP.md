@@ -123,6 +123,59 @@ This is registered in `CAI/Info.plist` under `CFBundleURLTypes`.
 
 ---
 
+## 7. macOS (Mac Catalyst) — One-Time Setup
+
+BlueFunda AI ships to Mac as **Mac Catalyst**, not a separate native macOS app — same Xcode target, same bundle ID (`com.bluefunda.ai`), same App Store Connect app record. There is no second app to create. The steps below are the one-time manual portion; everything else (build, sign, upload) is automated the same way as iOS via Fastlane.
+
+### 7.1 Enable App Sandbox on the App ID
+
+Mac App Store submissions — including Mac Catalyst — require App Sandbox. This is a capability on the *App ID*, not something Fastlane can toggle for you.
+
+**developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → `com.bluefunda.ai`**
+
+- Under Capabilities, enable **App Sandbox**.
+- Leave "Sign In with Apple" as-is (already enabled, already used by iOS).
+
+The corresponding entitlement is already in the repo at `CAI/CAI-macOS.entitlements` (`com.apple.security.app-sandbox`, `com.apple.security.network.client`) and is wired to apply only to the macOS build via `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` in `project.pbxproj` — iOS keeps using the original `CAI/CAI.entitlements`.
+
+### 7.2 Create the Mac App Store provisioning profile
+
+**developer.apple.com → Profiles → `+`**
+
+| Field | Value |
+|---|---|
+| Type | Mac App Store Connect (under Distribution) |
+| App ID | `com.bluefunda.ai` |
+| Certificate | Your existing **Apple Distribution** certificate (the same one used for iOS — Apple's distribution certificate covers both iOS and Mac App Store) |
+| Profile Name | `BlueFunda AI Mac App Store` |
+
+This exact name is already referenced in `project.pbxproj` (`PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]`). If you name it differently, update that build setting to match.
+
+Download the `.mobileprovision` and double-click to install locally, same as the iOS profile.
+
+### 7.3 Enable macOS on the App Store Connect app record
+
+**appstoreconnect.apple.com → My Apps → BlueFunda AI → App Information → Platforms** (or the "+" next to Platforms in the sidebar)
+
+Add **macOS**. This is a one-time manual click Apple doesn't expose over the API — Fastlane/`deliver` cannot add a new platform to an existing app record. Everything after this (metadata, builds, submission) works the same as iOS once the platform exists.
+
+You'll also need, for the macOS version specifically:
+- At least one **macOS screenshot** (minimum size 1280×800) before you can submit for review — see `fastlane/screenshots/`.
+- App Review notes/demo account can be shared with iOS (`fastlane/metadata/review_information/`) unless the Mac experience needs different reviewer instructions.
+
+### 7.4 First macOS upload
+
+Once 7.1–7.3 are done:
+
+```bash
+bundle exec fastlane mac_beta      # TestFlight, sanity check first
+bundle exec fastlane mac_upload    # or straight to App Store Connect, no submit
+```
+
+Then **mac_submit** (see [FASTLANE.md](FASTLANE.md)) when you're ready for review — submission is never automatic.
+
+---
+
 ## Common Errors and Fixes
 
 | Error | Cause | Fix |
@@ -132,3 +185,6 @@ This is registered in `CAI/Info.plist` under `CFBundleURLTypes`.
 | "Missing CFBundleIconName" | Info.plist missing key | Already added — `CFBundleIconName = AppIcon` |
 | "Icon can't contain alpha channel" | Source PNG has transparency | Run `sips` jpeg round-trip to strip alpha |
 | "Communication with Apple failed" | `xcode-select` points to CLT not Xcode | `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` |
+| macOS archive fails: "entitlement not permitted" / sandbox-related | App Sandbox not enabled on the App ID yet | Do step 7.1, then regenerate the profile in step 7.2 |
+| macOS build has no app icon in Dock/Cmd+Tab | Old `AppIcon.appiconset` only declared an iOS-scoped image | Already fixed — the asset catalog now includes explicit `mac` idiom renditions (16–512pt, 1x/2x) alongside the iOS universal image |
+| Can't select macOS when creating an App Store version in ASC | Platform not yet enabled on the app record | Do step 7.3 — one-time manual click, not automatable |

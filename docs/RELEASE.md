@@ -1,6 +1,8 @@
 # Build, Test & Release Guide
 
-End-to-end workflow from local development to App Store.
+End-to-end workflow from local development to App Store, for both iPhone/iPad and Mac (Mac Catalyst).
+
+See also: [FASTLANE.md](FASTLANE.md) for lane reference, [CI.md](CI.md) for workflow details, [APPLE_SETUP.md](APPLE_SETUP.md) for one-time portal setup, [CODE_SIGNING.md](CODE_SIGNING.md) for certs/profiles/secrets.
 
 ---
 
@@ -110,6 +112,26 @@ Review typically takes 24-48 hours. Apple may request clarification on:
 
 ---
 
+## macOS (Mac Catalyst) Release
+
+BlueFunda AI on Mac is **Mac Catalyst** — the same Xcode target, same bundle ID, same App Store Connect app record as iOS. There's no second app to maintain.
+
+**First time only:** complete [APPLE_SETUP.md §7](APPLE_SETUP.md#7-macos-mac-catalyst--one-time-setup) — enabling App Sandbox on the App ID, creating the Mac App Store provisioning profile, and enabling the macOS platform on the App Store Connect app record. These are one-time manual steps Apple doesn't expose over the API.
+
+After that, macOS releases work exactly like iOS ones:
+
+```bash
+bundle exec fastlane mac_beta      # TestFlight
+bundle exec fastlane mac_upload    # App Store Connect, no submit
+bundle exec fastlane mac_submit    # submit the uploaded build for review
+```
+
+Local development/testing on Mac: select **My Mac (Mac Catalyst)** as the run destination in Xcode instead of a simulator — no separate provisioning needed for Debug (Automatic signing).
+
+CI automates the same `mac_upload` step via the `macos-deploy` job in `release-please.yml`, running in parallel with `ios-deploy` — see [CI.md](CI.md).
+
+---
+
 ## CI/CD — Automated Release
 
 Merging to `main` with conventional commits triggers:
@@ -118,9 +140,12 @@ Merging to `main` with conventional commits triggers:
 push to main
   → release-please creates/updates a Release PR
   → merging the Release PR creates a GitHub Release (tag v1.x.x)
-  → ios-deploy job: archive + upload to App Store Connect
+  → ios-deploy job: fastlane ios_upload (build + upload to App Store Connect, iOS)
+  → macos-deploy job: fastlane mac_upload (build + upload to App Store Connect, macOS) — runs in parallel with ios-deploy
   → release-notes job: generate notes via release-foundry
 ```
+
+Neither deploy job submits for review — that's always a deliberate, separate step (`fastlane ios_submit` / `mac_submit`). See [CI.md](CI.md) for the full job breakdown and [FASTLANE.md](FASTLANE.md) for the lanes.
 
 ### Conventional commit types that trigger a version bump
 
@@ -141,11 +166,12 @@ See [CODE_SIGNING.md](CODE_SIGNING.md#option-a-github-actions-secrets-cicd--alre
 
 | Field | Location | Meaning |
 |---|---|---|
-| `MARKETING_VERSION` | `project.pbxproj` / `VERSION` file | User-visible version (e.g. `1.2.0`) — managed by Release Please |
-| `CURRENT_PROJECT_VERSION` | `project.pbxproj` | Build number — set to `github.run_number` in CI, increment manually for local uploads |
+| `MARKETING_VERSION` | `project.pbxproj` | User-visible version (e.g. `1.5.0`). The checked-in value is a local-dev baseline; the authoritative shipped version is the release-please tag / `.release-please-manifest.json`. |
+| `CURRENT_PROJECT_VERSION` | `project.pbxproj` | Build number. |
 
-Apple requires each upload to have a unique `CURRENT_PROJECT_VERSION` within a marketing version.
-For local uploads, increment it in Xcode: **Project → Build Settings → Current Project Version**.
+Both are set through a single lane (`set_version` in `fastlane/Fastfile`), used by every build-producing lane whether run locally or in CI — see [FASTLANE.md](FASTLANE.md#versioning--how-local-and-ci-stay-in-sync). CI pins both to the release tag's version and `github.run_number`; local runs just increment the build number by 1. There used to be a separate top-level `VERSION` file tracking a third, independently-stale copy of the version — it was unused by any build step and has been removed to avoid that drift recurring.
+
+Apple requires each upload to have a unique `CURRENT_PROJECT_VERSION` within a marketing version — `github.run_number` guarantees this in CI since it only increases.
 
 ---
 

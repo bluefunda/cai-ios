@@ -11,8 +11,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: command -v swiftlint >/dev/null || brew install swiftlint
+
+      - name: SwiftLint
+        run: swiftlint lint --quiet --reporter github-actions-logging
+
   build-test:
-    name: Build & Test
+    name: Build & Test (iOS)
     runs-on: macos-15
 
     steps:
@@ -64,4 +77,36 @@ jobs:
           # Print a compact summary at the end
           echo "--- Test summary ---"
           grep -E "^(Test Suite|Test Case|error:|Executed|FAILED|PASSED)" /tmp/xcode.log || true
+          exit $XCODE_EXIT
+
+  build-macos:
+    name: Build (macOS / Mac Catalyst)
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Build for Mac Catalyst
+        run: |
+          # Unsigned build-only smoke test — catches Catalyst compile/link
+          # regressions on every PR without needing a Mac provisioning profile.
+          xcodebuild \
+            -project CAI.xcodeproj \
+            -scheme CAI \
+            -destination "generic/platform=macOS,variant=Mac Catalyst" \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee /tmp/xcode-macos.log
+          XCODE_EXIT=${PIPESTATUS[0]}
           exit $XCODE_EXIT
