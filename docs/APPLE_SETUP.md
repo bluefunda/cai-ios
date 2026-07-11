@@ -127,16 +127,11 @@ This is registered in `CAI/Info.plist` under `CFBundleURLTypes`.
 
 BlueFunda AI ships to Mac as **Mac Catalyst**, not a separate native macOS app — same Xcode target, same bundle ID (`com.bluefunda.ai`), same App Store Connect app record. There is no second app to create. The steps below are the one-time manual portion; everything else (build, sign, upload) is automated the same way as iOS via Fastlane.
 
-### 7.1 Enable App Sandbox on the App ID
+### 7.1 App Sandbox — no portal step needed
 
-Mac App Store submissions — including Mac Catalyst — require App Sandbox. This is a capability on the *App ID*, not something Fastlane can toggle for you.
+Mac App Store submissions — including Mac Catalyst — require App Sandbox, but unlike Push Notifications, Sign In with Apple, or Associated Domains, **App Sandbox is not a capability listed under Identifiers → Capabilities on developer.apple.com.** It doesn't require server-side registration on the App ID at all — it's purely an entitlement, validated locally at codesign time. (Native macOS App IDs don't show it in the portal either — it's enabled entirely from Xcode's Signing & Capabilities tab / the entitlements file, and Mac App Store provisioning profiles allow it by default.)
 
-**developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → `com.bluefunda.ai`**
-
-- Under Capabilities, enable **App Sandbox**.
-- Leave "Sign In with Apple" as-is (already enabled, already used by iOS).
-
-The corresponding entitlement is already in the repo at `CAI/CAI-macOS.entitlements` (`com.apple.security.app-sandbox`, `com.apple.security.network.client`) and is wired to apply only to the macOS build via `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` in `project.pbxproj` — iOS keeps using the original `CAI/CAI.entitlements`.
+This is already done in the repo: `CAI/CAI-macOS.entitlements` sets `com.apple.security.app-sandbox` and `com.apple.security.network.client`, wired to apply only to the macOS build via `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]` in `project.pbxproj` — iOS keeps using the original `CAI/CAI.entitlements`. Nothing to do on developer.apple.com for this one.
 
 ### 7.2 Create the Mac App Store provisioning profile
 
@@ -185,6 +180,6 @@ Then **mac_submit** (see [FASTLANE.md](FASTLANE.md)) when you're ready for revie
 | "Missing CFBundleIconName" | Info.plist missing key | Already added — `CFBundleIconName = AppIcon` |
 | "Icon can't contain alpha channel" | Source PNG has transparency | Run `sips` jpeg round-trip to strip alpha |
 | "Communication with Apple failed" | `xcode-select` points to CLT not Xcode | `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` |
-| macOS archive fails: "entitlement not permitted" / sandbox-related | App Sandbox not enabled on the App ID yet | Do step 7.1, then regenerate the profile in step 7.2 |
+| macOS archive fails: "entitlement not permitted" / sandbox-related | Provisioning profile doesn't match `CAI-macOS.entitlements` | Regenerate the profile in step 7.2 — Mac App Store profiles allow App Sandbox by default, no App ID capability toggle involved |
 | macOS build has no app icon in Dock/Cmd+Tab | Old `AppIcon.appiconset` only declared an iOS-scoped image | Already fixed — the asset catalog now includes explicit `mac` idiom renditions (16–512pt, 1x/2x) alongside the iOS universal image |
 | Can't select macOS when creating an App Store version in ASC | Platform not yet enabled on the app record | Do step 7.3 — one-time manual click, not automatable |

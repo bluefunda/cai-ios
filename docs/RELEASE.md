@@ -116,7 +116,7 @@ Review typically takes 24-48 hours. Apple may request clarification on:
 
 BlueFunda AI on Mac is **Mac Catalyst** — the same Xcode target, same bundle ID, same App Store Connect app record as iOS. There's no second app to maintain.
 
-**First time only:** complete [APPLE_SETUP.md §7](APPLE_SETUP.md#7-macos-mac-catalyst--one-time-setup) — enabling App Sandbox on the App ID, creating the Mac App Store provisioning profile, and enabling the macOS platform on the App Store Connect app record. These are one-time manual steps Apple doesn't expose over the API.
+**First time only:** complete [APPLE_SETUP.md §7](APPLE_SETUP.md#7-macos-mac-catalyst--one-time-setup) — creating the Mac App Store provisioning profile and enabling the macOS platform on the App Store Connect app record. (App Sandbox itself needs no portal step — it's entitlements-only, already committed.) These are one-time manual steps Apple doesn't expose over the API.
 
 After that, macOS releases work exactly like iOS ones:
 
