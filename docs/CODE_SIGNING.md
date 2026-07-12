@@ -65,21 +65,23 @@ security export \
 
 ### Option A: GitHub Actions Secrets (CI/CD — already configured)
 
-The release workflow expects these secrets in the repo:
+The release workflow (`.github/workflows/release-please.yml`) expects these secrets in the repo. Names below match the workflow exactly — a couple of these were previously documented with the wrong name (e.g. `ASC_KEY_ID` vs `APPLE_ASC_KEY_ID`); this table is now the source of truth.
 
-| Secret | How to generate |
-|---|---|
-| `APPLE_CERTIFICATE` | `base64 -i BlueFunda-Distribution.p12 \| pbcopy` |
-| `APPLE_CERTIFICATE_PASSWORD` | The password you set when exporting |
-| `KEYCHAIN_PASSWORD` | Any string (used for CI temp keychain only) |
-| `APPLE_PROVISIONING_PROFILE` | `base64 -i "BlueFunda AI App Store.mobileprovision" \| pbcopy` |
-| `PROVISIONING_PROFILE_NAME` | `BlueFunda AI App Store` |
-| `ASC_KEY_ID` | App Store Connect → Users & Access → Integrations → Keys |
-| `ASC_ISSUER_ID` | Same page |
-| `ASC_PRIVATE_KEY` | `base64 -i AuthKey_XXXX.p8 \| pbcopy` |
-| `GH_PAT` | github.com → Settings → Developer Settings → Personal Access Tokens |
+| Secret | Used by | How to generate |
+|---|---|---|
+| `APPLE_CERTIFICATE` | iOS + macOS | `base64 -i BlueFunda-Distribution.p12 \| pbcopy` |
+| `APPLE_CERTIFICATE_PASSWORD` | iOS + macOS | The password you set when exporting |
+| `APPLE_KEYCHAIN_PASSWORD` | iOS + macOS | Any string (used for CI temp keychain only) |
+| `APPLE_PROVISIONING_PROFILE` | iOS | `base64 -i "BlueFunda AI App Store.mobileprovision" \| pbcopy` |
+| `APPLE_MAC_PROVISIONING_PROFILE` | macOS | `base64 -i "BlueFunda AI Mac App Store.mobileprovision" \| pbcopy` — see [APPLE_SETUP.md §7.2](APPLE_SETUP.md#72-create-the-mac-app-store-provisioning-profile) |
+| `APPLE_ASC_KEY_ID` | iOS + macOS | App Store Connect → Users & Access → Integrations → Keys |
+| `APPLE_ASC_ISSUER_ID` | iOS + macOS | Same page |
+| `APPLE_ASC_PRIVATE_KEY` | iOS + macOS | `base64 -i AuthKey_XXXX.p8 \| pbcopy` |
+| `GH_PAT` | release-please | github.com → Settings → Developer Settings → Personal Access Tokens |
 
 Add them at: **github.com/bluefunda/cai-ios → Settings → Secrets and variables → Actions**
+
+The same Apple Distribution certificate and the same App Store Connect API key work for both iOS and macOS — only the provisioning profile differs per platform (Apple issues separate profile types even for the same App ID/cert).
 
 This covers CI. For human developers, use one of the options below.
 
@@ -162,6 +164,7 @@ New developer joining the iOS project:
 - [ ] Added to App Store Connect (appstoreconnect.apple.com → Users and Access)
 - [ ] `.p12` certificate imported into Keychain (double-click or `security import`)
 - [ ] `BlueFunda AI App Store.mobileprovision` installed (double-click)
+- [ ] `BlueFunda AI Mac App Store.mobileprovision` installed if building for Mac (double-click)
 - [ ] Xcode → Settings → Accounts → Apple ID added
 - [ ] `xcode-select -s /Applications/Xcode.app/Contents/Developer`
 - [ ] Can open project, select Release config, see profile without errors

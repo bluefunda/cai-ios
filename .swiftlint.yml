@@ -1,0 +1,23 @@
+excluded:
+  - fastlane
+
+# identifier_name/force_try/trailing_comma: stylistic, not worth churning the
+# diff on unrelated pre-existing code. cyclomatic_complexity/function_body_length:
+# a couple of pre-existing functions (MarkdownView, ChatManager) exceed default
+# limits — real debt, tracked separately, not blocking CI on it here.
+disabled_rules:
+  - identifier_name
+  - force_try
+  - trailing_comma
+  - cyclomatic_complexity
+  - function_body_length
+
+# Raised just above the current high-water mark so CI still catches files/types
+# that grow meaningfully larger than today, without failing on existing debt.
+file_length:
+  warning: 1000
+  error: 1300
+
+type_body_length:
+  warning: 400
+  error: 500

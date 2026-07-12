@@ -13,13 +13,17 @@ jobs:
       GH_PAT: ${{ secrets.GH_PAT }}
 
   ios-deploy:
-    name: Archive & Upload to App Store
+    name: Archive & Upload iOS to App Store Connect
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
 
       - name: Select Xcode
         run: |
@@ -30,9 +34,8 @@ jobs:
         run: |
           VERSION="${{ needs.release-please.outputs.tag_name }}"
           VERSION="${VERSION#v}"
-          echo "Setting MARKETING_VERSION=$VERSION build=${{ github.run_number }}"
-          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
-          echo "BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
+          echo "FL_VERSION_NUMBER=$VERSION" >> $GITHUB_ENV
+          echo "FL_BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
 
       - name: Install distribution certificate
         env:
@@ -50,75 +53,82 @@ jobs:
             -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-      - name: Install provisioning profile
+      - name: Install iOS provisioning profile
         env:
           PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
         run: |
-          PP_PATH=$RUNNER_TEMP/profile.mobileprovision
+          PP_PATH=$RUNNER_TEMP/ios-profile.mobileprovision
           echo -n "$PROVISIONING_PROFILE" | base64 --decode -o $PP_PATH
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      - name: Archive
-        run: |
-          xcodebuild \
-            -project CAI.xcodeproj \
-            -scheme CAI \
-            -configuration Release \
-            -archivePath $RUNNER_TEMP/CAI.xcarchive \
-            MARKETING_VERSION=${{ env.APP_VERSION }} \
-            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }} \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM=UR7HWT72SR \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}" \
-            archive
-
-      - name: Export IPA
-        run: |
-          cat > $RUNNER_TEMP/ExportOptions.plist << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>teamID</key>
-              <string>UR7HWT72SR</string>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>signingCertificate</key>
-              <string>Apple Distribution</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.bluefunda.ai</key>
-                  <string>${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/CAI.xcarchive \
-            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/export
-
-      - name: Upload to App Store Connect
+      - name: Build & upload to App Store Connect
         env:
           ASC_KEY_ID: ${{ secrets.APPLE_ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APPLE_ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.APPLE_ASC_PRIVATE_KEY }}
+        run: bundle exec fastlane ios ios_upload
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
+
+  macos-deploy:
+    name: Archive & Upload macOS to App Store Connect
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Select Xcode
         run: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo -n "$ASC_PRIVATE_KEY" | base64 --decode \
-            > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
-          xcrun altool --upload-app \
-            -f $RUNNER_TEMP/export/CAI.ipa \
-            -t ios \
-            --apiKey $ASC_KEY_ID \
-            --apiIssuer $ASC_ISSUER_ID \
-            --verbose
+          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer
+          xcodebuild -version
+
+      - name: Set version
+        run: |
+          VERSION="${{ needs.release-please.outputs.tag_name }}"
+          VERSION="${VERSION#v}"
+          echo "FL_VERSION_NUMBER=$VERSION" >> $GITHUB_ENV
+          echo "FL_BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Install distribution certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $RUNNER_TEMP/cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security import $RUNNER_TEMP/cert.p12 \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+      - name: Install macOS provisioning profile
+        env:
+          PROVISIONING_PROFILE: ${{ secrets.APPLE_MAC_PROVISIONING_PROFILE }}
+        run: |
+          PP_PATH=$RUNNER_TEMP/mac-profile.mobileprovision
+          echo -n "$PROVISIONING_PROFILE" | base64 --decode -o $PP_PATH
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build & upload to App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.APPLE_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APPLE_ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.APPLE_ASC_PRIVATE_KEY }}
+        run: bundle exec fastlane ios mac_upload
 
       - name: Clean up keychain
         if: always()

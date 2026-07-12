@@ -1,24 +1,63 @@
 # fastlane/Fastfile
 #
 # Lanes:
-#   ios_beta     — build iOS + upload to TestFlight
-#   ios_release  — build iOS + upload to App Store (NO auto-submit)
-#   mac_beta     — build Mac Catalyst + upload to TestFlight
-#   mac_release  — build Mac Catalyst + upload to Mac App Store (NO auto-submit)
-#   meta         — push metadata only, no binary
+#   test          — run unit tests (iOS simulator)
+#   ios_beta      — build iOS + upload to TestFlight
+#   ios_upload    — build iOS + upload to App Store Connect (NO submit)
+#   ios_submit    — submit an already-uploaded iOS build for review
+#   mac_beta      — build Mac Catalyst + upload to TestFlight
+#   mac_upload    — build Mac Catalyst + upload to Mac App Store Connect (NO submit)
+#   mac_submit    — submit an already-uploaded macOS build for review
+#   bump_version  — bump MARKETING_VERSION locally (patch/minor/major)
+#   meta          — push metadata only, no binary
 #
-# IMPORTANT: submit_for_review is explicitly false in every lane.
-# To submit, do it manually in App Store Connect after all checks pass.
+# IMPORTANT: nothing in this file submits for review automatically.
+# ios_submit / mac_submit exist so a human (or an explicit, separately-triggered
+# CI job) can do it deliberately after checking the processed build.
+#
+# Auth: if ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY are present in the
+# environment (always true in CI), every lane uses the App Store Connect API
+# key — no Apple ID session, no 2FA prompt. Locally, omit them and fastlane
+# falls back to your Xcode Apple ID session.
 
 default_platform(:ios)
 
+BUILD_NUMBER = ENV["FL_BUILD_NUMBER"]
+VERSION_NUMBER = ENV["FL_VERSION_NUMBER"]
+
 platform :ios do
+
+  # ── Shared setup ─────────────────────────────────────────────────────────
+
+  # Keychain/cert/profile installation for CI is handled by the GitHub Actions
+  # workflow step before fastlane runs (see .github/workflows/release-please.yml) —
+  # not here, to avoid setup_ci creating a second, conflicting temporary keychain.
+  before_all do
+    use_api_key
+  end
+
+  desc "Run unit tests on an iOS Simulator"
+  lane :test do
+    run_tests(
+      scheme: "CAI",
+      devices: ["iPhone 16"],
+      configuration: "Debug"
+    )
+  end
+
+  desc "Bump MARKETING_VERSION locally — bump_type: patch|minor|major"
+  lane :bump_version do |options|
+    increment_version_number(
+      xcodeproj: "CAI.xcodeproj",
+      bump_type: options[:bump_type] || "patch"
+    )
+  end
 
   # ── iOS ──────────────────────────────────────────────────────────────────
 
   desc "Build iOS archive and upload to TestFlight"
   lane :ios_beta do
-    increment_build_number(xcodeproj: "CAI.xcodeproj")
+    set_version
     build_ios
     upload_to_testflight(
       skip_waiting_for_build_processing: true,
@@ -26,9 +65,9 @@ platform :ios do
     )
   end
 
-  desc "Build iOS archive and upload to App Store — does NOT submit for review"
-  lane :ios_release do
-    increment_build_number(xcodeproj: "CAI.xcodeproj")
+  desc "Build iOS archive and upload to App Store Connect — does NOT submit for review"
+  lane :ios_upload do
+    set_version
     build_ios
     upload_to_app_store(
       platform:             "ios",
@@ -40,11 +79,24 @@ platform :ios do
     )
   end
 
+  desc "Submit the most recent processed iOS build for App Store review"
+  lane :ios_submit do
+    upload_to_app_store(
+      platform:             "ios",
+      skip_binary_upload:   true,
+      skip_screenshots:     true,
+      skip_metadata:        true,
+      submit_for_review:    true,
+      automatic_release:    ENV["AUTO_RELEASE"] == "true",
+      force:                true
+    )
+  end
+
   # ── Mac Catalyst ─────────────────────────────────────────────────────────
 
   desc "Build Mac Catalyst archive and upload to TestFlight"
   lane :mac_beta do
-    increment_build_number(xcodeproj: "CAI.xcodeproj")
+    set_version
     build_mac
     upload_to_testflight(
       skip_waiting_for_build_processing: true,
@@ -52,9 +104,9 @@ platform :ios do
     )
   end
 
-  desc "Build Mac Catalyst archive and upload to Mac App Store — does NOT submit for review"
-  lane :mac_release do
-    increment_build_number(xcodeproj: "CAI.xcodeproj")
+  desc "Build Mac Catalyst archive and upload to Mac App Store Connect — does NOT submit for review"
+  lane :mac_upload do
+    set_version
     build_mac
     upload_to_app_store(
       platform:             "osx",
@@ -62,6 +114,19 @@ platform :ios do
       automatic_release:    false,
       skip_screenshots:     true,
       skip_metadata:        false,
+      force:                true
+    )
+  end
+
+  desc "Submit the most recent processed macOS build for App Store review"
+  lane :mac_submit do
+    upload_to_app_store(
+      platform:             "osx",
+      skip_binary_upload:   true,
+      skip_screenshots:     true,
+      skip_metadata:        true,
+      submit_for_review:    true,
+      automatic_release:    ENV["AUTO_RELEASE"] == "true",
       force:                true
     )
   end
@@ -79,6 +144,37 @@ platform :ios do
   end
 
   # ── Private helpers ──────────────────────────────────────────────────────
+
+  # Uses the App Store Connect API key when CI provides one; otherwise falls
+  # back to an interactive Apple ID session (local dev).
+  private_lane :use_api_key do
+    next unless ENV["ASC_KEY_ID"]
+    app_store_connect_api_key(
+      key_id:            ENV["ASC_KEY_ID"],
+      issuer_id:         ENV["ASC_ISSUER_ID"],
+      key_content:       ENV["ASC_PRIVATE_KEY"],
+      is_key_content_base64: true,
+      in_house:          false
+    )
+  end
+
+  # Single place both platforms and CI go through for version/build numbers,
+  # so local Fastlane runs and CI archives can never drift from each other.
+  #   - FL_VERSION_NUMBER set (CI, on a release tag)  -> pin MARKETING_VERSION
+  #   - FL_BUILD_NUMBER set (CI, github.run_number)    -> pin CURRENT_PROJECT_VERSION
+  #   - neither set (local dev)                        -> just bump build +1
+  private_lane :set_version do
+    increment_version_number(
+      xcodeproj: "CAI.xcodeproj",
+      version_number: VERSION_NUMBER
+    ) if VERSION_NUMBER
+
+    if BUILD_NUMBER
+      increment_build_number(xcodeproj: "CAI.xcodeproj", build_number: BUILD_NUMBER)
+    else
+      increment_build_number(xcodeproj: "CAI.xcodeproj")
+    end
+  end
 
   private_lane :build_ios do
     build_app(

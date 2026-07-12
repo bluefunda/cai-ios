@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A1000060201BCDEF"
-               BuildableName = "CAI.app"
+               BuildableName = "BlueFunda AI.app"
                BlueprintName = "CAI"
                ReferencedContainer = "container:CAI.xcodeproj">
             </BuildableReference>
@@ -71,7 +71,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A1000060201BCDEF"
-            BuildableName = "CAI.app"
+            BuildableName = "BlueFunda AI.app"
             BlueprintName = "CAI"
             ReferencedContainer = "container:CAI.xcodeproj">
          </BuildableReference>
@@ -91,7 +91,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A1000060201BCDEF"
-            BuildableName = "CAI.app"
+            BuildableName = "BlueFunda AI.app"
             BlueprintName = "CAI"
             ReferencedContainer = "container:CAI.xcodeproj">
          </BuildableReference>
