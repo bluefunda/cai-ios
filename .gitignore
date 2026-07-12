@@ -33,8 +33,9 @@ fastlane/metadata/review_information/phone_number.txt
 # fastlane generated output / artifacts
 fastlane/README.md
 fastlane/report.xml
-fastlane/screenshots/
 fastlane/test_output/
+# fastlane/screenshots/ is intentionally NOT ignored — those are real App
+# Store assets that CI and other developers need, not ephemeral output.
 
 # Editor / network-mount temp files (e.g. .!12345!Foo.swift)
 .!*!*

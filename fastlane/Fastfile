@@ -75,6 +75,7 @@ platform :ios do
       automatic_release:    false,
       skip_screenshots:     true,
       skip_metadata:        false,
+      run_precheck_before_submit: false,
       force:                true
     )
   end
@@ -86,6 +87,7 @@ platform :ios do
       skip_binary_upload:   true,
       skip_screenshots:     true,
       skip_metadata:        true,
+      run_precheck_before_submit: false,
       submit_for_review:    true,
       automatic_release:    ENV["AUTO_RELEASE"] == "true",
       force:                true
@@ -114,6 +116,7 @@ platform :ios do
       automatic_release:    false,
       skip_screenshots:     true,
       skip_metadata:        false,
+      run_precheck_before_submit: false,
       force:                true
     )
   end
@@ -125,6 +128,7 @@ platform :ios do
       skip_binary_upload:   true,
       skip_screenshots:     true,
       skip_metadata:        true,
+      run_precheck_before_submit: false,
       submit_for_review:    true,
       automatic_release:    ENV["AUTO_RELEASE"] == "true",
       force:                true
@@ -181,16 +185,32 @@ platform :ios do
       scheme:         "CAI",
       destination:    "generic/platform=iOS",
       export_method:  "app-store",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          "com.bluefunda.ai" => "BlueFunda AI App Store"
+        }
+      },
       xcargs:         "-allowProvisioningUpdates"
     )
   end
 
   private_lane :build_mac do
     build_app(
-      scheme:         "CAI",
-      destination:    "generic/platform=macOS,variant=Mac Catalyst",
-      export_method:  "app-store",
-      xcargs:         "-allowProvisioningUpdates"
+      scheme:            "CAI",
+      destination:       "generic/platform=macOS,variant=Mac Catalyst",
+      export_method:     "app-store",
+      # Without this, gym's own building_mac_catalyst_for_mac? check returns
+      # false, so it misclassifies the archive as an iOS build, looks for a
+      # .ipa that will never exist, and fails with a confusing "IPA invalid".
+      catalyst_platform: "macos",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: {
+          "com.bluefunda.ai" => "BlueFunda AI Mac App Store"
+        }
+      },
+      xcargs:            "-allowProvisioningUpdates"
     )
   end
 

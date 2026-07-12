@@ -1,5 +1,8 @@
 # fastlane/Deliverfile
-skip_screenshots(true)       # add screenshots later
+# skip_screenshots is deliberately NOT set here — each lane in Fastfile passes
+# it explicitly (false for ios_upload/mac_upload, true for ios_submit/mac_submit
+# and meta) since the right value differs per lane. A hardcoded value here used
+# to silently override the lane's own setting.
 skip_binary_upload(false)    # set true for metadata-only runs
 submit_for_review(false)     # never auto-submit
 automatic_release(false)
