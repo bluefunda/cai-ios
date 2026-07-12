@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/bluefunda/cai-ios/compare/v1.5.0...v1.6.0) (2026-07-12)
+
+
+### Features
+
+* enable production macOS (Mac Catalyst) release pipeline ([#126](https://github.com/bluefunda/cai-ios/issues/126)) ([e64d92d](https://github.com/bluefunda/cai-ios/commit/e64d92db6f5aa36741be1f739d8db0a8b2c317c7))
+
+
+### Bug Fixes
+
+* repair macOS upload pipeline bugs found in first real run ([#130](https://github.com/bluefunda/cai-ios/issues/130)) ([c67d744](https://github.com/bluefunda/cai-ios/commit/c67d744b4f5076b8dedfdc519b92be26f802e43c))
+
 ## [1.5.0](https://github.com/bluefunda/cai-ios/compare/v1.4.0...v1.5.0) (2026-07-08)
 
 
