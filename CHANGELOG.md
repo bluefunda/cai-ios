@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/bluefunda/cai-ios/compare/v1.6.1...v1.6.2) (2026-07-13)
+
+
+### Bug Fixes
+
+* screenshot uploads + macOS-specific metadata + iOS deploy pause switch ([#135](https://github.com/bluefunda/cai-ios/issues/135)) ([6f79f59](https://github.com/bluefunda/cai-ios/commit/6f79f59acb7fb120b4e1eb8175eaf5ca49056463))
+
 ## [1.6.1](https://github.com/bluefunda/cai-ios/compare/v1.6.0...v1.6.1) (2026-07-12)
 
 
