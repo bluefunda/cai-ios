@@ -9,7 +9,7 @@
 #   mac_upload    — build Mac Catalyst + upload to Mac App Store Connect (NO submit)
 #   mac_submit    — submit an already-uploaded macOS build for review
 #   bump_version  — bump MARKETING_VERSION locally (patch/minor/major)
-#   meta          — push metadata only, no binary
+#   meta          — push metadata + screenshots only, no binary — platform: ios|osx (default ios)
 #
 # IMPORTANT: nothing in this file submits for review automatically.
 # ios_submit / mac_submit exist so a human (or an explicit, separately-triggered
@@ -73,6 +73,9 @@ platform :ios do
       platform:             "ios",
       submit_for_review:    false,
       automatic_release:    false,
+      # iOS already has an approved, live listing with its own screenshots —
+      # fastlane/screenshots/ only has Mac-sized assets right now, so leave
+      # iOS screenshots untouched rather than risk this path unexpectedly.
       skip_screenshots:     true,
       skip_metadata:        false,
       run_precheck_before_submit: false,
@@ -114,7 +117,7 @@ platform :ios do
       platform:             "osx",
       submit_for_review:    false,
       automatic_release:    false,
-      skip_screenshots:     true,
+      skip_screenshots:     false,
       skip_metadata:        false,
       run_precheck_before_submit: false,
       force:                true
@@ -137,12 +140,14 @@ platform :ios do
 
   # ── Metadata only ────────────────────────────────────────────────────────
 
-  desc "Push App Store metadata only (no build, no screenshots)"
-  lane :meta do
+  desc "Push App Store metadata + screenshots only (no build) — platform: ios|osx"
+  lane :meta do |options|
     deliver(
+      platform:           options[:platform] || "ios",
       skip_binary_upload: true,
-      skip_screenshots:   true,
+      skip_screenshots:   false,
       submit_for_review:  false,
+      run_precheck_before_submit: false,
       force:              true
     )
   end
