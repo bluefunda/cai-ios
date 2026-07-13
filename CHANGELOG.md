@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/bluefunda/cai-ios/compare/v1.6.0...v1.6.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* pin ruby-version in release-please.yml deploy jobs ([#132](https://github.com/bluefunda/cai-ios/issues/132)) ([cd7c9e3](https://github.com/bluefunda/cai-ios/commit/cd7c9e35c78c1c0c9b3bc3844c7647f590e54af1)), closes [#131](https://github.com/bluefunda/cai-ios/issues/131)
+
 ## [1.6.0](https://github.com/bluefunda/cai-ios/compare/v1.5.0...v1.6.0) (2026-07-12)
 
 
