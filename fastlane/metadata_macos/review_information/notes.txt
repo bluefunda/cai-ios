@@ -1,0 +1,44 @@
+DEMO ACCOUNT
+Use the credentials in the demo_user / demo_password fields to sign in.
+On the login screen tap "Sign in with Apple." A standard system sheet will appear —
+sign in with the demo Apple ID provided. After sign-in you will land on the chat interface.
+
+SIGN IN WITH APPLE (Guideline 4.8)
+Sign in with Apple is the primary authentication method in this version.
+It is implemented natively via ASAuthorizationAppleIDProvider with PKCE, nonce, and
+state verification — no web redirect or third-party SDK. The entitlement
+com.apple.developer.applesignin is present in CAI.entitlements.
+
+MAC CATALYST
+This version ships as a native Mac app via Mac Catalyst (SUPPORTS_MACCATALYST = YES,
+TARGETED_DEVICE_FAMILY = "1,2,6" for Mac Idiom at 100% scale). The Mac build shares
+the same bundle identifier (com.bluefunda.ai) and is submitted as a Universal Purchase.
+
+AI APPLICATION SAFEGUARDS
+• Closed-access service: all users must create a BlueFunda account and agree to Terms
+  of Service before API access is granted. No anonymous usage is possible.
+• The backend enforces per-user daily and monthly token rate limits visible in
+  Settings → Rate Limit.
+• AI model providers (Groq, OpenAI, DeepSeek) apply their own content policies.
+• All conversations are private to the authenticated account — no public UGC feed.
+• The app transmits only user-typed prompts and uploaded files to the backend.
+  No device identifiers, location, or contacts are collected.
+
+ACCOUNT DELETION
+Settings → Delete Account permanently deletes the account and all associated data
+via the backend user-delete endpoint and signs the user out. A confirmation dialog
+is shown before deletion.
+
+REPORTING OBJECTIONABLE CONTENT
+Settings → Report Suspicious Content opens a pre-filled email to info@bluefunda.com
+for reporting suspicious, abusive, or policy-violating content.
+
+LEGAL
+Settings → Legal provides links to our Privacy Policy and Terms of Service.
+
+TECHNICAL NOTES
+• Requires iOS 17.0+ (iPhone/iPad) or macOS 14.0+ (Mac).
+• Network calls go to api.bluefunda.com (HTTPS/443) and auth.bluefunda.com (HTTPS/443).
+  Both are live production endpoints — no sandbox or mock server is needed.
+• SSE streaming may take 1–3 seconds to start; this is normal (LLM context init).
+• MCP server list and cloud storage may be empty for the demo account — this is normal.

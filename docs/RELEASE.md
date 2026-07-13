@@ -130,6 +130,19 @@ Local development/testing on Mac: select **My Mac (Mac Catalyst)** as the run de
 
 CI automates the same `mac_upload` step via the `macos-deploy` job in `release-please.yml`, running in parallel with `ios-deploy` — see [CI.md](CI.md).
 
+### macOS-specific metadata
+
+iOS and macOS share the same screenshots folder (`fastlane/screenshots/en-US/` — deliver sorts by image resolution automatically) but use **separate metadata text folders**, since a couple of App Store fields don't translate directly between platforms (e.g. "in your pocket" doesn't make sense for a desktop app):
+
+- iOS: `fastlane/metadata/` (unchanged)
+- macOS: `fastlane/metadata_macos/` — a full copy of the iOS set with only the platform-specific lines edited (currently `promotional_text.txt` and one bullet in `description.txt`)
+
+`mac_upload`/`mac_submit`/`fastlane meta platform:osx` all point at `metadata_macos` via an explicit `metadata_path:`; `fastlane meta` (no platform arg) defaults to iOS's `fastlane/metadata`. Keep both folders' non-platform-specific fields (keywords, category, review info) in sync manually when one changes.
+
+### Pausing iOS deploys during macOS's first review cycle
+
+Since macOS's first submission may need several review round-trips, and every release-please release triggers `ios-deploy` and `macos-deploy` together, set the `PAUSE_IOS_DEPLOY` repo variable to `"true"` (Settings → Secrets and variables → Actions → Variables) to skip `ios-deploy` without touching App Store Connect or the workflow file. Unset it (or set to anything else) to resume normal dual-platform deploys once macOS is stable. Note this only pauses *uploads* — `ios-deploy` never submitted for review automatically in the first place, so this is purely about reducing unused-build noise in App Store Connect, not preventing accidental review submissions.
+
 ---
 
 ## CI/CD — Automated Release

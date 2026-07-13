@@ -119,6 +119,7 @@ platform :ios do
       automatic_release:    false,
       skip_screenshots:     false,
       skip_metadata:        false,
+      metadata_path:        "./fastlane/metadata_macos",
       run_precheck_before_submit: false,
       force:                true
     )
@@ -131,6 +132,7 @@ platform :ios do
       skip_binary_upload:   true,
       skip_screenshots:     true,
       skip_metadata:        true,
+      metadata_path:        "./fastlane/metadata_macos",
       run_precheck_before_submit: false,
       submit_for_review:    true,
       automatic_release:    ENV["AUTO_RELEASE"] == "true",
@@ -142,10 +144,12 @@ platform :ios do
 
   desc "Push App Store metadata + screenshots only (no build) — platform: ios|osx"
   lane :meta do |options|
+    platform = options[:platform] || "ios"
     deliver(
-      platform:           options[:platform] || "ios",
+      platform:           platform,
       skip_binary_upload: true,
       skip_screenshots:   false,
+      metadata_path:      platform == "osx" ? "./fastlane/metadata_macos" : "./fastlane/metadata",
       submit_for_review:  false,
       run_precheck_before_submit: false,
       force:              true

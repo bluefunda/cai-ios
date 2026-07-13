@@ -15,7 +15,12 @@ jobs:
   ios-deploy:
     name: Archive & Upload iOS to App Store Connect
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    # PAUSE_IOS_DEPLOY repo variable: set to "true" to temporarily skip iOS
+    # uploads (e.g. while macOS goes through its first review's back-and-forth)
+    # without touching App Store Connect or this workflow. Unset/anything else
+    # = iOS deploys normally. Toggle at: repo Settings > Secrets and variables
+    # > Actions > Variables.
+    if: needs.release-please.outputs.release_created == 'true' && vars.PAUSE_IOS_DEPLOY != 'true'
     runs-on: macos-15
 
     steps:
