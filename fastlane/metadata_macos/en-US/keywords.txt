@@ -1,0 +1,1 @@
+SAP,AI,ABAP,agent,assistant,GenAI,automation,enterprise,developer,chatbot,consultant,productivity

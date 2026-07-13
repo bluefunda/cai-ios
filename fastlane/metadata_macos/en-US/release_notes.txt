@@ -1,0 +1,8 @@
+1.3.0 brings a major platform upgrade and visual refresh:
+
+• Native Mac app — BlueFunda AI is now a first-class macOS app via Mac Catalyst with a proper desktop window, sidebar, and ⌘N for new chat
+• iPad split-view — persistent sidebar with full conversation history alongside the chat panel
+• Improved AI responses — better table rendering, larger readable body text, and proper heading hierarchy
+• Redesigned sidebar — unified header, cleaner navigation, no redundant controls
+• Sign in with Apple improvements — more reliable authentication flow
+• Bug fixes and performance improvements
