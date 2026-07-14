@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3](https://github.com/bluefunda/cai-ios/compare/v1.6.2...v1.6.3) (2026-07-14)
+
+
+### Bug Fixes
+
+* rate limit UX — banners, usage bars, and unlimited plan support ([#139](https://github.com/bluefunda/cai-ios/issues/139)) ([aeacf4b](https://github.com/bluefunda/cai-ios/commit/aeacf4bd6833181a82c156c743d9c9e47ec8bfe2))
+
 ## [1.6.2](https://github.com/bluefunda/cai-ios/compare/v1.6.1...v1.6.2) (2026-07-13)
 
 
