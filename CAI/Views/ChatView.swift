@@ -144,11 +144,20 @@ struct ChatView: View {
 
             // Input — centred at the same max width as the message column
             VStack(spacing: 0) {
+                // Rate limit banner
+                if let status = chatManager.rateLimit?.status, status != .normal {
+                    RateLimitBanner(
+                        status: status,
+                        percent: chatManager.rateLimit?.dailyPercent ?? 0
+                    )
+                }
+
                 ChatInputView(
                     text: $inputText,
                     isStreaming: chatManager.isStreaming,
                     attachmentFilename: attachmentFilename,
                     isFocused: $isInputFocused,
+                    rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
                     onSend: sendMessage,
                     onStop: stopStreaming,
                     onClearAttachment: clearAttachment,
@@ -484,6 +493,7 @@ struct ChatInputView: View {
     let isStreaming: Bool
     let attachmentFilename: String?
     var isFocused: FocusState<Bool>.Binding
+    var rateLimitExceeded: Bool = false
     let onSend: () -> Void
     let onStop: () -> Void
     let onClearAttachment: () -> Void
@@ -491,7 +501,7 @@ struct ChatInputView: View {
     let onPickPhoto: (() -> Void)?
     let onPickFile: (() -> Void)?
 
-    private var canSend: Bool { !text.isEmpty || attachmentFilename != nil }
+    private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
     private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
 
     var body: some View {
@@ -533,7 +543,7 @@ struct ChatInputView: View {
                     .disabled(isStreaming)
                 }
 
-                TextField("Message...", text: $text, axis: .vertical)
+                TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
                     .font(BFFont.body)
                     .textFieldStyle(.plain)
                     .focused(isFocused)
@@ -678,6 +688,44 @@ private struct AtBottomPreferenceKey: PreferenceKey {
     static var defaultValue: Bool = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = nextValue()
+    }
+}
+
+// MARK: - Rate Limit Banner
+
+struct RateLimitBanner: View {
+    let status: RateLimitStatus
+    let percent: Double
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: status == .warning ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
+                .foregroundColor(bannerColor)
+            Text(message)
+                .font(.caption)
+                .foregroundColor(bannerColor)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(bannerColor.opacity(0.1))
+    }
+
+    private var bannerColor: Color {
+        status == .warning ? .orange : .red
+    }
+
+    private var message: String {
+        switch status {
+        case .warning:
+            return "You've used \(Int(percent * 100))% of your daily token limit"
+        case .exceeded:
+            return "Daily token limit reached. Resets at midnight."
+        case .blocked:
+            return "Your account has been temporarily blocked."
+        case .normal:
+            return ""
+        }
     }
 }
 

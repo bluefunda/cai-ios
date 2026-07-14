@@ -2,13 +2,22 @@ import SwiftUI
 
 struct RateLimitView: View {
     @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
     @State private var isRefreshing = false
+
+    private var isUnlimited: Bool {
+        authManager.realm == "trm" || (chatManager.rateLimit?.dailyLimit == 0)
+    }
 
     var body: some View {
         NavigationStack {
             Group {
                 if let info = chatManager.rateLimit {
-                    rateContent(info: info)
+                    if isUnlimited {
+                        unlimitedContent
+                    } else {
+                        rateContent(info: info)
+                    }
                 } else {
                     LoadingRateLimitView()
                 }
@@ -31,6 +40,28 @@ struct RateLimitView: View {
             }
             .task {
                 await chatManager.loadRateLimit()
+            }
+        }
+    }
+
+    private var unlimitedContent: some View {
+        List {
+            Section {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundColor(.green)
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Unlimited Access")
+                            .font(.headline)
+                        Text("No token limits apply to your account.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Status")
             }
         }
     }
@@ -180,4 +211,5 @@ struct LoadingRateLimitView: View {
             )
             return m
         }())
+        .environmentObject(AuthManager())
 }

@@ -244,11 +244,11 @@ final class ChatManager: ObservableObject {
         do {
             let dto = try await api.fetchRateLimit()
             rateLimit = RateLimitInfo(
-                planName: dto.planName ?? "—",
-                dailyUsed: dto.dailyTokensUsed ?? 0,
-                dailyLimit: dto.dailyTokensLimit ?? 0,
-                monthlyUsed: dto.monthlyTokensUsed ?? 0,
-                monthlyLimit: dto.monthlyTokensLimit ?? 0,
+                planName: dto.stats?.planName ?? "—",
+                dailyUsed: dto.stats?.dailyTokensUsed ?? 0,
+                dailyLimit: dto.stats?.dailyTokensLimit ?? 0,
+                monthlyUsed: dto.stats?.monthlyTokensUsed ?? 0,
+                monthlyLimit: dto.stats?.monthlyTokensLimit ?? 0,
                 isBlocked: dto.isBlocked ?? false,
                 blockReason: dto.blockReason
             )
@@ -748,6 +748,13 @@ struct MCPServer: Identifiable, Hashable {
     }
 }
 
+enum RateLimitStatus {
+    case normal
+    case warning   // daily >= 80%
+    case exceeded  // daily >= 100%
+    case blocked
+}
+
 struct RateLimitInfo {
     let planName: String
     let dailyUsed: Int
@@ -765,5 +772,12 @@ struct RateLimitInfo {
     var monthlyPercent: Double {
         guard monthlyLimit > 0 else { return 0 }
         return min(Double(monthlyUsed) / Double(monthlyLimit), 1.0)
+    }
+
+    var status: RateLimitStatus {
+        if isBlocked { return .blocked }
+        if dailyPercent >= 1.0 { return .exceeded }
+        if dailyPercent >= 0.8 { return .warning }
+        return .normal
     }
 }
