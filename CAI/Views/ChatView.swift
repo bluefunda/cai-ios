@@ -42,148 +42,14 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Connection banner
             if chatManager.connectionStatus != .connected {
                 ConnectionBanner(status: chatManager.connectionStatus)
             }
-
-            // Messages + scroll-down button overlay
-            ZStack(alignment: .bottom) {
-                GeometryReader { outer in
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 0) {
-                                if let conversation = chatManager.currentConversation,
-                                   !conversation.messages.isEmpty {
-                                    ForEach(conversation.messages) { message in
-                                        MessageView(message: message)
-                                            .id(message.id)
-                                    }
-
-                                    if chatManager.isStreaming {
-                                        StreamingIndicator()
-                                    }
-                                } else if chatManager.isLoadingChats {
-                                    ProgressView()
-                                        .padding(.top, 40)
-                                        .frame(maxWidth: .infinity)
-                                } else {
-                                    EmptyStateView(greeting: greetingText)
-                                        .frame(maxWidth: .infinity, minHeight: 300)
-                                }
-
-                                // Scroll anchor + bottom-visibility probe (works iOS 17+)
-                                Color.clear
-                                    .frame(height: 1)
-                                    .id("bottom")
-                                    .background(
-                                        GeometryReader { marker in
-                                            Color.clear.preference(
-                                                key: AtBottomPreferenceKey.self,
-                                                value: marker.frame(in: .named("chatScroll")).minY
-                                                    <= outer.size.height + 60
-                                            )
-                                        }
-                                    )
-                            }
-                            // Centre content at desktop-comfortable width
-                            .frame(maxWidth: maxChatWidth)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical)
-                        }
-                        .coordinateSpace(name: "chatScroll")
-                        .scrollDismissesKeyboard(.interactively)
-                        .onPreferenceChange(AtBottomPreferenceKey.self) { atBottom in
-                            isAtBottom = atBottom
-                            showScrollButton = !atBottom
-                        }
-                        // Scroll to bottom when history loads (not streaming).
-                        .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
-                            if isAtBottom && !chatManager.isStreaming { scrollToBottom(proxy: proxy) }
-                        }
-                        // Jump to the latest messages when a different conversation is opened.
-                        .onChange(of: chatManager.currentConversation?.id) { _, _ in
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(50))
-                                scrollToBottom(proxy: proxy)
-                            }
-                        }
-                        .onAppear {
-                            scrollProxy = proxy
-                            // Scroll to bottom on first appear so history starts at the latest message.
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(50))
-                                scrollToBottom(proxy: proxy)
-                            }
-                        }
-                    }
-                }
-
-                // Scroll-to-bottom button — centred at the bottom, Claude/ChatGPT style
-                if showScrollButton {
-                    Button {
-                        isAtBottom = true
-                        showScrollButton = false
-                        if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 34, height: 34)
-                            .background(.regularMaterial, in: Circle())
-                            .overlay(Circle().stroke(Color.secondary.opacity(0.18), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
-                    }
-                    .padding(.bottom, 10)
-                    .transition(.scale.combined(with: .opacity))
-                    .animation(.spring(duration: 0.2), value: showScrollButton)
-                }
-            }
-
+            messageScrollArea
             Divider()
-
-            // Input — centred at the same max width as the message column
-            VStack(spacing: 0) {
-                // Rate limit banner
-                if let info = chatManager.rateLimit, info.status != .normal {
-                    RateLimitBanner(
-                        status: info.status,
-                        percent: info.dailyPercent,
-                        resetLabel: info.resetLabel
-                    )
-                }
-
-                ChatInputView(
-                    text: $inputText,
-                    isStreaming: chatManager.isStreaming,
-                    attachmentFilename: attachmentFilename,
-                    isFocused: $isInputFocused,
-                    rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
-                    onSend: sendMessage,
-                    onStop: stopStreaming,
-                    onClearAttachment: clearAttachment,
-                    onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
-                    onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
-                )
-                .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
-                .onChange(of: selectedPhotoItem) { _, item in
-                    Task { await loadAttachment(from: item) }
-                }
-                .fileImporter(
-                    isPresented: $showFileImporter,
-                    allowedContentTypes: importableTypes,
-                    allowsMultipleSelection: false
-                ) { result in
-                    handleFileImport(result)
-                }
-
-                Text("AI responses may be inaccurate. Verify important information.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 4)
-            }
-            .frame(maxWidth: maxChatWidth)
-            .frame(maxWidth: .infinity)
+            inputArea
+                .frame(maxWidth: maxChatWidth)
+                .frame(maxWidth: .infinity)
         }
         // Dismiss keyboard the moment the response starts rendering
         .onChange(of: chatManager.isStreaming) { _, streaming in
@@ -228,6 +94,134 @@ struct ChatView: View {
             Button("OK") { chatManager.error = nil }
         } message: {
             Text(chatManager.error ?? "")
+        }
+    }
+
+    // MARK: - Sub-views
+
+    @ViewBuilder
+    private var messageScrollArea: some View {
+        ZStack(alignment: .bottom) {
+            GeometryReader { outer in
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            if let conversation = chatManager.currentConversation,
+                               !conversation.messages.isEmpty {
+                                ForEach(conversation.messages) { message in
+                                    MessageView(message: message)
+                                        .id(message.id)
+                                }
+                                if chatManager.isStreaming {
+                                    StreamingIndicator()
+                                }
+                            } else if chatManager.isLoadingChats {
+                                ProgressView()
+                                    .padding(.top, 40)
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                EmptyStateView(greeting: greetingText)
+                                    .frame(maxWidth: .infinity, minHeight: 300)
+                            }
+                            Color.clear
+                                .frame(height: 1)
+                                .id("bottom")
+                                .background(
+                                    GeometryReader { marker in
+                                        Color.clear.preference(
+                                            key: AtBottomPreferenceKey.self,
+                                            value: marker.frame(in: .named("chatScroll")).minY
+                                                <= outer.size.height + 60
+                                        )
+                                    }
+                                )
+                        }
+                        .frame(maxWidth: maxChatWidth)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical)
+                    }
+                    .coordinateSpace(name: "chatScroll")
+                    .scrollDismissesKeyboard(.interactively)
+                    .onPreferenceChange(AtBottomPreferenceKey.self) { atBottom in
+                        isAtBottom = atBottom
+                        showScrollButton = !atBottom
+                    }
+                    .onChange(of: chatManager.currentConversation?.messages.count) { _, _ in
+                        if isAtBottom && !chatManager.isStreaming { scrollToBottom(proxy: proxy) }
+                    }
+                    .onChange(of: chatManager.currentConversation?.id) { _, _ in
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(50))
+                            scrollToBottom(proxy: proxy)
+                        }
+                    }
+                    .onAppear {
+                        scrollProxy = proxy
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(50))
+                            scrollToBottom(proxy: proxy)
+                        }
+                    }
+                }
+            }
+            if showScrollButton {
+                Button {
+                    isAtBottom = true
+                    showScrollButton = false
+                    if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 34, height: 34)
+                        .background(.regularMaterial, in: Circle())
+                        .overlay(Circle().stroke(Color.secondary.opacity(0.18), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                }
+                .padding(.bottom, 10)
+                .transition(.scale.combined(with: .opacity))
+                .animation(.spring(duration: 0.2), value: showScrollButton)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var inputArea: some View {
+        VStack(spacing: 0) {
+            if let info = chatManager.rateLimit, info.status != .normal {
+                RateLimitBanner(
+                    status: info.status,
+                    percent: info.dailyPercent,
+                    resetLabel: info.resetLabel
+                )
+            }
+            ChatInputView(
+                text: $inputText,
+                isStreaming: chatManager.isStreaming,
+                attachmentFilename: attachmentFilename,
+                isFocused: $isInputFocused,
+                rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
+                onSend: sendMessage,
+                onStop: stopStreaming,
+                onClearAttachment: clearAttachment,
+                onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
+                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
+            )
+            .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
+            .onChange(of: selectedPhotoItem) { _, item in
+                Task { await loadAttachment(from: item) }
+            }
+            .fileImporter(
+                isPresented: $showFileImporter,
+                allowedContentTypes: importableTypes,
+                allowsMultipleSelection: false
+            ) { result in
+                handleFileImport(result)
+            }
+            Text("AI responses may be inaccurate. Verify important information.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 4)
         }
     }
 
