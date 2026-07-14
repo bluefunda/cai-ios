@@ -145,10 +145,11 @@ struct ChatView: View {
             // Input — centred at the same max width as the message column
             VStack(spacing: 0) {
                 // Rate limit banner
-                if let status = chatManager.rateLimit?.status, status != .normal {
+                if let info = chatManager.rateLimit, info.status != .normal {
                     RateLimitBanner(
-                        status: status,
-                        percent: chatManager.rateLimit?.dailyPercent ?? 0
+                        status: info.status,
+                        percent: info.dailyPercent,
+                        resetLabel: info.resetLabel
                     )
                 }
 
@@ -696,6 +697,7 @@ private struct AtBottomPreferenceKey: PreferenceKey {
 struct RateLimitBanner: View {
     let status: RateLimitStatus
     let percent: Double
+    let resetLabel: String
 
     var body: some View {
         HStack(spacing: 8) {
@@ -720,7 +722,7 @@ struct RateLimitBanner: View {
         case .warning:
             return "You've used \(Int(percent * 100))% of your daily token limit"
         case .exceeded:
-            return "Daily token limit reached. Resets at midnight."
+            return "Daily token limit reached. Resets in \(resetLabel)."
         case .blocked:
             return "Your account has been temporarily blocked."
         case .normal:
