@@ -95,7 +95,8 @@ final class APIModelsTests: XCTestCase {
             "monthly_tokens_limit": 100000
           },
           "is_blocked": false,
-          "block_reason": null
+          "block_reason": null,
+          "reset_in_seconds": 3600
         }
         """.data(using: .utf8)!
 
@@ -104,6 +105,7 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(dto.stats?.dailyTokensUsed, 5000)
         XCTAssertEqual(dto.stats?.dailyTokensLimit, 10000)
         XCTAssertEqual(dto.isBlocked, false)
+        XCTAssertEqual(dto.resetInSeconds, 3600)
         XCTAssertEqual(dto.dailyUsagePercent, 0.5, accuracy: 0.001)
     }
 
@@ -709,7 +711,8 @@ final class RateLimitInfoTests: XCTestCase {
         dailyLimit: Int = 100000,
         monthlyUsed: Int = 0,
         monthlyLimit: Int = 1500000,
-        isBlocked: Bool = false
+        isBlocked: Bool = false,
+        resetInSeconds: Int = 0
     ) -> RateLimitInfo {
         RateLimitInfo(
             planName: "free",
@@ -718,7 +721,8 @@ final class RateLimitInfoTests: XCTestCase {
             monthlyUsed: monthlyUsed,
             monthlyLimit: monthlyLimit,
             isBlocked: isBlocked,
-            blockReason: nil
+            blockReason: nil,
+            resetInSeconds: resetInSeconds
         )
     }
 
@@ -781,6 +785,33 @@ final class RateLimitInfoTests: XCTestCase {
     func test_status_blockedWhenIsBlockedTrue() {
         let info = makeInfo(isBlocked: true)
         XCTAssertEqual(info.status, .blocked)
+    }
+
+    // MARK: resetLabel
+
+    func test_resetLabel_hoursAndMinutes() {
+        let info = makeInfo(resetInSeconds: 5400) // 1h 30m
+        XCTAssertEqual(info.resetLabel, "1h 30m")
+    }
+
+    func test_resetLabel_hoursOnly() {
+        let info = makeInfo(resetInSeconds: 7200) // 2h
+        XCTAssertEqual(info.resetLabel, "2h")
+    }
+
+    func test_resetLabel_minutesOnly() {
+        let info = makeInfo(resetInSeconds: 1800) // 30m
+        XCTAssertEqual(info.resetLabel, "30m")
+    }
+
+    func test_resetLabel_secondsOnly() {
+        let info = makeInfo(resetInSeconds: 45)
+        XCTAssertEqual(info.resetLabel, "45s")
+    }
+
+    func test_resetLabel_zeroFallsBackToMidnight() {
+        let info = makeInfo(resetInSeconds: 0)
+        XCTAssertEqual(info.resetLabel, "midnight")
     }
 }
 

@@ -315,11 +315,13 @@ struct RateLimitDTO: Codable {
     let stats: RateLimitStatsDTO?
     let isBlocked: Bool?
     let blockReason: String?
+    let resetInSeconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case stats
         case isBlocked = "is_blocked"
         case blockReason = "block_reason"
+        case resetInSeconds = "reset_in_seconds"
     }
 
     var dailyUsagePercent: Double {

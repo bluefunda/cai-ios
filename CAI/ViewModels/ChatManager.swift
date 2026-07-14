@@ -250,7 +250,8 @@ final class ChatManager: ObservableObject {
                 monthlyUsed: dto.stats?.monthlyTokensUsed ?? 0,
                 monthlyLimit: dto.stats?.monthlyTokensLimit ?? 0,
                 isBlocked: dto.isBlocked ?? false,
-                blockReason: dto.blockReason
+                blockReason: dto.blockReason,
+                resetInSeconds: dto.resetInSeconds ?? 0
             )
         } catch {
             print("[ChatManager] loadRateLimit error: \(error)")
@@ -763,6 +764,7 @@ struct RateLimitInfo {
     let monthlyLimit: Int
     let isBlocked: Bool
     let blockReason: String?
+    let resetInSeconds: Int
 
     var dailyPercent: Double {
         guard dailyLimit > 0 else { return 0 }
@@ -772,6 +774,17 @@ struct RateLimitInfo {
     var monthlyPercent: Double {
         guard monthlyLimit > 0 else { return 0 }
         return min(Double(monthlyUsed) / Double(monthlyLimit), 1.0)
+    }
+
+    var resetLabel: String {
+        let s = resetInSeconds
+        guard s > 0 else { return "midnight" }
+        let h = s / 3600
+        let m = (s % 3600) / 60
+        if h > 0 && m > 0 { return "\(h)h \(m)m" }
+        if h > 0 { return "\(h)h" }
+        if m > 0 { return "\(m)m" }
+        return "\(s)s"
     }
 
     var status: RateLimitStatus {
