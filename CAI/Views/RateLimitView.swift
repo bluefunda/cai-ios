@@ -207,7 +207,8 @@ struct LoadingRateLimitView: View {
                 monthlyUsed: 45_000,
                 monthlyLimit: 100_000,
                 isBlocked: false,
-                blockReason: nil
+                blockReason: nil,
+                resetInSeconds: 3600
             )
             return m
         }())
