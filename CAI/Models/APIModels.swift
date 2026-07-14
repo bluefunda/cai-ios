@@ -291,7 +291,7 @@ struct AnyCodable: Codable {
 
 // MARK: - Rate Limit (/rate-limit)
 
-struct RateLimitDTO: Codable {
+struct RateLimitStatsDTO: Codable {
     let planName: String?
     let dailyTokensUsed: Int?
     let dailyTokensLimit: Int?
@@ -299,8 +299,6 @@ struct RateLimitDTO: Codable {
     let monthlyTokensLimit: Int?
     let hourlyTokensUsed: Int?
     let hourlyTokensLimit: Int?
-    let isBlocked: Bool?
-    let blockReason: String?
 
     enum CodingKeys: String, CodingKey {
         case planName = "plan_name"
@@ -310,17 +308,29 @@ struct RateLimitDTO: Codable {
         case monthlyTokensLimit = "monthly_tokens_limit"
         case hourlyTokensUsed = "hourly_tokens_used"
         case hourlyTokensLimit = "hourly_tokens_limit"
+    }
+}
+
+struct RateLimitDTO: Codable {
+    let stats: RateLimitStatsDTO?
+    let isBlocked: Bool?
+    let blockReason: String?
+    let resetInSeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case stats
         case isBlocked = "is_blocked"
         case blockReason = "block_reason"
+        case resetInSeconds = "reset_in_seconds"
     }
 
     var dailyUsagePercent: Double {
-        guard let used = dailyTokensUsed, let limit = dailyTokensLimit, limit > 0 else { return 0 }
+        guard let used = stats?.dailyTokensUsed, let limit = stats?.dailyTokensLimit, limit > 0 else { return 0 }
         return min(Double(used) / Double(limit), 1.0)
     }
 
     var monthlyUsagePercent: Double {
-        guard let used = monthlyTokensUsed, let limit = monthlyTokensLimit, limit > 0 else { return 0 }
+        guard let used = stats?.monthlyTokensUsed, let limit = stats?.monthlyTokensLimit, limit > 0 else { return 0 }
         return min(Double(used) / Double(limit), 1.0)
     }
 }

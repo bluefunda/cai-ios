@@ -8,6 +8,8 @@
 #   mac_beta      — build Mac Catalyst + upload to TestFlight
 #   mac_upload    — build Mac Catalyst + upload to Mac App Store Connect (NO submit)
 #   mac_submit    — submit an already-uploaded macOS build for review
+#   release_all   — build iOS + macOS with the same version/build, upload both (NO submit)
+#   submit_all    — submit the most recent processed iOS + macOS builds together
 #   bump_version  — bump MARKETING_VERSION locally (patch/minor/major)
 #   meta          — push metadata + screenshots only, no binary — platform: ios|osx (default ios)
 #
@@ -127,6 +129,59 @@ platform :ios do
 
   desc "Submit the most recent processed macOS build for App Store review"
   lane :mac_submit do
+    upload_to_app_store(
+      platform:             "osx",
+      skip_binary_upload:   true,
+      skip_screenshots:     true,
+      skip_metadata:        true,
+      metadata_path:        "./fastlane/metadata_macos",
+      run_precheck_before_submit: false,
+      submit_for_review:    true,
+      automatic_release:    ENV["AUTO_RELEASE"] == "true",
+      force:                true
+    )
+  end
+
+  # ── Combined iOS + macOS ─────────────────────────────────────────────────
+
+  desc "Build and upload both iOS and macOS to App Store Connect — does NOT submit for review"
+  lane :release_all do
+    set_version
+    build_ios
+    upload_to_app_store(
+      platform:             "ios",
+      submit_for_review:    false,
+      automatic_release:    false,
+      skip_screenshots:     true,
+      skip_metadata:        false,
+      run_precheck_before_submit: false,
+      force:                true
+    )
+    build_mac
+    upload_to_app_store(
+      platform:             "osx",
+      submit_for_review:    false,
+      automatic_release:    false,
+      skip_screenshots:     false,
+      skip_metadata:        false,
+      metadata_path:        "./fastlane/metadata_macos",
+      run_precheck_before_submit: false,
+      force:                true
+    )
+  end
+
+  desc "Submit the most recent processed iOS and macOS builds for App Store review"
+  lane :submit_all do
+    upload_to_app_store(
+      platform:             "ios",
+      skip_binary_upload:   true,
+      skip_screenshots:     true,
+      skip_metadata:        true,
+      run_precheck_before_submit: false,
+      submit_for_review:    true,
+      automatic_release:    ENV["AUTO_RELEASE"] == "true",
+      force:                true
+    )
     upload_to_app_store(
       platform:             "osx",
       skip_binary_upload:   true,

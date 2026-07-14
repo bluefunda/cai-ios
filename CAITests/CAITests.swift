@@ -61,27 +61,103 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(dto.normalizedRoleString, "assistant")
     }
 
-    // MARK: RateLimitDTO
+    // MARK: RateLimitStatsDTO
 
-    func test_rateLimitDTO_decodesSnakeCase() throws {
+    func test_rateLimitStatsDTO_decodesSnakeCase() throws {
         let json = """
         {
           "plan_name": "premium",
           "daily_tokens_used": 5000,
           "daily_tokens_limit": 10000,
           "monthly_tokens_used": 20000,
-          "monthly_tokens_limit": 100000,
+          "monthly_tokens_limit": 100000
+        }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(RateLimitStatsDTO.self, from: json)
+        XCTAssertEqual(dto.planName, "premium")
+        XCTAssertEqual(dto.dailyTokensUsed, 5000)
+        XCTAssertEqual(dto.dailyTokensLimit, 10000)
+        XCTAssertEqual(dto.monthlyTokensUsed, 20000)
+        XCTAssertEqual(dto.monthlyTokensLimit, 100000)
+    }
+
+    // MARK: RateLimitDTO (nested stats shape)
+
+    func test_rateLimitDTO_decodesNestedStats() throws {
+        let json = """
+        {
+          "stats": {
+            "plan_name": "premium",
+            "daily_tokens_used": 5000,
+            "daily_tokens_limit": 10000,
+            "monthly_tokens_used": 20000,
+            "monthly_tokens_limit": 100000
+          },
           "is_blocked": false,
-          "block_reason": null
+          "block_reason": null,
+          "reset_in_seconds": 3600
         }
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
-        XCTAssertEqual(dto.planName, "premium")
-        XCTAssertEqual(dto.dailyTokensUsed, 5000)
-        XCTAssertEqual(dto.dailyTokensLimit, 10000)
+        XCTAssertEqual(dto.stats?.planName, "premium")
+        XCTAssertEqual(dto.stats?.dailyTokensUsed, 5000)
+        XCTAssertEqual(dto.stats?.dailyTokensLimit, 10000)
         XCTAssertEqual(dto.isBlocked, false)
+        XCTAssertEqual(dto.resetInSeconds, 3600)
         XCTAssertEqual(dto.dailyUsagePercent, 0.5, accuracy: 0.001)
+    }
+
+    func test_rateLimitDTO_dailyUsagePercent_capsAt100() throws {
+        let json = """
+        {
+          "stats": {
+            "daily_tokens_used": 120000,
+            "daily_tokens_limit": 100000
+          }
+        }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
+        XCTAssertEqual(dto.dailyUsagePercent, 1.0, accuracy: 0.001)
+    }
+
+    func test_rateLimitDTO_dailyUsagePercent_zeroWhenNoStats() throws {
+        let json = """
+        { "is_blocked": false }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
+        XCTAssertEqual(dto.dailyUsagePercent, 0.0, accuracy: 0.001)
+    }
+
+    func test_rateLimitDTO_monthlyUsagePercent() throws {
+        let json = """
+        {
+          "stats": {
+            "monthly_tokens_used": 3000000,
+            "monthly_tokens_limit": 6000000
+          }
+        }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
+        XCTAssertEqual(dto.monthlyUsagePercent, 0.5, accuracy: 0.001)
+    }
+
+    func test_rateLimitDTO_blockedFlag() throws {
+        let json = """
+        {
+          "stats": { "plan_name": "free" },
+          "is_blocked": true,
+          "block_reason": "Abuse detected"
+        }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
+        XCTAssertEqual(dto.isBlocked, true)
+        XCTAssertEqual(dto.blockReason, "Abuse detected")
     }
 
     // MARK: TitleResponse
@@ -623,6 +699,119 @@ final class AuthSecurityTests: XCTestCase {
         let r = try JSONDecoder().decode(TokenResponse.self, from: json)
         XCTAssertEqual(r.accessToken, "at")
         XCTAssertNil(r.refreshToken)
+    }
+}
+
+// MARK: - RateLimitInfo Tests
+
+final class RateLimitInfoTests: XCTestCase {
+
+    private func makeInfo(
+        dailyUsed: Int = 0,
+        dailyLimit: Int = 100000,
+        monthlyUsed: Int = 0,
+        monthlyLimit: Int = 1500000,
+        isBlocked: Bool = false,
+        resetInSeconds: Int = 0
+    ) -> RateLimitInfo {
+        RateLimitInfo(
+            planName: "free",
+            dailyUsed: dailyUsed,
+            dailyLimit: dailyLimit,
+            monthlyUsed: monthlyUsed,
+            monthlyLimit: monthlyLimit,
+            isBlocked: isBlocked,
+            blockReason: nil,
+            resetInSeconds: resetInSeconds
+        )
+    }
+
+    // MARK: dailyPercent
+
+    func test_dailyPercent_calculatesCorrectly() {
+        let info = makeInfo(dailyUsed: 50000, dailyLimit: 100000)
+        XCTAssertEqual(info.dailyPercent, 0.5, accuracy: 0.001)
+    }
+
+    func test_dailyPercent_capsAt1() {
+        let info = makeInfo(dailyUsed: 120000, dailyLimit: 100000)
+        XCTAssertEqual(info.dailyPercent, 1.0, accuracy: 0.001)
+    }
+
+    func test_dailyPercent_zeroWhenLimitIsZero() {
+        let info = makeInfo(dailyUsed: 5000, dailyLimit: 0)
+        XCTAssertEqual(info.dailyPercent, 0.0, accuracy: 0.001)
+    }
+
+    // MARK: monthlyPercent
+
+    func test_monthlyPercent_calculatesCorrectly() {
+        let info = makeInfo(monthlyUsed: 750000, monthlyLimit: 1500000)
+        XCTAssertEqual(info.monthlyPercent, 0.5, accuracy: 0.001)
+    }
+
+    // MARK: status
+
+    func test_status_normalWhenUnder80Percent() {
+        let info = makeInfo(dailyUsed: 79000, dailyLimit: 100000)
+        XCTAssertEqual(info.status, .normal)
+    }
+
+    func test_status_warningAt80Percent() {
+        let info = makeInfo(dailyUsed: 80000, dailyLimit: 100000)
+        XCTAssertEqual(info.status, .warning)
+    }
+
+    func test_status_warningBetween80And100() {
+        let info = makeInfo(dailyUsed: 95000, dailyLimit: 100000)
+        XCTAssertEqual(info.status, .warning)
+    }
+
+    func test_status_exceededAt100Percent() {
+        let info = makeInfo(dailyUsed: 100000, dailyLimit: 100000)
+        XCTAssertEqual(info.status, .exceeded)
+    }
+
+    func test_status_exceededWhenOver100Percent() {
+        let info = makeInfo(dailyUsed: 110000, dailyLimit: 100000)
+        XCTAssertEqual(info.status, .exceeded)
+    }
+
+    func test_status_blockedTakesPriorityOverExceeded() {
+        let info = makeInfo(dailyUsed: 100000, dailyLimit: 100000, isBlocked: true)
+        XCTAssertEqual(info.status, .blocked)
+    }
+
+    func test_status_blockedWhenIsBlockedTrue() {
+        let info = makeInfo(isBlocked: true)
+        XCTAssertEqual(info.status, .blocked)
+    }
+
+    // MARK: resetLabel
+
+    func test_resetLabel_hoursAndMinutes() {
+        let info = makeInfo(resetInSeconds: 5400) // 1h 30m
+        XCTAssertEqual(info.resetLabel, "1h 30m")
+    }
+
+    func test_resetLabel_hoursOnly() {
+        let info = makeInfo(resetInSeconds: 7200) // 2h
+        XCTAssertEqual(info.resetLabel, "2h")
+    }
+
+    func test_resetLabel_minutesOnly() {
+        let info = makeInfo(resetInSeconds: 1800) // 30m
+        XCTAssertEqual(info.resetLabel, "30m")
+    }
+
+    func test_resetLabel_secondsOnly() {
+        let info = makeInfo(resetInSeconds: 45)
+        XCTAssertEqual(info.resetLabel, "45s")
+    }
+
+    func test_resetLabel_zeroFallsBackToMidnight() {
+        let info = makeInfo(resetInSeconds: 0)
+        XCTAssertEqual(info.resetLabel, "midnight")
     }
 }
 
