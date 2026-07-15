@@ -53,6 +53,10 @@ final class ChatManager: ObservableObject {
     @Published var subscribedMCPServerIds: Set<String> = []
 
     @Published var rateLimit: RateLimitInfo?
+    @Published var showRateLimitModal = false
+    // Fallback data from the rate_limited event itself, used when API call fails
+    private(set) var rateLimitEventPeriod: String = "daily"
+    private(set) var rateLimitEventResetSeconds: Int = 0
     @Published var greeting: String = ""
     /// True only when a fresh draft was just created via newConversation(). Cleared on first use.
     @Published var shouldAutoFocusInput: Bool = false
@@ -400,6 +404,7 @@ final class ChatManager: ObservableObject {
 
         streamingTask = Task {
             var finalContent = ""
+            var wasRateLimited = false
             do {
                 for try await event in service.sendMessage(request) {
                     switch event {
@@ -443,6 +448,23 @@ final class ChatManager: ObservableObject {
 
                     case .error(let message, _):
                         self.error = message
+
+                    case .rateLimited(let period, let resetInSeconds):
+                        // Remove the empty assistant placeholder — keep the user message visible.
+                        if var conv = currentConversation,
+                           !conv.messages.isEmpty,
+                           conv.messages.last?.role == .assistant,
+                           conv.messages.last?.content.isEmpty == true {
+                            conv.messages.removeLast()
+                            currentConversation = conv
+                            updateConversation(conv)
+                        }
+                        wasRateLimited = true
+                        rateLimitEventPeriod = period
+                        rateLimitEventResetSeconds = resetInSeconds
+                        // Show modal immediately with event data; API refresh enhances it
+                        showRateLimitModal = true
+                        Task { await loadRateLimit() }
                     }
                 }
             } catch is CancellationError {
@@ -460,6 +482,7 @@ final class ChatManager: ObservableObject {
             // blank assistant bubble with nothing shown — surface a clear,
             // retryable message. Skipped on user-stop and on session expiry.
             if !Task.isCancelled,
+               !wasRateLimited,
                finalContent.isEmpty,
                self.error == nil,
                authManager?.isAuthenticated != false {
@@ -779,8 +802,11 @@ struct RateLimitInfo {
     var resetLabel: String {
         let s = resetInSeconds
         guard s > 0 else { return "midnight" }
-        let h = s / 3600
+        let d = s / 86400
+        let h = (s % 86400) / 3600
         let m = (s % 3600) / 60
+        if d > 0 && h > 0 { return "\(d)d \(h)h" }
+        if d > 0 { return "\(d)d" }
         if h > 0 && m > 0 { return "\(h)h \(m)m" }
         if h > 0 { return "\(h)h" }
         if m > 0 { return "\(m)m" }
@@ -789,8 +815,8 @@ struct RateLimitInfo {
 
     var status: RateLimitStatus {
         if isBlocked { return .blocked }
-        if dailyPercent >= 1.0 { return .exceeded }
-        if dailyPercent >= 0.8 { return .warning }
+        if dailyPercent >= 1.0 || monthlyPercent >= 1.0 { return .exceeded }
+        if dailyPercent >= 0.8 || monthlyPercent >= 0.8 { return .warning }
         return .normal
     }
 }
