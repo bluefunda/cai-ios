@@ -400,6 +400,7 @@ final class ChatManager: ObservableObject {
 
         streamingTask = Task {
             var finalContent = ""
+            var wasRateLimited = false
             do {
                 for try await event in service.sendMessage(request) {
                     switch event {
@@ -443,6 +444,20 @@ final class ChatManager: ObservableObject {
 
                     case .error(let message, _):
                         self.error = message
+
+                    case .rateLimited(_, _):
+                        // Remove the empty assistant placeholder — keep the user message visible.
+                        // RateLimitBanner will show once loadRateLimit() refreshes rateLimit state.
+                        if var conv = currentConversation,
+                           !conv.messages.isEmpty,
+                           conv.messages.last?.role == .assistant,
+                           conv.messages.last?.content.isEmpty == true {
+                            conv.messages.removeLast()
+                            currentConversation = conv
+                            updateConversation(conv)
+                        }
+                        wasRateLimited = true
+                        Task { await loadRateLimit() }
                     }
                 }
             } catch is CancellationError {
@@ -460,6 +475,7 @@ final class ChatManager: ObservableObject {
             // blank assistant bubble with nothing shown — surface a clear,
             // retryable message. Skipped on user-stop and on session expiry.
             if !Task.isCancelled,
+               !wasRateLimited,
                finalContent.isEmpty,
                self.error == nil,
                authManager?.isAuthenticated != false {

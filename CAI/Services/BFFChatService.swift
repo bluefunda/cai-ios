@@ -298,6 +298,11 @@ final class BFFChatService: ChatServiceProtocol {
             let details = json["details"] as? String
             return .error(message: message, details: details)
 
+        case "rate_limited":
+            let period = json["period"] as? String ?? "daily"
+            let resetInSeconds = json["reset_in_seconds"] as? Int ?? 0
+            return .rateLimited(period: period, resetInSeconds: resetInSeconds)
+
         default:
             // Try to parse as chunk if content exists
             if let content = json["content"] as? String, !content.isEmpty {
