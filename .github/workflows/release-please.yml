@@ -3,9 +3,23 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_ios:
+        description: 'Upload iOS build to App Store Connect'
+        type: boolean
+        default: true
+      deploy_macos:
+        description: 'Upload macOS build to App Store Connect'
+        type: boolean
+        default: true
+      version:
+        description: 'Version number (e.g. 1.6.3) — required for manual runs'
+        required: false
 
 jobs:
   release-please:
+    if: github.event_name == 'push'
     uses: bluefunda/.github/.github/workflows/release-please.yml@main
     with:
       release-type: simple
@@ -14,13 +28,13 @@ jobs:
 
   ios-deploy:
     name: Archive & Upload iOS to App Store Connect
-    needs: release-please
-    # PAUSE_IOS_DEPLOY repo variable: set to "true" to temporarily skip iOS
-    # uploads (e.g. while macOS goes through its first review's back-and-forth)
-    # without touching App Store Connect or this workflow. Unset/anything else
-    # = iOS deploys normally. Toggle at: repo Settings > Secrets and variables
-    # > Actions > Variables.
-    if: needs.release-please.outputs.release_created == 'true' && vars.PAUSE_IOS_DEPLOY != 'true'
+    needs: [release-please]
+    if: |
+      always() &&
+      (
+        (github.event_name == 'push' && needs.release-please.outputs.release_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy_ios == true)
+      )
     runs-on: macos-15
 
     steps:
@@ -38,8 +52,12 @@ jobs:
 
       - name: Set version
         run: |
-          VERSION="${{ needs.release-please.outputs.tag_name }}"
-          VERSION="${VERSION#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ needs.release-please.outputs.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
           echo "FL_VERSION_NUMBER=$VERSION" >> $GITHUB_ENV
           echo "FL_BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
 
@@ -81,8 +99,13 @@ jobs:
 
   macos-deploy:
     name: Archive & Upload macOS to App Store Connect
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    needs: [release-please]
+    if: |
+      always() &&
+      (
+        (github.event_name == 'push' && needs.release-please.outputs.release_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy_macos == true)
+      )
     runs-on: macos-15
 
     steps:
@@ -100,8 +123,12 @@ jobs:
 
       - name: Set version
         run: |
-          VERSION="${{ needs.release-please.outputs.tag_name }}"
-          VERSION="${VERSION#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ needs.release-please.outputs.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
           echo "FL_VERSION_NUMBER=$VERSION" >> $GITHUB_ENV
           echo "FL_BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
 
