@@ -716,7 +716,7 @@ struct RateLimitBanner: View {
         case .warning:
             return "You've used \(Int(percent * 100))% of your daily token limit"
         case .exceeded:
-            return "Daily token limit reached. Resets in \(resetLabel)."
+            return "Token limit reached. Resets in \(resetLabel)."
         case .blocked:
             return "Your account has been temporarily blocked."
         case .normal:

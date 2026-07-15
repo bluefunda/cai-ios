@@ -808,8 +808,8 @@ struct RateLimitInfo {
 
     var status: RateLimitStatus {
         if isBlocked { return .blocked }
-        if dailyPercent >= 1.0 { return .exceeded }
-        if dailyPercent >= 0.8 { return .warning }
+        if dailyPercent >= 1.0 || monthlyPercent >= 1.0 { return .exceeded }
+        if dailyPercent >= 0.8 || monthlyPercent >= 0.8 { return .warning }
         return .normal
     }
 }
