@@ -53,6 +53,10 @@ final class ChatManager: ObservableObject {
     @Published var subscribedMCPServerIds: Set<String> = []
 
     @Published var rateLimit: RateLimitInfo?
+    @Published var showRateLimitModal = false
+    // Fallback data from the rate_limited event itself, used when API call fails
+    private(set) var rateLimitEventPeriod: String = "daily"
+    private(set) var rateLimitEventResetSeconds: Int = 0
     @Published var greeting: String = ""
     /// True only when a fresh draft was just created via newConversation(). Cleared on first use.
     @Published var shouldAutoFocusInput: Bool = false
@@ -445,9 +449,8 @@ final class ChatManager: ObservableObject {
                     case .error(let message, _):
                         self.error = message
 
-                    case .rateLimited(_, _):
+                    case .rateLimited(let period, let resetInSeconds):
                         // Remove the empty assistant placeholder — keep the user message visible.
-                        // RateLimitBanner will show once loadRateLimit() refreshes rateLimit state.
                         if var conv = currentConversation,
                            !conv.messages.isEmpty,
                            conv.messages.last?.role == .assistant,
@@ -457,6 +460,10 @@ final class ChatManager: ObservableObject {
                             updateConversation(conv)
                         }
                         wasRateLimited = true
+                        rateLimitEventPeriod = period
+                        rateLimitEventResetSeconds = resetInSeconds
+                        // Show modal immediately with event data; API refresh enhances it
+                        showRateLimitModal = true
                         Task { await loadRateLimit() }
                     }
                 }

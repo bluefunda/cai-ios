@@ -95,6 +95,20 @@ struct ChatView: View {
         } message: {
             Text(chatManager.error ?? "")
         }
+        .overlay {
+            if chatManager.showRateLimitModal {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                    .onTapGesture { chatManager.showRateLimitModal = false }
+                RateLimitModal(
+                    info: chatManager.rateLimit,
+                    period: chatManager.rateLimitEventPeriod,
+                    resetInSeconds: chatManager.rateLimitEventResetSeconds,
+                    onClose: { chatManager.showRateLimitModal = false },
+                    onUpgrade: { chatManager.showRateLimitModal = false }
+                )
+            }
+        }
     }
 
     // MARK: - Sub-views
@@ -722,6 +736,81 @@ struct RateLimitBanner: View {
         case .normal:
             return ""
         }
+    }
+}
+
+// MARK: - Rate Limit Modal
+
+struct RateLimitModal: View {
+    let info: RateLimitInfo?
+    let period: String
+    let resetInSeconds: Int
+    let onClose: () -> Void
+    let onUpgrade: () -> Void
+
+    private var planName: String { info?.planName ?? "current" }
+
+    private var resetLabel: String {
+        let s = info != nil ? info!.resetInSeconds : resetInSeconds
+        guard s > 0 else { return "midnight" }
+        let d = s / 86400
+        let h = (s % 86400) / 3600
+        let m = (s % 3600) / 60
+        if d > 0 && h > 0 { return "\(d)d \(h)h" }
+        if d > 0 { return "\(d)d" }
+        if h > 0 && m > 0 { return "\(h)h \(m)m" }
+        if h > 0 { return "\(h)h" }
+        if m > 0 { return "\(m)m" }
+        return "\(s)s"
+    }
+
+    private var isMonthly: Bool {
+        if let info, info.monthlyPercent >= 1.0 && info.dailyPercent < 1.0 { return true }
+        return period == "monthly"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "xmark.octagon.fill")
+                    .foregroundColor(.white)
+                Text("Token Limit Reached")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(Color.red)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("You've reached your **\(planName)** plan's token limit.")
+                    .font(.body)
+                Text("\(isMonthly ? "Monthly" : "Daily") limit resets in **\(resetLabel)**.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Spacer()
+                Button("Close", action: onClose)
+                    .buttonStyle(.bordered)
+                Button("Upgrade to Premium", action: onUpgrade)
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .background(Color(uiColor: .systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
+        .padding(.horizontal, 24)
     }
 }
 

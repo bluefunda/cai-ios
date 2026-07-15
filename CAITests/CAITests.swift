@@ -320,6 +320,51 @@ final class ChatManagerTests: XCTestCase {
         XCTAssertTrue(mockService.stopStreamingCalled)
     }
 
+    func test_rateLimited_removesEmptyAssistantBubble() async throws {
+        mockService.mockEvents = [
+            .rateLimited(period: "daily", resetInSeconds: 3600)
+        ]
+
+        chatManager.newConversation()
+        await chatManager.sendMessage("Hello")
+        try await waitForStreamingToFinish()
+
+        // Only the user message should remain — empty assistant placeholder removed
+        XCTAssertEqual(chatManager.currentConversation?.messages.count, 1)
+        XCTAssertEqual(chatManager.currentConversation?.messages.first?.role, .user)
+    }
+
+    func test_rateLimited_setsShowRateLimitModal() async throws {
+        mockService.mockEvents = [
+            .rateLimited(period: "monthly", resetInSeconds: 86400)
+        ]
+
+        chatManager.newConversation()
+        await chatManager.sendMessage("Hello")
+        try await waitForStreamingToFinish()
+
+        // Wait briefly for the async loadRateLimit + showRateLimitModal = true
+        let deadline = Date().addingTimeInterval(2)
+        while !chatManager.showRateLimitModal && Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertTrue(chatManager.showRateLimitModal)
+    }
+
+    func test_rateLimited_doesNotLeaveEmptyErrorMessage() async throws {
+        mockService.mockEvents = [
+            .rateLimited(period: "daily", resetInSeconds: 3600)
+        ]
+
+        chatManager.newConversation()
+        await chatManager.sendMessage("Hello")
+        try await waitForStreamingToFinish()
+
+        XCTAssertNil(chatManager.error)
+        let lastMsg = chatManager.currentConversation?.messages.last
+        XCTAssertNotEqual(lastMsg?.content, "I couldn't generate a response for that. Please try rephrasing or send it again.")
+    }
+
     // MARK: - Helper
 
     /// Waits up to 5 s for streaming to finish, sleeping 50 ms between checks so
@@ -787,6 +832,21 @@ final class RateLimitInfoTests: XCTestCase {
         XCTAssertEqual(info.status, .blocked)
     }
 
+    func test_status_exceededWhenMonthlyAt100Percent() {
+        let info = makeInfo(dailyUsed: 0, dailyLimit: 100000, monthlyUsed: 1500000, monthlyLimit: 1500000)
+        XCTAssertEqual(info.status, .exceeded)
+    }
+
+    func test_status_warningWhenMonthlyAt80Percent() {
+        let info = makeInfo(dailyUsed: 0, dailyLimit: 100000, monthlyUsed: 1200000, monthlyLimit: 1500000)
+        XCTAssertEqual(info.status, .warning)
+    }
+
+    func test_status_normalWhenBothUnder80Percent() {
+        let info = makeInfo(dailyUsed: 50000, dailyLimit: 100000, monthlyUsed: 600000, monthlyLimit: 1500000)
+        XCTAssertEqual(info.status, .normal)
+    }
+
     // MARK: resetLabel
 
     func test_resetLabel_hoursAndMinutes() {
@@ -812,6 +872,16 @@ final class RateLimitInfoTests: XCTestCase {
     func test_resetLabel_zeroFallsBackToMidnight() {
         let info = makeInfo(resetInSeconds: 0)
         XCTAssertEqual(info.resetLabel, "midnight")
+    }
+
+    func test_resetLabel_daysAndHours() {
+        let info = makeInfo(resetInSeconds: 16 * 86400 + 14 * 3600) // 16d 14h
+        XCTAssertEqual(info.resetLabel, "16d 14h")
+    }
+
+    func test_resetLabel_daysOnly() {
+        let info = makeInfo(resetInSeconds: 3 * 86400) // 3d
+        XCTAssertEqual(info.resetLabel, "3d")
     }
 }
 
