@@ -779,8 +779,11 @@ struct RateLimitInfo {
     var resetLabel: String {
         let s = resetInSeconds
         guard s > 0 else { return "midnight" }
-        let h = s / 3600
+        let d = s / 86400
+        let h = (s % 86400) / 3600
         let m = (s % 3600) / 60
+        if d > 0 && h > 0 { return "\(d)d \(h)h" }
+        if d > 0 { return "\(d)d" }
         if h > 0 && m > 0 { return "\(h)h \(m)m" }
         if h > 0 { return "\(h)h" }
         if m > 0 { return "\(m)m" }
