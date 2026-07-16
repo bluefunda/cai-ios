@@ -149,7 +149,7 @@ enum ChatEvent {
     case streamEnd(totalChunks: Int, fullContent: String, stopped: Bool)
     case heartbeat(sessionId: String, chunks: Int, contentLength: Int)
     case error(message: String, details: String?)
-    case rateLimited(period: String, resetInSeconds: Int)
+    case rateLimited(period: String, resetLabel: String)
 
     var isTerminal: Bool {
         switch self {

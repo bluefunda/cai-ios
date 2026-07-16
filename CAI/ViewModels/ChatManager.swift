@@ -56,7 +56,7 @@ final class ChatManager: ObservableObject {
     @Published var showRateLimitModal = false
     // Fallback data from the rate_limited event itself, used when API call fails
     private(set) var rateLimitEventPeriod: String = "daily"
-    private(set) var rateLimitEventResetSeconds: Int = 0
+    private(set) var rateLimitEventResetLabel: String = ""
     @Published var greeting: String = ""
     /// True only when a fresh draft was just created via newConversation(). Cleared on first use.
     @Published var shouldAutoFocusInput: Bool = false
@@ -255,7 +255,7 @@ final class ChatManager: ObservableObject {
                 monthlyLimit: dto.stats?.monthlyTokensLimit ?? 0,
                 isBlocked: dto.isBlocked ?? false,
                 blockReason: dto.blockReason,
-                resetInSeconds: dto.resetInSeconds ?? 0
+                resetLabel: dto.resetLabel ?? "midnight"
             )
         } catch {
             print("[ChatManager] loadRateLimit error: \(error)")
@@ -449,7 +449,7 @@ final class ChatManager: ObservableObject {
                     case .error(let message, _):
                         self.error = message
 
-                    case .rateLimited(let period, let resetInSeconds):
+                    case .rateLimited(let period, let resetLabel):
                         // Remove the empty assistant placeholder — keep the user message visible.
                         if var conv = currentConversation,
                            !conv.messages.isEmpty,
@@ -461,7 +461,7 @@ final class ChatManager: ObservableObject {
                         }
                         wasRateLimited = true
                         rateLimitEventPeriod = period
-                        rateLimitEventResetSeconds = resetInSeconds
+                        rateLimitEventResetLabel = resetLabel
                         // Show modal immediately with event data; API refresh enhances it
                         showRateLimitModal = true
                         Task { await loadRateLimit() }
@@ -787,7 +787,7 @@ struct RateLimitInfo {
     let monthlyLimit: Int
     let isBlocked: Bool
     let blockReason: String?
-    let resetInSeconds: Int
+    let resetLabel: String
 
     var dailyPercent: Double {
         guard dailyLimit > 0 else { return 0 }
@@ -797,20 +797,6 @@ struct RateLimitInfo {
     var monthlyPercent: Double {
         guard monthlyLimit > 0 else { return 0 }
         return min(Double(monthlyUsed) / Double(monthlyLimit), 1.0)
-    }
-
-    var resetLabel: String {
-        let s = resetInSeconds
-        guard s > 0 else { return "midnight" }
-        let d = s / 86400
-        let h = (s % 86400) / 3600
-        let m = (s % 3600) / 60
-        if d > 0 && h > 0 { return "\(d)d \(h)h" }
-        if d > 0 { return "\(d)d" }
-        if h > 0 && m > 0 { return "\(h)h \(m)m" }
-        if h > 0 { return "\(h)h" }
-        if m > 0 { return "\(m)m" }
-        return "\(s)s"
     }
 
     var status: RateLimitStatus {
