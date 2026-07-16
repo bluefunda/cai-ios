@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/bluefunda/cai-ios/compare/v1.6.4...v1.7.0) (2026-07-16)
+
+
+### Features
+
+* **rate-limit:** use server-provided reset_label, remove local time formatting ([#144](https://github.com/bluefunda/cai-ios/issues/144)) ([b30d64c](https://github.com/bluefunda/cai-ios/commit/b30d64c7cecbc1d11b7e3d258647fe4adab8fd75))
+
 ## [1.6.4](https://github.com/bluefunda/cai-ios/compare/v1.6.3...v1.6.4) (2026-07-15)
 
 
