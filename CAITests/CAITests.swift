@@ -96,7 +96,8 @@ final class APIModelsTests: XCTestCase {
           },
           "is_blocked": false,
           "block_reason": null,
-          "reset_in_seconds": 3600
+          "reset_in_seconds": 3600,
+          "reset_label": "1h"
         }
         """.data(using: .utf8)!
 
@@ -106,6 +107,7 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(dto.stats?.dailyTokensLimit, 10000)
         XCTAssertEqual(dto.isBlocked, false)
         XCTAssertEqual(dto.resetInSeconds, 3600)
+        XCTAssertEqual(dto.resetLabel, "1h")
         XCTAssertEqual(dto.dailyUsagePercent, 0.5, accuracy: 0.001)
     }
 
@@ -322,7 +324,7 @@ final class ChatManagerTests: XCTestCase {
 
     func test_rateLimited_removesEmptyAssistantBubble() async throws {
         mockService.mockEvents = [
-            .rateLimited(period: "daily", resetInSeconds: 3600)
+            .rateLimited(period: "daily", resetLabel: "1h")
         ]
 
         chatManager.newConversation()
@@ -336,7 +338,7 @@ final class ChatManagerTests: XCTestCase {
 
     func test_rateLimited_setsShowRateLimitModal() async throws {
         mockService.mockEvents = [
-            .rateLimited(period: "monthly", resetInSeconds: 86400)
+            .rateLimited(period: "monthly", resetLabel: "1d")
         ]
 
         chatManager.newConversation()
@@ -353,7 +355,7 @@ final class ChatManagerTests: XCTestCase {
 
     func test_rateLimited_doesNotLeaveEmptyErrorMessage() async throws {
         mockService.mockEvents = [
-            .rateLimited(period: "daily", resetInSeconds: 3600)
+            .rateLimited(period: "daily", resetLabel: "1h")
         ]
 
         chatManager.newConversation()
@@ -757,7 +759,7 @@ final class RateLimitInfoTests: XCTestCase {
         monthlyUsed: Int = 0,
         monthlyLimit: Int = 1500000,
         isBlocked: Bool = false,
-        resetInSeconds: Int = 0
+        resetLabel: String = "midnight"
     ) -> RateLimitInfo {
         RateLimitInfo(
             planName: "free",
@@ -767,7 +769,7 @@ final class RateLimitInfoTests: XCTestCase {
             monthlyLimit: monthlyLimit,
             isBlocked: isBlocked,
             blockReason: nil,
-            resetInSeconds: resetInSeconds
+            resetLabel: resetLabel
         )
     }
 
@@ -847,41 +849,16 @@ final class RateLimitInfoTests: XCTestCase {
         XCTAssertEqual(info.status, .normal)
     }
 
-    // MARK: resetLabel
+    // MARK: resetLabel — server-provided string, passed through as-is
 
-    func test_resetLabel_hoursAndMinutes() {
-        let info = makeInfo(resetInSeconds: 5400) // 1h 30m
-        XCTAssertEqual(info.resetLabel, "1h 30m")
+    func test_resetLabel_storedFromServer() {
+        let info = makeInfo(resetLabel: "3h 20m")
+        XCTAssertEqual(info.resetLabel, "3h 20m")
     }
 
-    func test_resetLabel_hoursOnly() {
-        let info = makeInfo(resetInSeconds: 7200) // 2h
-        XCTAssertEqual(info.resetLabel, "2h")
-    }
-
-    func test_resetLabel_minutesOnly() {
-        let info = makeInfo(resetInSeconds: 1800) // 30m
-        XCTAssertEqual(info.resetLabel, "30m")
-    }
-
-    func test_resetLabel_secondsOnly() {
-        let info = makeInfo(resetInSeconds: 45)
-        XCTAssertEqual(info.resetLabel, "45s")
-    }
-
-    func test_resetLabel_zeroFallsBackToMidnight() {
-        let info = makeInfo(resetInSeconds: 0)
+    func test_resetLabel_defaultIsMidnight() {
+        let info = makeInfo()
         XCTAssertEqual(info.resetLabel, "midnight")
-    }
-
-    func test_resetLabel_daysAndHours() {
-        let info = makeInfo(resetInSeconds: 16 * 86400 + 14 * 3600) // 16d 14h
-        XCTAssertEqual(info.resetLabel, "16d 14h")
-    }
-
-    func test_resetLabel_daysOnly() {
-        let info = makeInfo(resetInSeconds: 3 * 86400) // 3d
-        XCTAssertEqual(info.resetLabel, "3d")
     }
 }
 
