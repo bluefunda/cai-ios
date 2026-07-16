@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.4](https://github.com/bluefunda/cai-ios/compare/v1.6.3...v1.6.4) (2026-07-15)
+
+
+### Bug Fixes
+
+* **rate-limit:** show days in reset label and add manual deploy trigger ([#142](https://github.com/bluefunda/cai-ios/issues/142)) ([19407a2](https://github.com/bluefunda/cai-ios/commit/19407a2a974cf10a01a2bdf17c2c30d830315237))
+
 ## [1.6.3](https://github.com/bluefunda/cai-ios/compare/v1.6.2...v1.6.3) (2026-07-14)
 
 
