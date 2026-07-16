@@ -300,8 +300,8 @@ final class BFFChatService: ChatServiceProtocol {
 
         case "rate_limited":
             let period = json["period"] as? String ?? "daily"
-            let resetInSeconds = json["reset_in_seconds"] as? Int ?? 0
-            return .rateLimited(period: period, resetInSeconds: resetInSeconds)
+            let resetLabel = json["reset_label"] as? String ?? ""
+            return .rateLimited(period: period, resetLabel: resetLabel)
 
         default:
             // Try to parse as chunk if content exists

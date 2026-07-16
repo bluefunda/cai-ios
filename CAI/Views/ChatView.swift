@@ -103,7 +103,7 @@ struct ChatView: View {
                 RateLimitModal(
                     info: chatManager.rateLimit,
                     period: chatManager.rateLimitEventPeriod,
-                    resetInSeconds: chatManager.rateLimitEventResetSeconds,
+                    resetLabel: chatManager.rateLimit?.resetLabel ?? chatManager.rateLimitEventResetLabel,
                     onClose: { chatManager.showRateLimitModal = false },
                     onUpgrade: { chatManager.showRateLimitModal = false }
                 )
@@ -744,25 +744,11 @@ struct RateLimitBanner: View {
 struct RateLimitModal: View {
     let info: RateLimitInfo?
     let period: String
-    let resetInSeconds: Int
+    let resetLabel: String
     let onClose: () -> Void
     let onUpgrade: () -> Void
 
     private var planName: String { info?.planName ?? "current" }
-
-    private var resetLabel: String {
-        let s = info != nil ? info!.resetInSeconds : resetInSeconds
-        guard s > 0 else { return "midnight" }
-        let d = s / 86400
-        let h = (s % 86400) / 3600
-        let m = (s % 3600) / 60
-        if d > 0 && h > 0 { return "\(d)d \(h)h" }
-        if d > 0 { return "\(d)d" }
-        if h > 0 && m > 0 { return "\(h)h \(m)m" }
-        if h > 0 { return "\(h)h" }
-        if m > 0 { return "\(m)m" }
-        return "\(s)s"
-    }
 
     private var isMonthly: Bool {
         if let info, info.monthlyPercent >= 1.0 && info.dailyPercent < 1.0 { return true }
