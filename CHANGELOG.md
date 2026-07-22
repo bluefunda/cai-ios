@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/bluefunda/cai-ios/compare/v1.7.0...v1.7.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* **auth:** resolve immediate session expiry after login on iOS ([#146](https://github.com/bluefunda/cai-ios/issues/146)) ([4dae0b1](https://github.com/bluefunda/cai-ios/commit/4dae0b18ef5bc01226df9249fca10d13e417efa5))
+
 ## [1.7.0](https://github.com/bluefunda/cai-ios/compare/v1.6.4...v1.7.0) (2026-07-16)
 
 
