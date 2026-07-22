@@ -181,6 +181,55 @@ jobs:
         if: always()
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
 
+  commit-version:
+    name: Sync released version back to main
+    needs: [release-please, ios-deploy, macos-deploy]
+    if: |
+      always() &&
+      (needs.ios-deploy.result == 'success' || needs.macos-deploy.result == 'success')
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GH_PAT }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Determine released version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ needs.release-please.outputs.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
+          echo "FL_VERSION_NUMBER=$VERSION" >> $GITHUB_ENV
+          echo "FL_BUILD_NUMBER=${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Bump project.pbxproj to match the released build
+        run: |
+          bundle exec fastlane run increment_version_number \
+            xcodeproj:"CAI.xcodeproj" version_number:"$FL_VERSION_NUMBER"
+          bundle exec fastlane run increment_build_number \
+            xcodeproj:"CAI.xcodeproj" build_number:"$FL_BUILD_NUMBER"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet CAI.xcodeproj/project.pbxproj; then
+            echo "project.pbxproj already matches $FL_VERSION_NUMBER ($FL_BUILD_NUMBER) — nothing to commit"
+            exit 0
+          fi
+          git add CAI.xcodeproj/project.pbxproj
+          git commit -m "chore: sync project.pbxproj to $FL_VERSION_NUMBER ($FL_BUILD_NUMBER) [skip ci]"
+          git push origin HEAD:main
+
   release-notes:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
