@@ -3,7 +3,7 @@ import AuthenticationServices
 import CryptoKit
 
 // MARK: - Authentication Manager
-// Handles Keycloak OAuth/OIDC with PKCE. All token POSTs go to auth-dev.bluefunda.com.
+// Handles Keycloak OAuth/OIDC with PKCE. All token POSTs go to auth.bluefunda.com.
 // Apple Sign In uses the native ASAuthorizationAppleIDButton; the identity token is
 // exchanged directly with Keycloak (no BFF intermediary). Google and Microsoft use
 // ASWebAuthenticationSession → Keycloak IDP redirect.
@@ -43,12 +43,13 @@ final class AuthManager: NSObject, ObservableObject {
     // MARK: - Configuration
 
     struct Config {
-        static let keycloakBaseURL = AppConfig.authBaseURL   // https://auth-dev.bluefunda.com
+        static let keycloakBaseURL = AppConfig.authBaseURL   // https://auth.bluefunda.com
         static let clientId = "cai-ios"
         static let redirectScheme = "cai"
         static let redirectURI = "cai://auth/callback"
-        /// Refresh 5 minutes before expiry for network buffer.
-        static let tokenRefreshThreshold: TimeInterval = 300
+        /// Refresh 1 minute before expiry. Must be less than Access Token Lifespan
+        /// (currently 5 min in Keycloak) to avoid firing the proactive timer instantly.
+        static let tokenRefreshThreshold: TimeInterval = 60
         static let keychainService = "com.bluefunda.ai"
         static let appleUserIDKey = "apple_user_id"
     }
@@ -177,7 +178,7 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     // MARK: - Keycloak Apple Token Exchange
-    // POST https://auth-dev.bluefunda.com/realms/{realm}/protocol/openid-connect/token
+    // POST https://auth.bluefunda.com/realms/{realm}/protocol/openid-connect/token
     // grant_type=urn:ietf:params:oauth:grant-type:token-exchange
     // Requires: token-exchange feature enabled + IDP permissions granted to cai-ios in Keycloak.
 
@@ -494,7 +495,9 @@ final class AuthManager: NSObject, ObservableObject {
             currentUser = User(id: "", email: appleEmail, name: appleFullName, roles: [])
         }
 
-        refreshToken = response.refreshToken
+        if let newRefreshToken = response.refreshToken {
+            refreshToken = newRefreshToken
+        }
         saveTokensToKeychain()
 
         isAuthenticated = true
