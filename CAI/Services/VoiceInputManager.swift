@@ -17,8 +17,16 @@ final class VoiceInputManager: ObservableObject {
         case transcribing
     }
 
+    /// Which permission was denied, so the UI can deep-link to the right Settings pane.
+    enum DeniedPermission {
+        case microphone
+        case speechRecognition
+    }
+
     @Published private(set) var state: State = .idle
     @Published var error: String?
+    /// Set alongside `error` when the failure is a denied permission — nil for other errors.
+    @Published var deniedPermission: DeniedPermission?
     /// Elapsed recording time, for a simple UI timer.
     @Published private(set) var elapsed: TimeInterval = 0
 
@@ -36,7 +44,8 @@ final class VoiceInputManager: ObservableObject {
     func requestPermissions() async -> Bool {
         let micGranted = await requestMicrophonePermission()
         guard micGranted else {
-            error = "Microphone access is required to record a voice message. Enable it in Settings."
+            error = "Microphone access is required to record a voice message."
+            deniedPermission = .microphone
             return false
         }
 
@@ -46,9 +55,11 @@ final class VoiceInputManager: ObservableObject {
             }
         }
         guard speechGranted else {
-            error = "Speech recognition access is required to transcribe voice messages. Enable it in Settings."
+            error = "Speech recognition access is required to transcribe voice messages."
+            deniedPermission = .speechRecognition
             return false
         }
+        deniedPermission = nil
         return true
     }
 

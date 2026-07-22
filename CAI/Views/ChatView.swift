@@ -2,6 +2,12 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
+/// `@MainActor` so every `Task { ... }` created in this view's methods stays
+/// pinned to the main actor for its whole lifetime — without it, synchronous
+/// calls into `ChatManager` (also `@MainActor`) from a Task resumed after an
+/// `await` aren't guaranteed to still be on the main thread, which traps
+/// under the Main Thread Checker / actor-isolation runtime checks.
+@MainActor
 struct ChatView: View {
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var authManager: AuthManager
@@ -100,7 +106,19 @@ struct ChatView: View {
             Text(chatManager.error ?? "")
         }
         .alert("Voice Input", isPresented: .constant(voiceInput.error != nil)) {
-            Button("OK") { voiceInput.error = nil }
+            if let denied = voiceInput.deniedPermission {
+                Button("Open Settings") {
+                    openSystemSettings(for: denied)
+                    voiceInput.error = nil
+                    voiceInput.deniedPermission = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    voiceInput.error = nil
+                    voiceInput.deniedPermission = nil
+                }
+            } else {
+                Button("OK") { voiceInput.error = nil }
+            }
         } message: {
             Text(voiceInput.error ?? "")
         }
@@ -360,6 +378,19 @@ struct ChatView: View {
                 )
             }
         }
+    }
+
+    /// Deep-links to the right permission pane. iOS/iPadOS has a per-app
+    /// Settings page; Mac Catalyst has no such page — it must open System
+    /// Settings' Privacy & Security pane via its own URL scheme instead.
+    private func openSystemSettings(for denied: VoiceInputManager.DeniedPermission) {
+        #if targetEnvironment(macCatalyst)
+        let anchor = denied == .microphone ? "Privacy_Microphone" : "Privacy_SpeechRecognition"
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else { return }
+        #else
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        #endif
+        UIApplication.shared.open(url)
     }
 
     private func mimeType(for ext: String) -> String {
