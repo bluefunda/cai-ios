@@ -24,10 +24,14 @@ struct ChatView: View {
     @State private var attachmentData: Data?
     @State private var attachmentFilename: String?
     @State private var attachmentMIME: String?
+    @State private var attachmentLocalMetadata: StoredFileMetadata?
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
 
     private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
+
+    // Voice input state
+    @StateObject private var voiceInput = VoiceInputManager()
 
     // Scroll management
     @State private var isAtBottom = true
@@ -94,6 +98,11 @@ struct ChatView: View {
             Button("OK") { chatManager.error = nil }
         } message: {
             Text(chatManager.error ?? "")
+        }
+        .alert("Voice Input", isPresented: .constant(voiceInput.error != nil)) {
+            Button("OK") { voiceInput.error = nil }
+        } message: {
+            Text(voiceInput.error ?? "")
         }
         .overlay {
             if chatManager.showRateLimitModal {
@@ -215,11 +224,16 @@ struct ChatView: View {
                 attachmentFilename: attachmentFilename,
                 isFocused: $isInputFocused,
                 rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
+                isRecording: voiceInput.isRecording,
+                recordingElapsed: voiceInput.elapsed,
                 onSend: sendMessage,
                 onStop: stopStreaming,
-                onClearAttachment: clearAttachment,
+                onClearAttachment: { clearAttachment() },
                 onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
-                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
+                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil,
+                onMicTap: startRecording,
+                onCancelRecording: cancelRecording,
+                onConfirmRecording: confirmRecording
             )
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, item in
@@ -256,9 +270,13 @@ struct ChatView: View {
 
         if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
             let d = data; let f = filename; let m = mime
-            clearAttachment()
+            let localMetadata = attachmentLocalMetadata
+            clearAttachment(deleteLocal: false)
             Task {
                 let fileUrl = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
+                if let fileUrl, let localMetadata {
+                    chatManager.markAttachmentUploaded(localMetadata, remoteURL: fileUrl)
+                }
                 let prompt = text.isEmpty ? "Analyze the attached file." : text
                 await chatManager.sendMessage(prompt, fileUrl: fileUrl)
             }
@@ -276,11 +294,19 @@ struct ChatView: View {
         attachmentData = data
         attachmentMIME = "image/jpeg"
         attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
+        await persistAttachmentLocally()
     }
 
-    private func clearAttachment() {
+    /// Removes the in-progress attachment. Deletes the locally-persisted copy
+    /// too unless the caller is about to send it (it's kept in that case, so
+    /// it survives independent of whether the upload succeeds).
+    private func clearAttachment(deleteLocal: Bool = true) {
+        if deleteLocal, let metadata = attachmentLocalMetadata {
+            Task { await chatManager.deleteAttachment(metadata) }
+        }
         attachmentData = nil; attachmentFilename = nil
         attachmentMIME = nil; selectedPhotoItem = nil
+        attachmentLocalMetadata = nil
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
@@ -291,6 +317,49 @@ struct ChatView: View {
         attachmentData = data
         attachmentFilename = url.lastPathComponent
         attachmentMIME = mimeType(for: url.pathExtension)
+        Task { await persistAttachmentLocally() }
+    }
+
+    /// Saves the currently-picked attachment via LocalFileStore so it
+    /// persists with the conversation independent of the upload/send flow.
+    private func persistAttachmentLocally() async {
+        guard let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME else { return }
+        let conversationId = chatManager.conversationIdForAttachment()
+        attachmentLocalMetadata = await chatManager.saveLocalAttachment(
+            data: data, filename: filename, mimeType: mime, conversationId: conversationId
+        )
+    }
+
+    // MARK: - Voice Input
+
+    private func startRecording() {
+        Task {
+            guard await voiceInput.requestPermissions() else { return }
+            do {
+                try voiceInput.startRecording()
+            } catch {
+                voiceInput.error = "Couldn't start recording: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func cancelRecording() {
+        voiceInput.cancelRecording()
+    }
+
+    private func confirmRecording() {
+        Task {
+            guard let result = await voiceInput.stopRecordingAndTranscribe() else { return }
+            if let transcript = result.transcript, !transcript.isBlank {
+                inputText = inputText.isBlank ? transcript : inputText + " " + transcript
+            }
+            if let audioData = result.audioData {
+                let conversationId = chatManager.conversationIdForAttachment()
+                await chatManager.saveLocalAttachment(
+                    data: audioData, filename: result.filename, mimeType: "audio/m4a", conversationId: conversationId
+                )
+            }
+        }
     }
 
     private func mimeType(for ext: String) -> String {
@@ -503,12 +572,17 @@ struct ChatInputView: View {
     let attachmentFilename: String?
     var isFocused: FocusState<Bool>.Binding
     var rateLimitExceeded: Bool = false
+    var isRecording: Bool = false
+    var recordingElapsed: TimeInterval = 0
     let onSend: () -> Void
     let onStop: () -> Void
     let onClearAttachment: () -> Void
     /// nil = file upload feature disabled; non-nil = show the attach button
     let onPickPhoto: (() -> Void)?
     let onPickFile: (() -> Void)?
+    var onMicTap: (() -> Void)? = nil
+    var onCancelRecording: (() -> Void)? = nil
+    var onConfirmRecording: (() -> Void)? = nil
 
     private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
     private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
@@ -529,38 +603,57 @@ struct ChatInputView: View {
                 .background(Color(.systemGray6))
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                // Attach button — only rendered when the feature flag is on
-                if attachEnabled {
-                    Menu {
-                        if let pickPhoto = onPickPhoto {
-                            Button { pickPhoto() } label: {
-                                Label("Photo Library", systemImage: "photo")
-                            }
+            if isRecording {
+                recordingRow
+            } else {
+                composerRow
+            }
+        }
+    }
+
+    private var composerRow: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            // Attach button — only rendered when the feature flag is on
+            if attachEnabled {
+                Menu {
+                    if let pickPhoto = onPickPhoto {
+                        Button { pickPhoto() } label: {
+                            Label("Photo Library", systemImage: "photo")
                         }
-                        if let pickFile = onPickFile {
-                            Button { pickFile() } label: {
-                                Label("Browse Files", systemImage: "folder")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "paperclip")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 44, height: 44)
                     }
-                    .disabled(isStreaming)
+                    if let pickFile = onPickFile {
+                        Button { pickFile() } label: {
+                            Label("Browse Files", systemImage: "folder")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
                 }
+                .disabled(isStreaming)
+            }
 
-                TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
-                    .font(BFFont.body)
-                    .textFieldStyle(.plain)
-                    .focused(isFocused)
-                    .padding(14)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(22)
-                    .lineLimit(1...5)
+            TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
+                .font(BFFont.body)
+                .textFieldStyle(.plain)
+                .focused(isFocused)
+                .padding(14)
+                .background(Color(.systemGray6))
+                .cornerRadius(22)
+                .lineLimit(1...5)
 
+            // Mic button — replaced by the send button once there's something to send
+            if let micTap = onMicTap, !canSend {
+                Button(action: micTap) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .disabled(isStreaming)
+            } else {
                 Button {
                     isStreaming ? onStop() : onSend()
                 } label: {
@@ -572,10 +665,41 @@ struct ChatInputView: View {
                 // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
                 .keyboardShortcut(.return, modifiers: .command)
             }
-            .padding(.horizontal, BFSpacing._4)
-            .padding(.vertical, 10)
-            .background(Color(.systemBackground))
         }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+    }
+
+    private var recordingRow: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 10, height: 10)
+            Text(formattedElapsed)
+                .font(BFFont.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(action: { onCancelRecording?() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
+            }
+            Button(action: { onConfirmRecording?() }) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(BFColor.primary)
+            }
+        }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+    }
+
+    private var formattedElapsed: String {
+        let minutes = Int(recordingElapsed) / 60
+        let seconds = Int(recordingElapsed) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

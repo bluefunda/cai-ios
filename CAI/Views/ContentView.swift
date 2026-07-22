@@ -439,6 +439,8 @@ struct ChatTopBar: View {
     var showHamburger: Bool = true
     var showNewChat: Bool = true
 
+    @State private var showFiles = false
+
     private var chatTitle: String {
         chatManager.currentConversation?.title ?? "New Chat"
     }
@@ -465,6 +467,24 @@ struct ChatTopBar: View {
             }
 
             Spacer()
+
+            if let conversationId = chatManager.currentConversation?.id {
+                Button { showFiles = true } label: {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: BFFont.toolbarIconPt - 2))
+                }
+                .foregroundStyle(.secondary)
+                .sheet(isPresented: $showFiles) {
+                    NavigationStack {
+                        ConversationFilesView(conversationId: conversationId)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Done") { showFiles = false }
+                                }
+                            }
+                    }
+                }
+            }
 
             ModeModelPicker()
         }

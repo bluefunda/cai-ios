@@ -64,6 +64,9 @@ final class ChatManager: ObservableObject {
     // MARK: - Private
 
     private let service: ChatServiceProtocol
+    let fileStore: FileStore
+    /// Used only to fetch LLM-output files detected in markdown responses; injectable for tests.
+    private let urlSession: URLSession
     var apiService: BFFAPIService?
     private var streamingTask: Task<Void, Never>?
     private var modelContext: ModelContext?
@@ -75,8 +78,10 @@ final class ChatManager: ObservableObject {
 
     // MARK: - Init
 
-    init(service: ChatServiceProtocol) {
+    init(service: ChatServiceProtocol, fileStore: FileStore = LocalFileStore(), urlSession: URLSession = .shared) {
         self.service = service
+        self.fileStore = fileStore
+        self.urlSession = urlSession
     }
 
     // Called once by CAIApp to hand off the AuthManager, the source of truth for
@@ -347,6 +352,7 @@ final class ChatManager: ObservableObject {
             currentConversation = conversations.first
         }
         deleteFromCache(conversation)
+        Task { try? await fileStore.deleteAll(conversationId: conversation.id) }
     }
 
     // MARK: - Messaging
@@ -443,6 +449,10 @@ final class ChatManager: ObservableObject {
                             }
                         }
 
+                        if !finalContent.isEmpty {
+                            persistOutputFiles(from: finalContent, conversationId: conversation.id)
+                        }
+
                     case .heartbeat:
                         break
 
@@ -525,6 +535,65 @@ final class ChatManager: ObservableObject {
     func uploadAttachment(data: Data, filename: String, mimeType: String) async throws -> String? {
         guard let api = apiService else { throw ChatServiceError.notConnected }
         return try await api.uploadFile(data: data, filename: filename, mimeType: mimeType)
+    }
+
+    // MARK: - Local File Persistence
+
+    /// The conversation a locally-picked attachment (or voice recording)
+    /// should be scoped to — creates a draft conversation if none is active
+    /// yet, mirroring sendMessage's own draft-creation fallback.
+    func conversationIdForAttachment() -> String {
+        if let id = currentConversation?.id { return id }
+        newConversation(focus: false)
+        return currentConversation!.id
+    }
+
+    /// Persists a user-picked file (attachment or voice recording) to
+    /// `fileStore` so it survives independent of whether/when it's uploaded.
+    @discardableResult
+    func saveLocalAttachment(data: Data, filename: String, mimeType: String, conversationId: String) async -> StoredFileMetadata? {
+        try? await fileStore.save(
+            data: data, filename: filename, mimeType: mimeType,
+            conversationId: conversationId, source: .userUpload, remoteURL: nil
+        )
+    }
+
+    /// Records the backend URL once a previously-saved local attachment finishes uploading.
+    func markAttachmentUploaded(_ metadata: StoredFileMetadata, remoteURL: String) {
+        Task { try? await fileStore.updateRemoteURL(remoteURL, for: metadata) }
+    }
+
+    /// Files (attachments + LLM output) stored locally for a conversation.
+    func attachments(for conversationId: String) async -> [StoredFileMetadata] {
+        (try? await fileStore.list(conversationId: conversationId)) ?? []
+    }
+
+    func deleteAttachment(_ metadata: StoredFileMetadata) async {
+        try? await fileStore.delete(metadata)
+    }
+
+    /// Scans a finalized assistant response for embedded generated-file links
+    /// (matching the web app's markdown-image detection, since the backend
+    /// has no structured "output file" field on the chat SSE stream) and
+    /// downloads/persists high-confidence matches (markdown images) locally.
+    private func persistOutputFiles(from content: String, conversationId: String) {
+        let links = MessageFileLinks.detect(in: content).filter(\.isImage)
+        guard !links.isEmpty else { return }
+        Task {
+            for link in links {
+                guard let url = URL(string: link.urlString) else { continue }
+                do {
+                    let (data, response) = try await urlSession.data(from: url)
+                    let mime = (response as? HTTPURLResponse)?.mimeType ?? "application/octet-stream"
+                    try await fileStore.save(
+                        data: data, filename: link.filename, mimeType: mime,
+                        conversationId: conversationId, source: .llmOutput, remoteURL: link.urlString
+                    )
+                } catch {
+                    print("[ChatManager] failed to persist output file \(link.urlString): \(error)")
+                }
+            }
+        }
     }
 
     func stopStreaming() async {

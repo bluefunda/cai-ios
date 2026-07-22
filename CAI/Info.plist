@@ -50,6 +50,10 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>BlueFunda AI uses the microphone to record voice messages you choose to send.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>BlueFunda AI uses on-device speech recognition to transcribe your voice messages into text.</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>CFBundleURLTypes</key>

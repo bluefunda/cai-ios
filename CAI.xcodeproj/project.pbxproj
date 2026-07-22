@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */; };
+		78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */; };
 		A1000001201BCDEF /* CAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011201BCDEF /* CAIApp.swift */; };
 		A1000002201BCDEF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012201BCDEF /* ContentView.swift */; };
 		A1000003201BCDEF /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013201BCDEF /* ChatView.swift */; };
@@ -24,6 +26,8 @@
 		B1000014201BCDEF /* BFFAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004201BCDEF /* BFFAPIService.swift */; };
 		B1000015201BCDEF /* RateLimitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000005201BCDEF /* RateLimitView.swift */; };
 		B1000016201BCDEF /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006201BCDEF /* StorageView.swift */; };
+		B21D7C5FE99EB18B79BFF586 /* LocalFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19352E75D7D0835B6D83375B /* LocalFileStore.swift */; };
+		B9B1269D9962DEE709AD6F19 /* VoiceInputManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280DCA3012561F192CB19BAA /* VoiceInputManager.swift */; };
 		C1000017201BCDEF /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDEF /* MarkdownView.swift */; };
 		D1000018201BCDEF /* StorageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000008201BCDEF /* StorageViewModel.swift */; };
 		DS100001201BCDEF /* BFColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000001201BCDEF /* BFColors.swift */; };
@@ -43,19 +47,20 @@
 		E900FE7C2FFC3FA200881287 /* SubscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E900FE7B2FFC3FA200881287 /* SubscriptionView.swift */; };
 		EE000001201BCDEF /* Environment.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE000002201BCDEF /* Environment.swift */; };
 		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
+		F7F26EF8687492EF9BC4B158 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22141F06B6EDC35EA631E85A /* FileStore.swift */; };
 		FF000002201BCDEF /* PersistedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000002100BCDEF /* PersistedModels.swift */; };
 		FF000011201BCDEF /* BFFeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000001201BCDEF /* BFFeatureFlags.swift */; };
-		G1000020201BCDEF /* Code/CodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000010201BCDEF /* Code/CodeView.swift */; };
+		G1000020201BCDEF /* CodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000010201BCDEF /* CodeView.swift */; };
 		G1000021201BCDEF /* CodeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000011201BCDEF /* CodeManager.swift */; };
 		H1000011201BCDEF /* SAPSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000001201BCDEF /* SAPSystem.swift */; };
 		H1000012201BCDEF /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000002201BCDEF /* KeychainStore.swift */; };
 		H1000013201BCDEF /* SAPSystemStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000003201BCDEF /* SAPSystemStore.swift */; };
 		H1000014201BCDEF /* CodeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000004201BCDEF /* CodeAPIService.swift */; };
-		H1000015201BCDEF /* Code/SystemManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000005201BCDEF /* Code/SystemManagerView.swift */; };
+		H1000015201BCDEF /* SystemManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000005201BCDEF /* SystemManagerView.swift */; };
 		J1000011201BCDEF /* ADTModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000001201BCDEF /* ADTModels.swift */; };
-		J1000012201BCDEF /* Code/ABAPHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000002201BCDEF /* Code/ABAPHighlighter.swift */; };
-		J1000013201BCDEF /* Code/ObjectBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000003201BCDEF /* Code/ObjectBrowserView.swift */; };
-		J1000014201BCDEF /* Code/SourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000004201BCDEF /* Code/SourceView.swift */; };
+		J1000012201BCDEF /* ABAPHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000002201BCDEF /* ABAPHighlighter.swift */; };
+		J1000013201BCDEF /* ObjectBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000003201BCDEF /* ObjectBrowserView.swift */; };
+		J1000014201BCDEF /* SourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000004201BCDEF /* SourceView.swift */; };
 		K1000011201BCDEF /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = K1000001201BCDEF /* HapticManager.swift */; };
 		L1000011201BCDEF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = L1000001201BCDEF /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -71,6 +76,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		19352E75D7D0835B6D83375B /* LocalFileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LocalFileStore.swift; path = LocalFileStore.swift; sourceTree = "<group>"; };
+		22141F06B6EDC35EA631E85A /* FileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FileStore.swift; path = FileStore.swift; sourceTree = "<group>"; };
+		280DCA3012561F192CB19BAA /* VoiceInputManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VoiceInputManager.swift; path = VoiceInputManager.swift; sourceTree = "<group>"; };
+		9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MessageFileLinks.swift; path = MessageFileLinks.swift; sourceTree = "<group>"; };
 		A1000011201BCDEF /* CAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAIApp.swift; sourceTree = "<group>"; };
 		A1000012201BCDEF /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000013201BCDEF /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -106,6 +115,7 @@
 		E100002201BCDEF /* CAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2000001201BCDEF /* CAI.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CAI.entitlements; sourceTree = "<group>"; };
 		E2000002201BCDEF /* CAI-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "CAI-macOS.entitlements"; sourceTree = "<group>"; };
+		E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ConversationFilesView.swift; path = ConversationFilesView.swift; sourceTree = "<group>"; };
 		E900FE722FFC198B00881287 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		E900FE752FFC32F100881287 /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 		E900FE772FFC336200881287 /* IAPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IAPManager.swift; sourceTree = "<group>"; };
@@ -114,17 +124,17 @@
 		F1000009201BCDEF /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		FF000001201BCDEF /* BFFeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFeatureFlags.swift; sourceTree = "<group>"; };
 		FF000002100BCDEF /* PersistedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedModels.swift; sourceTree = "<group>"; };
-		G1000010201BCDEF /* Code/CodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/CodeView.swift; sourceTree = "<group>"; };
+		G1000010201BCDEF /* CodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/CodeView.swift; sourceTree = "<group>"; };
 		G1000011201BCDEF /* CodeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeManager.swift; sourceTree = "<group>"; };
 		H1000001201BCDEF /* SAPSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystem.swift; sourceTree = "<group>"; };
 		H1000002201BCDEF /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		H1000003201BCDEF /* SAPSystemStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystemStore.swift; sourceTree = "<group>"; };
 		H1000004201BCDEF /* CodeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAPIService.swift; sourceTree = "<group>"; };
-		H1000005201BCDEF /* Code/SystemManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SystemManagerView.swift; sourceTree = "<group>"; };
+		H1000005201BCDEF /* SystemManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SystemManagerView.swift; sourceTree = "<group>"; };
 		J1000001201BCDEF /* ADTModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADTModels.swift; sourceTree = "<group>"; };
-		J1000002201BCDEF /* Code/ABAPHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ABAPHighlighter.swift; sourceTree = "<group>"; };
-		J1000003201BCDEF /* Code/ObjectBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ObjectBrowserView.swift; sourceTree = "<group>"; };
-		J1000004201BCDEF /* Code/SourceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SourceView.swift; sourceTree = "<group>"; };
+		J1000002201BCDEF /* ABAPHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ABAPHighlighter.swift; sourceTree = "<group>"; };
+		J1000003201BCDEF /* ObjectBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ObjectBrowserView.swift; sourceTree = "<group>"; };
+		J1000004201BCDEF /* SourceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SourceView.swift; sourceTree = "<group>"; };
 		K1000001201BCDEF /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
 		L1000001201BCDEF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -141,6 +151,16 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0305A5E601A51E5EAC372BEF /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				22141F06B6EDC35EA631E85A /* FileStore.swift */,
+				19352E75D7D0835B6D83375B /* LocalFileStore.swift */,
+			);
+			name = Storage;
+			path = Storage;
+			sourceTree = "<group>";
+		};
 		A1000040201BCDEF = {
 			isa = PBXGroup;
 			children = (
@@ -183,11 +203,12 @@
 				B1000006201BCDEF /* StorageView.swift */,
 				C1000007201BCDEF /* MarkdownView.swift */,
 				F1000009201BCDEF /* SafariView.swift */,
-				G1000010201BCDEF /* Code/CodeView.swift */,
-				H1000005201BCDEF /* Code/SystemManagerView.swift */,
-				J1000002201BCDEF /* Code/ABAPHighlighter.swift */,
-				J1000003201BCDEF /* Code/ObjectBrowserView.swift */,
-				J1000004201BCDEF /* Code/SourceView.swift */,
+				G1000010201BCDEF /* CodeView.swift */,
+				H1000005201BCDEF /* SystemManagerView.swift */,
+				J1000002201BCDEF /* ABAPHighlighter.swift */,
+				J1000003201BCDEF /* ObjectBrowserView.swift */,
+				J1000004201BCDEF /* SourceView.swift */,
+				E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -214,6 +235,8 @@
 				B1000004201BCDEF /* BFFAPIService.swift */,
 				H1000003201BCDEF /* SAPSystemStore.swift */,
 				H1000004201BCDEF /* CodeAPIService.swift */,
+				0305A5E601A51E5EAC372BEF /* Storage */,
+				280DCA3012561F192CB19BAA /* VoiceInputManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -246,6 +269,7 @@
 				H1000002201BCDEF /* KeychainStore.swift */,
 				K1000001201BCDEF /* HapticManager.swift */,
 				FF000001201BCDEF /* BFFeatureFlags.swift */,
+				9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -395,7 +419,7 @@
 				B1000016201BCDEF /* StorageView.swift in Sources */,
 				C1000017201BCDEF /* MarkdownView.swift in Sources */,
 				F1000019201BCDEF /* SafariView.swift in Sources */,
-				G1000020201BCDEF /* Code/CodeView.swift in Sources */,
+				G1000020201BCDEF /* CodeView.swift in Sources */,
 				G1000021201BCDEF /* CodeManager.swift in Sources */,
 				H1000011201BCDEF /* SAPSystem.swift in Sources */,
 				H1000012201BCDEF /* KeychainStore.swift in Sources */,
@@ -403,12 +427,12 @@
 				FF000011201BCDEF /* BFFeatureFlags.swift in Sources */,
 				H1000013201BCDEF /* SAPSystemStore.swift in Sources */,
 				H1000014201BCDEF /* CodeAPIService.swift in Sources */,
-				H1000015201BCDEF /* Code/SystemManagerView.swift in Sources */,
+				H1000015201BCDEF /* SystemManagerView.swift in Sources */,
 				J1000011201BCDEF /* ADTModels.swift in Sources */,
 				E900FE782FFC336200881287 /* IAPManager.swift in Sources */,
-				J1000012201BCDEF /* Code/ABAPHighlighter.swift in Sources */,
-				J1000013201BCDEF /* Code/ObjectBrowserView.swift in Sources */,
-				J1000014201BCDEF /* Code/SourceView.swift in Sources */,
+				J1000012201BCDEF /* ABAPHighlighter.swift in Sources */,
+				J1000013201BCDEF /* ObjectBrowserView.swift in Sources */,
+				J1000014201BCDEF /* SourceView.swift in Sources */,
 				D1000018201BCDEF /* StorageViewModel.swift in Sources */,
 				DS100001201BCDEF /* BFColors.swift in Sources */,
 				DS100002201BCDEF /* BFTypography.swift in Sources */,
@@ -420,6 +444,11 @@
 				DS100007201BCDEF /* BFIconSize.swift in Sources */,
 				DS100008201BCDEF /* BFLogo.swift in Sources */,
 				DS100009201BCDEF /* BFButtonStyle.swift in Sources */,
+				F7F26EF8687492EF9BC4B158 /* FileStore.swift in Sources */,
+				B21D7C5FE99EB18B79BFF586 /* LocalFileStore.swift in Sources */,
+				B9B1269D9962DEE709AD6F19 /* VoiceInputManager.swift in Sources */,
+				78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */,
+				4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -15,10 +15,12 @@ enum BFFeatureFlags {
     }
 
     /// File attachment (photo library + document picker) in the chat input bar.
-    /// Disabled by default; enable for internal builds or once backend is production-ready.
+    /// Enabled by default now that attachments persist locally via LocalFileStore
+    /// and the backend upload + fileUrl contract is confirmed production-ready.
+    /// Override to false via UserDefaults/launch argument to kill-switch it.
     static var fileUploadEnabled: Bool {
         UserDefaults.standard.object(forKey: Keys.fileUpload) != nil
             ? UserDefaults.standard.bool(forKey: Keys.fileUpload)
-            : false
+            : true
     }
 }
