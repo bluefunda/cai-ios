@@ -87,6 +87,7 @@ struct APIClient {
         data fileData: Data,
         filename: String,
         mimeType: String,
+        fields: [String: String] = [:],
         queryItems: [URLQueryItem] = []
     ) async throws -> Data {
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -104,6 +105,12 @@ struct APIClient {
 
         var body = Data()
         let append: (String) -> Void = { body.append($0.data(using: .utf8)!) }
+
+        for (name, value) in fields {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            append("\(value)\r\n")
+        }
 
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")

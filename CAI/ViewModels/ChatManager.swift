@@ -537,7 +537,10 @@ final class ChatManager: ObservableObject {
 
     func uploadAttachment(data: Data, filename: String, mimeType: String) async throws -> String? {
         guard let api = apiService else { throw ChatServiceError.notConnected }
-        return try await api.uploadFile(data: data, filename: filename, mimeType: mimeType)
+        guard let userId = authManager?.currentUser?.id, !userId.isEmpty else {
+            throw ChatServiceError.unauthorized
+        }
+        return try await api.uploadFileForPrompt(data: data, filename: filename, mimeType: mimeType, userId: userId)
     }
 
     // MARK: - Local File Persistence

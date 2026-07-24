@@ -158,6 +158,23 @@ final class BFFAPIService {
         let result = try JSONDecoder().decode(FileUploadResultDTO.self, from: raw)
         return result.resolvedURL
     }
+
+    /// Uploads a file to attach to a chat prompt via `/fileupload` — the same
+    /// endpoint/contract the web app's chat-attach flow uses (no `/api/v1`
+    /// prefix, no bucket concept). Deliberately separate from `uploadFile`
+    /// above, which is the bucket-scoped `/storage/upload` proxy the Storage
+    /// browser feature depends on.
+    func uploadFileForPrompt(data: Data, filename: String, mimeType: String, userId: String) async throws -> String? {
+        let raw = try await client.uploadMultipart(
+            "/fileupload",
+            data: data,
+            filename: filename,
+            mimeType: mimeType,
+            fields: ["userid": userId, "path": userId]
+        )
+        let result = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: raw)
+        return result.resolvedURL
+    }
 }
 
 // MARK: - Convenience: AuthManager token provider factory

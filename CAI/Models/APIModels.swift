@@ -493,6 +493,22 @@ struct FileUploadResultDTO: Codable {
     var resolvedURL: String? { url ?? key ?? path }
 }
 
+/// Response shape for `POST /fileupload` — the shared chat-attachment upload
+/// contract also used by the web app (`{ data: { file: [{ url }] } }`).
+/// Deliberately separate from `FileUploadResultDTO`, which is the bucket-scoped
+/// `/storage/upload` response used by the unrelated Storage browser feature.
+struct FileUploadForPromptResponseDTO: Codable {
+    struct FileEntry: Codable {
+        let url: String?
+    }
+    struct DataPayload: Codable {
+        let file: [FileEntry]?
+    }
+    let data: DataPayload?
+
+    var resolvedURL: String? { data?.file?.first?.url }
+}
+
 struct StorageStatsDTO: Codable {
     let totalSize: Int64?
     let fileCount: Int?

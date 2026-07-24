@@ -273,6 +273,26 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(message.fileUrl, "https://storage.example.com/doc.pdf")
         XCTAssertEqual(message.fileMetadata?.first?.fileName, "out.png")
     }
+
+    // MARK: FileUploadForPromptResponseDTO (/fileupload)
+
+    func test_fileUploadForPromptResponseDTO_decodesURL() throws {
+        let json = """
+        { "data": { "file": [ { "url": "https://storage.example.com/abc.pdf" } ] } }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
+        XCTAssertEqual(dto.resolvedURL, "https://storage.example.com/abc.pdf")
+    }
+
+    func test_fileUploadForPromptResponseDTO_resolvedURLNilWhenEmpty() throws {
+        let json = """
+        { "data": { "file": [] } }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
+        XCTAssertNil(dto.resolvedURL)
+    }
 }
 
 // MARK: - ChatManager Tests
