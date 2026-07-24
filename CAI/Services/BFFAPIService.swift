@@ -170,7 +170,8 @@ final class BFFAPIService {
             data: data,
             filename: filename,
             mimeType: mimeType,
-            fields: ["userid": userId, "path": userId]
+            fields: ["userid": userId, "path": userId],
+            includeAccessTokenHeader: true
         )
         let result = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: raw)
         return result.resolvedURL
