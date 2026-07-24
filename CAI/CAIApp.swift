@@ -28,7 +28,10 @@ struct CAIApp: App {
                 .onAppear {
                     #if targetEnvironment(macCatalyst)
                     if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                        scene.sizeRestrictions?.minimumSize = CGSize(width: 760, height: 520)
+                        // Raising the floor (not setting an explicit frame) makes the
+                        // window open bigger by default without fighting the window
+                        // manager / breaking fullscreen, per the note above.
+                        scene.sizeRestrictions?.minimumSize = CGSize(width: 1100, height: 750)
                     }
                     #endif
                 }

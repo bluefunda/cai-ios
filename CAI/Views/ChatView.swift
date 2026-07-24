@@ -32,7 +32,9 @@ struct ChatView: View {
     @State private var attachmentMIME: String?
     @State private var attachmentLocalMetadata: StoredFileMetadata?
     @State private var showPhotoPicker = false
-    @State private var showFileImporter = false
+    /// Keeps the document-picker delegate alive for the duration of an
+    /// imperative presentation (see DocumentPickerCoordinator).
+    @State private var documentPickerCoordinator: DocumentPickerCoordinator?
 
     private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
 
@@ -248,7 +250,7 @@ struct ChatView: View {
                 onStop: stopStreaming,
                 onClearAttachment: { clearAttachment() },
                 onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
-                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil,
+                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { presentDocumentPicker() } : nil,
                 onMicTap: startRecording,
                 onCancelRecording: cancelRecording,
                 onConfirmRecording: confirmRecording
@@ -256,13 +258,6 @@ struct ChatView: View {
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, item in
                 Task { await loadAttachment(from: item) }
-            }
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: importableTypes,
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result)
             }
             Text("AI responses may be inaccurate. Verify important information.")
                 .font(.caption2)
@@ -327,10 +322,25 @@ struct ChatView: View {
         attachmentLocalMetadata = nil
     }
 
-    private func handleFileImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
+    /// Presents the document picker imperatively — SwiftUI's `.fileImporter`
+    /// (and even a `.sheet`-wrapped `UIViewControllerRepresentable`) silently
+    /// fail to deliver their completion callback on Mac Catalyst.
+    private func presentDocumentPicker() {
+        documentPickerCoordinator = DocumentPickerCoordinator.present(
+            allowedContentTypes: importableTypes,
+            onPick: { url in
+                handleFileImport(url)
+                documentPickerCoordinator = nil
+            },
+            onCancel: {
+                documentPickerCoordinator = nil
+            }
+        )
+    }
+
+    /// Copies the picked file (`asCopy: true`) into a location we already
+    /// own, so no security-scoped access dance is needed.
+    private func handleFileImport(_ url: URL) {
         guard let data = try? Data(contentsOf: url) else { return }
         attachmentData = data
         attachmentFilename = url.lastPathComponent
@@ -643,7 +653,7 @@ struct ChatInputView: View {
     }
 
     private var composerRow: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .center, spacing: 6) {
             // Attach button — only rendered when the feature flag is on
             if attachEnabled {
                 Menu {
@@ -658,11 +668,16 @@ struct ChatInputView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 22))
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .disabled(isStreaming)
             }
 
@@ -670,33 +685,36 @@ struct ChatInputView: View {
                 .font(BFFont.body)
                 .textFieldStyle(.plain)
                 .focused(isFocused)
-                .padding(14)
-                .background(Color(.systemGray6))
-                .cornerRadius(22)
                 .lineLimit(1...5)
 
             // Mic button — replaced by the send button once there's something to send
             if let micTap = onMicTap, !canSend {
                 Button(action: micTap) {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: 18))
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 32, height: 32)
                 }
+                .buttonStyle(.plain)
                 .disabled(isStreaming)
             } else {
                 Button {
                     isStreaming ? onStop() : onSend()
                 } label: {
                     Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 36))
+                        .font(.system(size: 28))
                         .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
                 }
+                .buttonStyle(.plain)
                 .disabled(!isStreaming && !canSend)
                 // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
                 .keyboardShortcut(.return, modifiers: .command)
             }
         }
+        .padding(.leading, attachEnabled ? 6 : 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 10)
         .background(Color(.systemBackground))
