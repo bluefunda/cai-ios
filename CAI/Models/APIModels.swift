@@ -494,19 +494,19 @@ struct FileUploadResultDTO: Codable {
 }
 
 /// Response shape for `POST /fileupload` — the shared chat-attachment upload
-/// contract also used by the web app (`{ data: { file: [{ url }] } }`).
+/// contract also used by the web app (`{ file: [{ url, name, size, ... }] }`,
+/// verified against the live gateway response — cai-gw's `is_collection`/
+/// `mapping` config on this endpoint wraps trm-s3's raw JSON array under a
+/// top-level "file" key, with no additional "data" nesting).
 /// Deliberately separate from `FileUploadResultDTO`, which is the bucket-scoped
 /// `/storage/upload` response used by the unrelated Storage browser feature.
 struct FileUploadForPromptResponseDTO: Codable {
     struct FileEntry: Codable {
         let url: String?
     }
-    struct DataPayload: Codable {
-        let file: [FileEntry]?
-    }
-    let data: DataPayload?
+    let file: [FileEntry]?
 
-    var resolvedURL: String? { data?.file?.first?.url }
+    var resolvedURL: String? { file?.first?.url }
 }
 
 struct StorageStatsDTO: Codable {

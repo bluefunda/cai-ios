@@ -277,8 +277,10 @@ final class APIModelsTests: XCTestCase {
     // MARK: FileUploadForPromptResponseDTO (/fileupload)
 
     func test_fileUploadForPromptResponseDTO_decodesURL() throws {
+        // Verified against the live gateway response, 2026-07-24: cai-gw wraps
+        // trm-s3's raw array under a top-level "file" key, no "data" nesting.
         let json = """
-        { "data": { "file": [ { "url": "https://storage.example.com/abc.pdf" } ] } }
+        { "file": [ { "url": "https://storage.example.com/abc.pdf", "name": "abc.pdf", "size": 123 } ] }
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
@@ -287,7 +289,7 @@ final class APIModelsTests: XCTestCase {
 
     func test_fileUploadForPromptResponseDTO_resolvedURLNilWhenEmpty() throws {
         let json = """
-        { "data": { "file": [] } }
+        { "file": [] }
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
