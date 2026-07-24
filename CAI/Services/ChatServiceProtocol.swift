@@ -167,14 +167,50 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     let role: MessageRole
     let content: String
     let timestamp: Date
+    /// Durable reference to a user-attached file, relayed by cai-bff from history
+    /// (also set locally the moment an attachment upload succeeds).
+    var fileUrl: String? = nil
+    /// Structured reference(s) for LLM-generated files, relayed by cai-bff from history.
+    var fileMetadata: [MessageFileMetadata]? = nil
 
-    init(id: String = UUID().uuidString, role: MessageRole, content: String, timestamp: Date = Date()) {
+    init(
+        id: String = UUID().uuidString,
+        role: MessageRole,
+        content: String,
+        timestamp: Date = Date(),
+        fileUrl: String? = nil,
+        fileMetadata: [MessageFileMetadata]? = nil
+    ) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
+        self.fileUrl = fileUrl
+        self.fileMetadata = fileMetadata
     }
 
+}
+
+/// App-level mirror of `FileMetadataDTO` — the structured reference for an
+/// LLM-generated file attached to a chat message.
+struct MessageFileMetadata: Codable, Equatable, Hashable {
+    let originalURL: String?
+    let s3Path: String?
+    let downloadURL: String?
+    let fileName: String?
+    let fileSize: Int64?
+    let source: String?
+}
+
+extension MessageFileMetadata {
+    init(from dto: FileMetadataDTO) {
+        self.originalURL = dto.originalURL
+        self.s3Path = dto.s3Path
+        self.downloadURL = dto.downloadURL
+        self.fileName = dto.fileName
+        self.fileSize = dto.fileSize
+        self.source = dto.source
+    }
 }
 
 extension ChatMessage {

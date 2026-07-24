@@ -294,7 +294,9 @@ final class ChatManager: ObservableObject {
                     id: dto.id ?? UUID().uuidString,
                     role: MessageRole(rawValue: dto.normalizedRoleString) ?? .user,
                     content: dto.content,
-                    timestamp: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
+                    timestamp: dto.createdAt.flatMap(Date.fromISO8601) ?? Date(),
+                    fileUrl: dto.fileUrl,
+                    fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:))
                 )
             }
             conversations[idx].messages = messages
@@ -302,6 +304,7 @@ final class ChatManager: ObservableObject {
                 currentConversation = conversations[idx]
             }
             cacheMessages(messages, for: conversationId)
+            persistHistoryFileReferences(messages, conversationId: conversationId)
         } catch {
             // Offline fallback: show whatever is cached
             if conversations[idx].messages.isEmpty {
@@ -372,7 +375,7 @@ final class ChatManager: ObservableObject {
         let isFirstMessage = conversation.messages.isEmpty
 
         // Append user message
-        let userMessage = ChatMessage(role: .user, content: text)
+        let userMessage = ChatMessage(role: .user, content: text, fileUrl: fileUrl)
         conversation.messages.append(userMessage)
 
         // Append empty assistant placeholder
@@ -573,26 +576,57 @@ final class ChatManager: ObservableObject {
     }
 
     /// Scans a finalized assistant response for embedded generated-file links
-    /// (matching the web app's markdown-image detection, since the backend
-    /// has no structured "output file" field on the chat SSE stream) and
-    /// downloads/persists high-confidence matches (markdown images) locally.
+    /// (matching the web app's markdown-image detection, since the live chat
+    /// SSE stream has no structured "output file" field) and downloads/persists
+    /// high-confidence matches (markdown images) locally.
     private func persistOutputFiles(from content: String, conversationId: String) {
         let links = MessageFileLinks.detect(in: content).filter(\.isImage)
         guard !links.isEmpty else { return }
         Task {
             for link in links {
-                guard let url = URL(string: link.urlString) else { continue }
-                do {
-                    let (data, response) = try await urlSession.data(from: url)
-                    let mime = (response as? HTTPURLResponse)?.mimeType ?? "application/octet-stream"
-                    try await fileStore.save(
-                        data: data, filename: link.filename, mimeType: mime,
-                        conversationId: conversationId, source: .llmOutput, remoteURL: link.urlString
-                    )
-                } catch {
-                    print("[ChatManager] failed to persist output file \(link.urlString): \(error)")
+                await downloadAndPersist(
+                    urlString: link.urlString, filename: link.filename,
+                    conversationId: conversationId, source: .llmOutput
+                )
+            }
+        }
+    }
+
+    /// Persists any structured file references cai-bff now relays on chat
+    /// history (`fileUrl`/`fileMetadata`, added by cai-mcp-go) so they're
+    /// browsable via LocalFileStore without depending on markdown-embedded
+    /// URLs. Skips files already persisted for this conversation.
+    private func persistHistoryFileReferences(_ messages: [ChatMessage], conversationId: String) {
+        Task {
+            var seenRemoteURLs = Set((try? await fileStore.list(conversationId: conversationId))?.compactMap(\.remoteURL) ?? [])
+
+            for message in messages {
+                if let fileUrl = message.fileUrl, !fileUrl.isEmpty, !seenRemoteURLs.contains(fileUrl) {
+                    seenRemoteURLs.insert(fileUrl)
+                    let filename = message.fileMetadata?.first?.fileName ?? URL(string: fileUrl)?.lastPathComponent ?? "attachment"
+                    await downloadAndPersist(urlString: fileUrl, filename: filename, conversationId: conversationId, source: .userUpload)
+                }
+                for meta in message.fileMetadata ?? [] {
+                    guard let remote = meta.downloadURL ?? meta.originalURL, !remote.isEmpty, !seenRemoteURLs.contains(remote) else { continue }
+                    seenRemoteURLs.insert(remote)
+                    let filename = meta.fileName ?? URL(string: remote)?.lastPathComponent ?? "file"
+                    await downloadAndPersist(urlString: remote, filename: filename, conversationId: conversationId, source: .llmOutput)
                 }
             }
+        }
+    }
+
+    private func downloadAndPersist(urlString: String, filename: String, conversationId: String, source: FileSource) async {
+        guard let url = URL(string: urlString) else { return }
+        do {
+            let (data, response) = try await urlSession.data(from: url)
+            let mime = (response as? HTTPURLResponse)?.mimeType ?? "application/octet-stream"
+            try await fileStore.save(
+                data: data, filename: filename, mimeType: mime,
+                conversationId: conversationId, source: source, remoteURL: urlString
+            )
+        } catch {
+            print("[ChatManager] failed to persist file \(urlString): \(error)")
         }
     }
 

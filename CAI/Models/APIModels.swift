@@ -146,6 +146,17 @@ struct ChatMessageDTO: Codable {
     let role: String       // "Human", "AI", "user", "assistant"
     let content: String
     let createdAt: String?
+    /// Durable reference to a user-attached file, relayed by cai-bff from history.
+    let fileUrl: String?
+    /// Ready-to-use URL for an LLM-generated file.
+    let fileDownloadUrl: String?
+    /// Structured reference(s) for LLM-generated files.
+    let fileMetadata: [FileMetadataDTO]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, content, createdAt, fileUrl, fileDownloadUrl
+        case fileMetadata = "file_metadata"
+    }
 
     /// Converts web role names ("Human", "AI") to canonical role strings ("user", "assistant")
     var normalizedRoleString: String {
@@ -155,6 +166,26 @@ struct ChatMessageDTO: Codable {
         case "system": return "system"
         default: return "user"
         }
+    }
+}
+
+/// Structured, durable reference for a file involved in a chat message —
+/// mirrors cai-bff's `FileMetadata` (relayed from cai-llm-router via cai-mcp-go).
+struct FileMetadataDTO: Codable, Hashable {
+    let originalURL: String?
+    let s3Path: String?
+    let downloadURL: String?
+    let fileName: String?
+    let fileSize: Int64?
+    let source: String?
+
+    enum CodingKeys: String, CodingKey {
+        case originalURL = "original_url"
+        case s3Path = "s3_path"
+        case downloadURL = "download_url"
+        case fileName = "file_name"
+        case fileSize = "file_size"
+        case source
     }
 }
 

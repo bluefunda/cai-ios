@@ -61,6 +61,46 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(dto.normalizedRoleString, "assistant")
     }
 
+    func test_chatMessageDTO_decodesFileFields() throws {
+        let json = """
+        {
+          "role": "AI",
+          "content": "Here's your chart",
+          "fileUrl": "https://storage.example.com/upload.pdf",
+          "fileDownloadUrl": "https://storage.example.com/chart.png",
+          "file_metadata": [
+            {
+              "original_url": "https://storage.example.com/chart.png",
+              "s3_path": "individual/user123/chart.png",
+              "download_url": "https://storage.example.com/chart.png",
+              "file_name": "chart.png",
+              "file_size": 4096,
+              "source": "llm_generated"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
+        XCTAssertEqual(dto.fileUrl, "https://storage.example.com/upload.pdf")
+        XCTAssertEqual(dto.fileDownloadUrl, "https://storage.example.com/chart.png")
+        XCTAssertEqual(dto.fileMetadata?.count, 1)
+        XCTAssertEqual(dto.fileMetadata?.first?.fileName, "chart.png")
+        XCTAssertEqual(dto.fileMetadata?.first?.fileSize, 4096)
+        XCTAssertEqual(dto.fileMetadata?.first?.source, "llm_generated")
+    }
+
+    func test_chatMessageDTO_fileFieldsDefaultNilWhenAbsent() throws {
+        let json = """
+        {"role":"user","content":"Hello"}
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
+        XCTAssertNil(dto.fileUrl)
+        XCTAssertNil(dto.fileDownloadUrl)
+        XCTAssertNil(dto.fileMetadata)
+    }
+
     // MARK: RateLimitStatsDTO
 
     func test_rateLimitStatsDTO_decodesSnakeCase() throws {
@@ -203,6 +243,35 @@ final class APIModelsTests: XCTestCase {
         let dto = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(dto.formattedSize, "1.5 KB")
         XCTAssertEqual(dto.displayName, "file.txt")
+    }
+
+    // MARK: MessageFileMetadata mapping
+
+    func test_messageFileMetadata_initsFromDTO() {
+        let dto = FileMetadataDTO(
+            originalURL: "https://storage.example.com/a.png",
+            s3Path: "individual/user/a.png",
+            downloadURL: "https://storage.example.com/a.png",
+            fileName: "a.png",
+            fileSize: 2048,
+            source: "llm_generated"
+        )
+        let model = MessageFileMetadata(from: dto)
+        XCTAssertEqual(model.fileName, "a.png")
+        XCTAssertEqual(model.fileSize, 2048)
+        XCTAssertEqual(model.downloadURL, "https://storage.example.com/a.png")
+        XCTAssertEqual(model.source, "llm_generated")
+    }
+
+    func test_chatMessage_carriesFileUrlAndMetadata() {
+        let message = ChatMessage(
+            role: .user,
+            content: "Check this out",
+            fileUrl: "https://storage.example.com/doc.pdf",
+            fileMetadata: [MessageFileMetadata(originalURL: nil, s3Path: nil, downloadURL: "https://storage.example.com/out.png", fileName: "out.png", fileSize: 10, source: "llm_generated")]
+        )
+        XCTAssertEqual(message.fileUrl, "https://storage.example.com/doc.pdf")
+        XCTAssertEqual(message.fileMetadata?.first?.fileName, "out.png")
     }
 }
 

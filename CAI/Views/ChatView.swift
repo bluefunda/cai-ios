@@ -500,6 +500,9 @@ struct MessageView: View {
         HStack(alignment: .bottom, spacing: 0) {
             Spacer(minLength: 56)
             VStack(alignment: .trailing, spacing: 3) {
+                if let fileUrl = message.fileUrl, !fileUrl.isEmpty {
+                    AttachmentChip(filename: URL(string: fileUrl)?.lastPathComponent ?? "Attachment")
+                }
                 Text(message.content)
                     .font(BFFont.body)
                     .foregroundStyle(.primary)
@@ -526,6 +529,14 @@ struct MessageView: View {
             MarkdownView(content: message.content)
                 .font(BFFont.body)
                 .contextMenu { if !message.content.isEmpty { messageActions } }
+
+            if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(fileMetadata, id: \.self) { meta in
+                        AttachmentChip(filename: meta.fileName ?? URL(string: meta.downloadURL ?? meta.originalURL ?? "")?.lastPathComponent ?? "File")
+                    }
+                }
+            }
 
             if !message.content.isEmpty {
                 HStack(spacing: 20) {
@@ -558,6 +569,26 @@ struct MessageView: View {
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Attachment Chip
+
+/// Small pill showing a file reference attached to a message (user upload or
+/// LLM-generated output) — backed by the durable fileUrl/file_metadata cai-bff
+/// relays on chat history, browsable in full via ConversationFilesView.
+struct AttachmentChip: View {
+    let filename: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "paperclip")
+            Text(filename).font(.caption).lineLimit(1)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color(.systemGray6), in: Capsule())
     }
 }
 
