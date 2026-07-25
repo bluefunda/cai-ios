@@ -198,6 +198,7 @@ final class ChatManager: ObservableObject {
             let localOnly = conversations.filter { !mergedIds.contains($0.id) }
             conversations = merged + localOnly
             cacheConversations(loaded)
+            retryStuckTitles(dtos)
         } catch {
             // Don't surface load errors — user can still create new chats
             print("[ChatManager] loadChats error: \(error)")
@@ -775,6 +776,41 @@ extension ChatManager {
             )
         } catch {
             print("[ChatManager] failed to persist file \(urlString): \(error)")
+        }
+    }
+}
+
+// MARK: - Stuck Chat Title Retry
+// Split from the main ChatManager body for the same type_body_length reason
+// as the file-attachment extension above.
+extension ChatManager {
+    /// Matches cai-mcp-go's DefaultChatTitle constant — the placeholder a chat
+    /// is created with, before title generation ever runs.
+    private static let defaultServerTitle = "New Chat"
+
+    /// Backend title generation is a one-shot, fire-and-forget call made once
+    /// when a chat is first created; if that single attempt fails (network
+    /// blip, LLM timeout, an expired token at that exact moment), the chat is
+    /// left stuck on the server's own default placeholder forever — nothing
+    /// else ever retries it. Re-attempts generation in the background for any
+    /// loaded chat still on that default, so it self-heals the next time the
+    /// chat list loads instead of staying wrong permanently.
+    private func retryStuckTitles(_ dtos: [ChatSummaryDTO]) {
+        guard let api = apiService else { return }
+        let stuck = dtos.filter { $0.title == Self.defaultServerTitle && !($0.firstMessage ?? "").isBlank }
+
+        for dto in stuck {
+            guard let prompt = dto.firstMessage else { continue }
+            Task {
+                guard let title = try? await api.generateTitle(chatId: dto.id, message: prompt) else { return }
+                if let idx = conversations.firstIndex(where: { $0.id == dto.id }) {
+                    conversations[idx].title = title
+                }
+                if currentConversation?.id == dto.id {
+                    currentConversation?.title = title
+                }
+                cacheUpdateTitle(title, for: dto.id)
+            }
         }
     }
 }
