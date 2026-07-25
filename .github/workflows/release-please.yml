@@ -218,7 +218,9 @@ jobs:
           bundle exec fastlane run increment_build_number \
             xcodeproj:"CAI.xcodeproj" build_number:"$FL_BUILD_NUMBER"
 
-      - name: Commit and push
+      - name: Commit and push (or open a PR if main is protected)
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -228,7 +230,26 @@ jobs:
           fi
           git add CAI.xcodeproj/project.pbxproj
           git commit -m "chore: sync project.pbxproj to $FL_VERSION_NUMBER ($FL_BUILD_NUMBER) [skip ci]"
-          git push origin HEAD:main
+
+          if git push origin HEAD:main; then
+            echo "Pushed directly to main"
+            exit 0
+          fi
+
+          # main has required-PR branch protection with no admin/token bypass,
+          # so a direct push is always rejected (GH006). That's expected, not
+          # an error -- fall back to a small PR instead of silently dropping
+          # the sync (App Store submission already succeeded in the deploy
+          # jobs above; this only keeps project.pbxproj's committed version
+          # numbers matching what was actually shipped).
+          echo "Direct push to main was rejected by branch protection — opening a PR instead"
+          BRANCH="chore/sync-version-$FL_VERSION_NUMBER-$FL_BUILD_NUMBER"
+          git push origin "HEAD:refs/heads/$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: sync project.pbxproj to $FL_VERSION_NUMBER ($FL_BUILD_NUMBER)" \
+            --body "Automated sync of the version/build number fastlane set during this release's App Store submission (already completed successfully in the jobs above). Cosmetic only — safe to merge."
 
   release-notes:
     needs: release-please
