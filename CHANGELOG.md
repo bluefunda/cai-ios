@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/bluefunda/cai-ios/compare/v1.7.1...v1.8.0) (2026-07-25)
+
+
+### Features
+
+* local file persistence, prompt attachments, and voice input ([#150](https://github.com/bluefunda/cai-ios/issues/150)) ([fb7777f](https://github.com/bluefunda/cai-ios/commit/fb7777f1d8a63837879a666d7bddfe766b5bcfe5))
+
 ## [1.7.1](https://github.com/bluefunda/cai-ios/compare/v1.7.0...v1.7.1) (2026-07-22)
 
 
