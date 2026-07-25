@@ -22,6 +22,7 @@
 		A1000009201BCDEF /* BFFChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019201BCDEF /* BFFChatService.swift */; };
 		A100000A201BCDEF /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001A201BCDEF /* AuthManager.swift */; };
 		A100000B201BCDEF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A100001B201BCDEF /* Assets.xcassets */; };
+		A44A9A13E45DC61CD42C68CB /* AuthTokenRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */; };
 		B1000011201BCDEF /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001201BCDEF /* APIModels.swift */; };
 		B1000012201BCDEF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002201BCDEF /* APIClient.swift */; };
 		B1000013201BCDEF /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000003201BCDEF /* Extensions.swift */; };
@@ -78,6 +79,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthTokenRefreshTests.swift; sourceTree = "<group>"; };
 		19352E75D7D0835B6D83375B /* LocalFileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LocalFileStore.swift; path = LocalFileStore.swift; sourceTree = "<group>"; };
 		22141F06B6EDC35EA631E85A /* FileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FileStore.swift; path = FileStore.swift; sourceTree = "<group>"; };
 		280DCA3012561F192CB19BAA /* VoiceInputManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VoiceInputManager.swift; path = VoiceInputManager.swift; sourceTree = "<group>"; };
@@ -301,6 +303,7 @@
 				E100002001BCDEF /* CAITests.swift */,
 				E100002101BCDEF /* MockChatService.swift */,
 				A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */,
+				0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */,
 			);
 			path = CAITests;
 			sourceTree = "<group>";
@@ -466,6 +469,7 @@
 				E100001001BCDEF /* CAITests.swift in Sources */,
 				E100001101BCDEF /* MockChatService.swift in Sources */,
 				36DD901178353045CBE6B0C0 /* ChatManagerFileTests.swift in Sources */,
+				A44A9A13E45DC61CD42C68CB /* AuthTokenRefreshTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
