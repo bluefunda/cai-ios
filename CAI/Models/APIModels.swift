@@ -146,6 +146,17 @@ struct ChatMessageDTO: Codable {
     let role: String       // "Human", "AI", "user", "assistant"
     let content: String
     let createdAt: String?
+    /// Durable reference to a user-attached file, relayed by cai-bff from history.
+    let fileUrl: String?
+    /// Ready-to-use URL for an LLM-generated file.
+    let fileDownloadUrl: String?
+    /// Structured reference(s) for LLM-generated files.
+    let fileMetadata: [FileMetadataDTO]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, content, createdAt, fileUrl, fileDownloadUrl
+        case fileMetadata = "file_metadata"
+    }
 
     /// Converts web role names ("Human", "AI") to canonical role strings ("user", "assistant")
     var normalizedRoleString: String {
@@ -155,6 +166,26 @@ struct ChatMessageDTO: Codable {
         case "system": return "system"
         default: return "user"
         }
+    }
+}
+
+/// Structured, durable reference for a file involved in a chat message —
+/// mirrors cai-bff's `FileMetadata` (relayed from cai-llm-router via cai-mcp-go).
+struct FileMetadataDTO: Codable, Hashable {
+    let originalURL: String?
+    let s3Path: String?
+    let downloadURL: String?
+    let fileName: String?
+    let fileSize: Int64?
+    let source: String?
+
+    enum CodingKeys: String, CodingKey {
+        case originalURL = "original_url"
+        case s3Path = "s3_path"
+        case downloadURL = "download_url"
+        case fileName = "file_name"
+        case fileSize = "file_size"
+        case source
     }
 }
 
@@ -460,6 +491,22 @@ struct FileUploadResultDTO: Codable {
     let message: String?
 
     var resolvedURL: String? { url ?? key ?? path }
+}
+
+/// Response shape for `POST /fileupload` — the shared chat-attachment upload
+/// contract also used by the web app (`{ file: [{ url, name, size, ... }] }`,
+/// verified against the live gateway response — cai-gw's `is_collection`/
+/// `mapping` config on this endpoint wraps trm-s3's raw JSON array under a
+/// top-level "file" key, with no additional "data" nesting).
+/// Deliberately separate from `FileUploadResultDTO`, which is the bucket-scoped
+/// `/storage/upload` response used by the unrelated Storage browser feature.
+struct FileUploadForPromptResponseDTO: Codable {
+    struct FileEntry: Codable {
+        let url: String?
+    }
+    let file: [FileEntry]?
+
+    var resolvedURL: String? { file?.first?.url }
 }
 
 struct StorageStatsDTO: Codable {

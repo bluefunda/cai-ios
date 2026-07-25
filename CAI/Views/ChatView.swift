@@ -2,6 +2,12 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
+/// `@MainActor` so every `Task { ... }` created in this view's methods stays
+/// pinned to the main actor for its whole lifetime — without it, synchronous
+/// calls into `ChatManager` (also `@MainActor`) from a Task resumed after an
+/// `await` aren't guaranteed to still be on the main thread, which traps
+/// under the Main Thread Checker / actor-isolation runtime checks.
+@MainActor
 struct ChatView: View {
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var authManager: AuthManager
@@ -24,10 +30,16 @@ struct ChatView: View {
     @State private var attachmentData: Data?
     @State private var attachmentFilename: String?
     @State private var attachmentMIME: String?
+    @State private var attachmentLocalMetadata: StoredFileMetadata?
     @State private var showPhotoPicker = false
-    @State private var showFileImporter = false
+    /// Keeps the document-picker delegate alive for the duration of an
+    /// imperative presentation (see DocumentPickerCoordinator).
+    @State private var documentPickerCoordinator: DocumentPickerCoordinator?
 
     private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
+
+    // Voice input state
+    @StateObject private var voiceInput = VoiceInputManager()
 
     // Scroll management
     @State private var isAtBottom = true
@@ -94,6 +106,23 @@ struct ChatView: View {
             Button("OK") { chatManager.error = nil }
         } message: {
             Text(chatManager.error ?? "")
+        }
+        .alert("Voice Input", isPresented: .constant(voiceInput.error != nil)) {
+            if let denied = voiceInput.deniedPermission {
+                Button("Open Settings") {
+                    openSystemSettings(for: denied)
+                    voiceInput.error = nil
+                    voiceInput.deniedPermission = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    voiceInput.error = nil
+                    voiceInput.deniedPermission = nil
+                }
+            } else {
+                Button("OK") { voiceInput.error = nil }
+            }
+        } message: {
+            Text(voiceInput.error ?? "")
         }
         .overlay {
             if chatManager.showRateLimitModal {
@@ -215,22 +244,20 @@ struct ChatView: View {
                 attachmentFilename: attachmentFilename,
                 isFocused: $isInputFocused,
                 rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
+                isRecording: voiceInput.isRecording,
+                recordingElapsed: voiceInput.elapsed,
                 onSend: sendMessage,
                 onStop: stopStreaming,
-                onClearAttachment: clearAttachment,
+                onClearAttachment: { clearAttachment() },
                 onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
-                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { showFileImporter = true } : nil
+                onPickFile:  BFFeatureFlags.fileUploadEnabled ? { presentDocumentPicker() } : nil,
+                onMicTap: startRecording,
+                onCancelRecording: cancelRecording,
+                onConfirmRecording: confirmRecording
             )
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, item in
                 Task { await loadAttachment(from: item) }
-            }
-            .fileImporter(
-                isPresented: $showFileImporter,
-                allowedContentTypes: importableTypes,
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result)
             }
             Text("AI responses may be inaccurate. Verify important information.")
                 .font(.caption2)
@@ -256,9 +283,13 @@ struct ChatView: View {
 
         if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
             let d = data; let f = filename; let m = mime
-            clearAttachment()
+            let localMetadata = attachmentLocalMetadata
+            clearAttachment(deleteLocal: false)
             Task {
                 let fileUrl = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
+                if let fileUrl, let localMetadata {
+                    chatManager.markAttachmentUploaded(localMetadata, remoteURL: fileUrl)
+                }
                 let prompt = text.isEmpty ? "Analyze the attached file." : text
                 await chatManager.sendMessage(prompt, fileUrl: fileUrl)
             }
@@ -276,21 +307,100 @@ struct ChatView: View {
         attachmentData = data
         attachmentMIME = "image/jpeg"
         attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
+        await persistAttachmentLocally()
     }
 
-    private func clearAttachment() {
+    /// Removes the in-progress attachment. Deletes the locally-persisted copy
+    /// too unless the caller is about to send it (it's kept in that case, so
+    /// it survives independent of whether the upload succeeds).
+    private func clearAttachment(deleteLocal: Bool = true) {
+        if deleteLocal, let metadata = attachmentLocalMetadata {
+            Task { await chatManager.deleteAttachment(metadata) }
+        }
         attachmentData = nil; attachmentFilename = nil
         attachmentMIME = nil; selectedPhotoItem = nil
+        attachmentLocalMetadata = nil
     }
 
-    private func handleFileImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
+    /// Presents the document picker imperatively — SwiftUI's `.fileImporter`
+    /// (and even a `.sheet`-wrapped `UIViewControllerRepresentable`) silently
+    /// fail to deliver their completion callback on Mac Catalyst.
+    private func presentDocumentPicker() {
+        documentPickerCoordinator = DocumentPickerCoordinator.present(
+            allowedContentTypes: importableTypes,
+            onPick: { url in
+                handleFileImport(url)
+                documentPickerCoordinator = nil
+            },
+            onCancel: {
+                documentPickerCoordinator = nil
+            }
+        )
+    }
+
+    /// Copies the picked file (`asCopy: true`) into a location we already
+    /// own, so no security-scoped access dance is needed.
+    private func handleFileImport(_ url: URL) {
         guard let data = try? Data(contentsOf: url) else { return }
         attachmentData = data
         attachmentFilename = url.lastPathComponent
         attachmentMIME = mimeType(for: url.pathExtension)
+        Task { await persistAttachmentLocally() }
+    }
+
+    /// Saves the currently-picked attachment via LocalFileStore so it
+    /// persists with the conversation independent of the upload/send flow.
+    private func persistAttachmentLocally() async {
+        guard let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME else { return }
+        let conversationId = chatManager.conversationIdForAttachment()
+        attachmentLocalMetadata = await chatManager.saveLocalAttachment(
+            data: data, filename: filename, mimeType: mime, conversationId: conversationId
+        )
+    }
+
+    // MARK: - Voice Input
+
+    private func startRecording() {
+        Task {
+            guard await voiceInput.requestPermissions() else { return }
+            do {
+                try voiceInput.startRecording()
+            } catch {
+                voiceInput.error = "Couldn't start recording: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func cancelRecording() {
+        voiceInput.cancelRecording()
+    }
+
+    private func confirmRecording() {
+        Task {
+            guard let result = await voiceInput.stopRecordingAndTranscribe() else { return }
+            if let transcript = result.transcript, !transcript.isBlank {
+                inputText = inputText.isBlank ? transcript : inputText + " " + transcript
+            }
+            if let audioData = result.audioData {
+                let conversationId = chatManager.conversationIdForAttachment()
+                await chatManager.saveLocalAttachment(
+                    data: audioData, filename: result.filename, mimeType: "audio/m4a", conversationId: conversationId
+                )
+            }
+        }
+    }
+
+    /// Deep-links to the right permission pane. iOS/iPadOS has a per-app
+    /// Settings page; Mac Catalyst has no such page — it must open System
+    /// Settings' Privacy & Security pane via its own URL scheme instead.
+    private func openSystemSettings(for denied: VoiceInputManager.DeniedPermission) {
+        #if targetEnvironment(macCatalyst)
+        let anchor = denied == .microphone ? "Privacy_Microphone" : "Privacy_SpeechRecognition"
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else { return }
+        #else
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        #endif
+        UIApplication.shared.open(url)
     }
 
     private func mimeType(for ext: String) -> String {
@@ -390,6 +500,9 @@ struct MessageView: View {
         HStack(alignment: .bottom, spacing: 0) {
             Spacer(minLength: 56)
             VStack(alignment: .trailing, spacing: 3) {
+                if let fileUrl = message.fileUrl, !fileUrl.isEmpty {
+                    AttachmentChip(filename: URL(string: fileUrl)?.lastPathComponent ?? "Attachment")
+                }
                 Text(message.content)
                     .font(BFFont.body)
                     .foregroundStyle(.primary)
@@ -416,6 +529,14 @@ struct MessageView: View {
             MarkdownView(content: message.content)
                 .font(BFFont.body)
                 .contextMenu { if !message.content.isEmpty { messageActions } }
+
+            if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(fileMetadata, id: \.self) { meta in
+                        AttachmentChip(filename: meta.fileName ?? URL(string: meta.downloadURL ?? meta.originalURL ?? "")?.lastPathComponent ?? "File")
+                    }
+                }
+            }
 
             if !message.content.isEmpty {
                 HStack(spacing: 20) {
@@ -448,6 +569,26 @@ struct MessageView: View {
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Attachment Chip
+
+/// Small pill showing a file reference attached to a message (user upload or
+/// LLM-generated output) — backed by the durable fileUrl/file_metadata cai-bff
+/// relays on chat history, browsable in full via ConversationFilesView.
+struct AttachmentChip: View {
+    let filename: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "paperclip")
+            Text(filename).font(.caption).lineLimit(1)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color(.systemGray6), in: Capsule())
     }
 }
 
@@ -503,12 +644,17 @@ struct ChatInputView: View {
     let attachmentFilename: String?
     var isFocused: FocusState<Bool>.Binding
     var rateLimitExceeded: Bool = false
+    var isRecording: Bool = false
+    var recordingElapsed: TimeInterval = 0
     let onSend: () -> Void
     let onStop: () -> Void
     let onClearAttachment: () -> Void
     /// nil = file upload feature disabled; non-nil = show the attach button
     let onPickPhoto: (() -> Void)?
     let onPickFile: (() -> Void)?
+    var onMicTap: (() -> Void)? = nil
+    var onCancelRecording: (() -> Void)? = nil
+    var onConfirmRecording: (() -> Void)? = nil
 
     private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
     private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
@@ -529,53 +675,111 @@ struct ChatInputView: View {
                 .background(Color(.systemGray6))
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                // Attach button — only rendered when the feature flag is on
-                if attachEnabled {
-                    Menu {
-                        if let pickPhoto = onPickPhoto {
-                            Button { pickPhoto() } label: {
-                                Label("Photo Library", systemImage: "photo")
-                            }
+            if isRecording {
+                recordingRow
+            } else {
+                composerRow
+            }
+        }
+    }
+
+    private var composerRow: some View {
+        HStack(alignment: .center, spacing: 6) {
+            // Attach button — only rendered when the feature flag is on
+            if attachEnabled {
+                Menu {
+                    if let pickPhoto = onPickPhoto {
+                        Button { pickPhoto() } label: {
+                            Label("Photo Library", systemImage: "photo")
                         }
-                        if let pickFile = onPickFile {
-                            Button { pickFile() } label: {
-                                Label("Browse Files", systemImage: "folder")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "paperclip")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 44, height: 44)
                     }
-                    .disabled(isStreaming)
+                    if let pickFile = onPickFile {
+                        Button { pickFile() } label: {
+                            Label("Browse Files", systemImage: "folder")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .disabled(isStreaming)
+            }
 
-                TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
-                    .font(BFFont.body)
-                    .textFieldStyle(.plain)
-                    .focused(isFocused)
-                    .padding(14)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(22)
-                    .lineLimit(1...5)
+            TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
+                .font(BFFont.body)
+                .textFieldStyle(.plain)
+                .focused(isFocused)
+                .lineLimit(1...5)
 
+            // Mic button — replaced by the send button once there's something to send
+            if let micTap = onMicTap, !canSend {
+                Button(action: micTap) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .disabled(isStreaming)
+            } else {
                 Button {
                     isStreaming ? onStop() : onSend()
                 } label: {
                     Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 36))
+                        .font(.system(size: 28))
                         .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
                 }
+                .buttonStyle(.plain)
                 .disabled(!isStreaming && !canSend)
                 // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
                 .keyboardShortcut(.return, modifiers: .command)
             }
-            .padding(.horizontal, BFSpacing._4)
-            .padding(.vertical, 10)
-            .background(Color(.systemBackground))
         }
+        .padding(.leading, attachEnabled ? 6 : 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+    }
+
+    private var recordingRow: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 10, height: 10)
+            Text(formattedElapsed)
+                .font(BFFont.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(action: { onCancelRecording?() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
+            }
+            Button(action: { onConfirmRecording?() }) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(BFColor.primary)
+            }
+        }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground))
+    }
+
+    private var formattedElapsed: String {
+        let minutes = Int(recordingElapsed) / 60
+        let seconds = Int(recordingElapsed) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 

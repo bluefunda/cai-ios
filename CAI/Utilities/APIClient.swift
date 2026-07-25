@@ -87,7 +87,9 @@ struct APIClient {
         data fileData: Data,
         filename: String,
         mimeType: String,
-        queryItems: [URLQueryItem] = []
+        fields: [String: String] = [:],
+        queryItems: [URLQueryItem] = [],
+        includeAccessTokenHeader: Bool = false
     ) async throws -> Data {
         let boundary = "Boundary-\(UUID().uuidString)"
         let token = try await tokenProvider()
@@ -99,11 +101,23 @@ struct APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // trm-s3 (behind /fileupload) checks this header directly for the
+        // per-user JWT, independent of the standard Authorization header the
+        // gateway needs for its own service-to-service auth on this route.
+        if includeAccessTokenHeader {
+            request.setValue(token, forHTTPHeaderField: "Access-Token")
+        }
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 60
 
         var body = Data()
         let append: (String) -> Void = { body.append($0.data(using: .utf8)!) }
+
+        for (name, value) in fields {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            append("\(value)\r\n")
+        }
 
         append("--\(boundary)\r\n")
         append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")

@@ -61,6 +61,46 @@ final class APIModelsTests: XCTestCase {
         XCTAssertEqual(dto.normalizedRoleString, "assistant")
     }
 
+    func test_chatMessageDTO_decodesFileFields() throws {
+        let json = """
+        {
+          "role": "AI",
+          "content": "Here's your chart",
+          "fileUrl": "https://storage.example.com/upload.pdf",
+          "fileDownloadUrl": "https://storage.example.com/chart.png",
+          "file_metadata": [
+            {
+              "original_url": "https://storage.example.com/chart.png",
+              "s3_path": "individual/user123/chart.png",
+              "download_url": "https://storage.example.com/chart.png",
+              "file_name": "chart.png",
+              "file_size": 4096,
+              "source": "llm_generated"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
+        XCTAssertEqual(dto.fileUrl, "https://storage.example.com/upload.pdf")
+        XCTAssertEqual(dto.fileDownloadUrl, "https://storage.example.com/chart.png")
+        XCTAssertEqual(dto.fileMetadata?.count, 1)
+        XCTAssertEqual(dto.fileMetadata?.first?.fileName, "chart.png")
+        XCTAssertEqual(dto.fileMetadata?.first?.fileSize, 4096)
+        XCTAssertEqual(dto.fileMetadata?.first?.source, "llm_generated")
+    }
+
+    func test_chatMessageDTO_fileFieldsDefaultNilWhenAbsent() throws {
+        let json = """
+        {"role":"user","content":"Hello"}
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
+        XCTAssertNil(dto.fileUrl)
+        XCTAssertNil(dto.fileDownloadUrl)
+        XCTAssertNil(dto.fileMetadata)
+    }
+
     // MARK: RateLimitStatsDTO
 
     func test_rateLimitStatsDTO_decodesSnakeCase() throws {
@@ -203,6 +243,57 @@ final class APIModelsTests: XCTestCase {
         let dto = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(dto.formattedSize, "1.5 KB")
         XCTAssertEqual(dto.displayName, "file.txt")
+    }
+
+    // MARK: MessageFileMetadata mapping
+
+    func test_messageFileMetadata_initsFromDTO() {
+        let dto = FileMetadataDTO(
+            originalURL: "https://storage.example.com/a.png",
+            s3Path: "individual/user/a.png",
+            downloadURL: "https://storage.example.com/a.png",
+            fileName: "a.png",
+            fileSize: 2048,
+            source: "llm_generated"
+        )
+        let model = MessageFileMetadata(from: dto)
+        XCTAssertEqual(model.fileName, "a.png")
+        XCTAssertEqual(model.fileSize, 2048)
+        XCTAssertEqual(model.downloadURL, "https://storage.example.com/a.png")
+        XCTAssertEqual(model.source, "llm_generated")
+    }
+
+    func test_chatMessage_carriesFileUrlAndMetadata() {
+        let message = ChatMessage(
+            role: .user,
+            content: "Check this out",
+            fileUrl: "https://storage.example.com/doc.pdf",
+            fileMetadata: [MessageFileMetadata(originalURL: nil, s3Path: nil, downloadURL: "https://storage.example.com/out.png", fileName: "out.png", fileSize: 10, source: "llm_generated")]
+        )
+        XCTAssertEqual(message.fileUrl, "https://storage.example.com/doc.pdf")
+        XCTAssertEqual(message.fileMetadata?.first?.fileName, "out.png")
+    }
+
+    // MARK: FileUploadForPromptResponseDTO (/fileupload)
+
+    func test_fileUploadForPromptResponseDTO_decodesURL() throws {
+        // Verified against the live gateway response, 2026-07-24: cai-gw wraps
+        // trm-s3's raw array under a top-level "file" key, no "data" nesting.
+        let json = """
+        { "file": [ { "url": "https://storage.example.com/abc.pdf", "name": "abc.pdf", "size": 123 } ] }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
+        XCTAssertEqual(dto.resolvedURL, "https://storage.example.com/abc.pdf")
+    }
+
+    func test_fileUploadForPromptResponseDTO_resolvedURLNilWhenEmpty() throws {
+        let json = """
+        { "file": [] }
+        """.data(using: .utf8)!
+
+        let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
+        XCTAssertNil(dto.resolvedURL)
     }
 }
 
@@ -896,5 +987,160 @@ final class ExtensionsTests: XCTestCase {
         let json = "{\"key\":\"f.bin\",\"size\":2097152}".data(using: .utf8)!
         let obj = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(obj.formattedSize, "2.0 MB")
+    }
+}
+
+// MARK: - LocalFileStore Tests
+
+final class LocalFileStoreTests: XCTestCase {
+    var tempRoot: URL!
+    var store: LocalFileStore!
+
+    override func setUp() {
+        super.setUp()
+        tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        store = LocalFileStore(rootDirectory: tempRoot)
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: tempRoot)
+        super.tearDown()
+    }
+
+    func test_saveAndLoad_roundTrips() async throws {
+        let data = "hello world".data(using: .utf8)!
+        let metadata = try await store.save(
+            data: data, filename: "note.txt", mimeType: "text/plain",
+            conversationId: "conv-1", source: .userUpload, remoteURL: nil
+        )
+
+        XCTAssertEqual(metadata.filename, "note.txt")
+        XCTAssertEqual(metadata.byteSize, data.count)
+        XCTAssertEqual(metadata.source, .userUpload)
+        XCTAssertNil(metadata.remoteURL)
+
+        let loaded = try await store.load(metadata)
+        XCTAssertEqual(loaded, data)
+    }
+
+    func test_list_returnsSavedFilesForConversation() async throws {
+        _ = try await store.save(data: Data([1]), filename: "a.png", mimeType: "image/png", conversationId: "conv-1", source: .llmOutput, remoteURL: nil)
+        _ = try await store.save(data: Data([2]), filename: "b.png", mimeType: "image/png", conversationId: "conv-1", source: .userUpload, remoteURL: nil)
+        _ = try await store.save(data: Data([3]), filename: "c.png", mimeType: "image/png", conversationId: "conv-2", source: .userUpload, remoteURL: nil)
+
+        let conv1Files = try await store.list(conversationId: "conv-1")
+        XCTAssertEqual(conv1Files.count, 2)
+
+        let conv2Files = try await store.list(conversationId: "conv-2")
+        XCTAssertEqual(conv2Files.count, 1)
+    }
+
+    func test_list_emptyForUnknownConversation() async throws {
+        let files = try await store.list(conversationId: "does-not-exist")
+        XCTAssertTrue(files.isEmpty)
+    }
+
+    func test_delete_removesFile() async throws {
+        let metadata = try await store.save(data: Data([1, 2, 3]), filename: "f.bin", mimeType: "application/octet-stream", conversationId: "conv-1", source: .userUpload, remoteURL: nil)
+
+        try await store.delete(metadata)
+
+        let files = try await store.list(conversationId: "conv-1")
+        XCTAssertTrue(files.isEmpty)
+        await XCTAssertThrowsErrorAsync(try await store.load(metadata))
+    }
+
+    func test_deleteAll_removesEntireConversation() async throws {
+        _ = try await store.save(data: Data([1]), filename: "a.bin", mimeType: "application/octet-stream", conversationId: "conv-1", source: .userUpload, remoteURL: nil)
+        _ = try await store.save(data: Data([2]), filename: "b.bin", mimeType: "application/octet-stream", conversationId: "conv-1", source: .userUpload, remoteURL: nil)
+
+        try await store.deleteAll(conversationId: "conv-1")
+
+        let files = try await store.list(conversationId: "conv-1")
+        XCTAssertTrue(files.isEmpty)
+    }
+
+    func test_updateRemoteURL_persistsNewURL() async throws {
+        let metadata = try await store.save(data: Data([1]), filename: "f.bin", mimeType: "application/octet-stream", conversationId: "conv-1", source: .userUpload, remoteURL: nil)
+        XCTAssertNil(metadata.remoteURL)
+
+        let updated = try await store.updateRemoteURL("https://storage.example.com/f.bin", for: metadata)
+        XCTAssertEqual(updated.remoteURL, "https://storage.example.com/f.bin")
+        XCTAssertEqual(updated.id, metadata.id)
+
+        let files = try await store.list(conversationId: "conv-1")
+        XCTAssertEqual(files.first?.remoteURL, "https://storage.example.com/f.bin")
+    }
+
+    func test_fileURL_pointsToReadableFile() async throws {
+        let data = Data("contents".utf8)
+        let metadata = try await store.save(data: data, filename: "f.txt", mimeType: "text/plain", conversationId: "conv-1", source: .userUpload, remoteURL: nil)
+
+        let url = try await store.fileURL(for: metadata)
+        let readBack = try Data(contentsOf: url)
+        XCTAssertEqual(readBack, data)
+    }
+
+    func test_load_throwsNotFoundForMissingFile() async {
+        let phantom = StoredFileMetadata(conversationId: "conv-1", filename: "ghost.txt", mimeType: "text/plain", byteSize: 0, source: .userUpload)
+        await XCTAssertThrowsErrorAsync(try await store.load(phantom))
+    }
+}
+
+/// Small helper since XCTAssertThrowsError has no async overload in this XCTest version.
+private func XCTAssertThrowsErrorAsync(_ expression: @autoclosure () async throws -> some Any, file: StaticString = #filePath, line: UInt = #line) async {
+    do {
+        _ = try await expression()
+        XCTFail("Expected an error to be thrown", file: file, line: line)
+    } catch {
+        // expected
+    }
+}
+
+// MARK: - MessageFileLinks Tests
+
+final class MessageFileLinksTests: XCTestCase {
+    func test_detectsMarkdownImage() {
+        let content = "Here's your chart:\n![chart](https://storage.example.com/chart.png)"
+        let links = MessageFileLinks.detect(in: content)
+        XCTAssertEqual(links.count, 1)
+        XCTAssertTrue(links[0].isImage)
+        XCTAssertEqual(links[0].urlString, "https://storage.example.com/chart.png")
+        XCTAssertEqual(links[0].filename, "chart.png")
+    }
+
+    func test_detectsBareFileLink() {
+        let content = "You can download the report at https://storage.example.com/report.pdf for details."
+        let links = MessageFileLinks.detect(in: content)
+        XCTAssertEqual(links.count, 1)
+        XCTAssertFalse(links[0].isImage)
+        XCTAssertEqual(links[0].filename, "report.pdf")
+    }
+
+    func test_ignoresNonFileBareURL() {
+        let content = "See https://docs.bluefunda.com/ for more info."
+        let links = MessageFileLinks.detect(in: content)
+        XCTAssertTrue(links.isEmpty)
+    }
+
+    func test_noLinks_returnsEmpty() {
+        XCTAssertTrue(MessageFileLinks.detect(in: "Just plain text, nothing to see here.").isEmpty)
+    }
+
+    func test_dedupesRepeatedLink() {
+        let content = """
+        ![chart](https://storage.example.com/chart.png)
+        Here it is again: ![chart](https://storage.example.com/chart.png)
+        """
+        let links = MessageFileLinks.detect(in: content)
+        XCTAssertEqual(links.count, 1)
+    }
+
+    func test_mixedImageAndBareLink() {
+        let content = "![chart](https://storage.example.com/chart.png) and also https://storage.example.com/data.csv"
+        let links = MessageFileLinks.detect(in: content)
+        XCTAssertEqual(links.count, 2)
+        XCTAssertTrue(links.contains { $0.isImage && $0.filename == "chart.png" })
+        XCTAssertTrue(links.contains { !$0.isImage && $0.filename == "data.csv" })
     }
 }

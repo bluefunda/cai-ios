@@ -29,6 +29,11 @@ final class AuthManager: NSObject, ObservableObject {
     /// and cancelled when the session ends.
     private var proactiveRefreshTask: Task<Void, Never>?
 
+    /// Backoff for retrying the proactive refresh after a transient failure
+    /// (network error, momentary server issue). Resets to the base delay on
+    /// every successful refresh; doubles up to a cap on repeated failures.
+    private var transientRetryDelay: TimeInterval = 30
+
     // PKCE verifier and anti-CSRF state — never persisted, cleared after each flow.
     private var pendingVerifier: String?
     private var pendingState: String?
@@ -279,16 +284,20 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     /// Returns a valid access token, refreshing first if it's near expiry.
-    /// If the session can no longer be refreshed (refresh/offline token expired
-    /// or revoked), it expires the session — flipping the UI back to sign-in —
-    /// and returns nil. Callers should treat nil as "session ended, stop here."
+    /// If the refresh token is confirmed dead, expires the session — flipping
+    /// the UI back to sign-in — and returns nil. On a transient failure
+    /// (network error, momentary server issue), the session is left intact
+    /// and the current (possibly stale) access token is returned instead, so
+    /// callers can still try the request rather than being forced to stop.
     func validAccessToken() async -> String? {
         do {
             try await refreshTokenIfNeeded()
             return accessToken
-        } catch {
+        } catch AuthError.refreshTokenInvalid {
             expireSession()
             return nil
+        } catch {
+            return accessToken
         }
     }
 
@@ -299,7 +308,7 @@ final class AuthManager: NSObject, ObservableObject {
         guard isAuthenticated else { return }
         clearKeychain()
         resetSession()
-        error = .tokenRefreshFailed   // "Session expired. Please sign in again."
+        error = .refreshTokenInvalid   // "Session expired. Please sign in again."
     }
 
     // MARK: - Proactive Refresh
@@ -326,8 +335,23 @@ final class AuthManager: NSObject, ObservableObject {
     private func performScheduledRefresh() async {
         do {
             try await performTokenRefresh()   // re-arms the timer on success
-        } catch {
+            transientRetryDelay = 30
+        } catch AuthError.refreshTokenInvalid {
             expireSession()
+        } catch {
+            // Transient failure (no network, momentary server issue) -- the
+            // refresh token itself is presumably still fine. Retry with
+            // backoff instead of ending a session that's good for weeks
+            // server-side; this is what keeps the app from logging users out
+            // just because they were briefly offline or the Mac was asleep.
+            let delay = transientRetryDelay
+            transientRetryDelay = min(transientRetryDelay * 2, 300)
+            proactiveRefreshTask?.cancel()
+            proactiveRefreshTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await self?.performScheduledRefresh()
+            }
         }
     }
 
@@ -372,8 +396,13 @@ final class AuthManager: NSObject, ObservableObject {
         self.refreshToken = stored.refreshToken
         do {
             try await performTokenRefresh()
-        } catch {
+        } catch AuthError.refreshTokenInvalid {
             clearKeychain()
+        } catch {
+            // Transient failure (e.g. no network yet at launch) -- leave the
+            // stored refresh token in place. The user sees the sign-in screen
+            // this time, but the session isn't destroyed; refreshOnForeground
+            // or a later relaunch can still recover it.
         }
     }
 
@@ -453,6 +482,15 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     // POST https://auth-dev.bluefunda.com/realms/{realm}/protocol/openid-connect/token
+    /// Refreshes the access token, retrying transient failures before giving up.
+    /// With a 5-minute access token lifespan, this fires roughly every 4 minutes
+    /// for the entire time the app is open — a single network blip (WiFi
+    /// reconnecting after sleep, a VPN toggle, a momentary Keycloak restart)
+    /// must not be treated the same as a genuinely dead refresh token, or a
+    /// perfectly healthy session (good for weeks server-side) ends after a
+    /// few hours of normal laptop use. Only a confirmed `invalid_grant` from
+    /// Keycloak — the refresh token is actually dead — should end the session;
+    /// everything else is retried.
     private func performTokenRefresh() async throws {
         guard let refreshToken = refreshToken else { throw AuthError.notAuthenticated }
 
@@ -467,12 +505,44 @@ final class AuthManager: NSObject, ObservableObject {
         ]
         request.httpBody = body.percentEncoded()
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw AuthError.tokenRefreshFailed
+        let maxAttempts = 3
+        var lastError: Error = AuthError.tokenRefreshFailed
+
+        for attempt in 1...maxAttempts {
+            do {
+                let (data, response) = try await session.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw AuthError.tokenRefreshFailed
+                }
+
+                if http.statusCode == 200 {
+                    let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
+                    await processTokenResponse(tokenResponse)
+                    return
+                }
+
+                // Keycloak's OAuth error body distinguishes a genuinely dead
+                // refresh token (invalid_grant) from other failures.
+                if http.statusCode == 400,
+                   let oauthError = try? JSONDecoder().decode(OAuthErrorResponse.self, from: data),
+                   oauthError.error == "invalid_grant" {
+                    throw AuthError.refreshTokenInvalid
+                }
+
+                throw AuthError.tokenRefreshFailed
+            } catch let error as AuthError {
+                if case .refreshTokenInvalid = error { throw error }
+                lastError = error
+            } catch {
+                lastError = error // network error, decoding error, etc. — treated as transient
+            }
+
+            if attempt < maxAttempts {
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000) // 1s, 2s
+            }
         }
-        let tokenResponse = try JSONDecoder().decode(TokenResponse.self, from: data)
-        await processTokenResponse(tokenResponse)
+
+        throw lastError
     }
 
     private func processTokenResponse(
@@ -663,6 +733,19 @@ struct TokenResponse: Codable {
     }
 }
 
+/// Keycloak's OAuth token-endpoint error body, e.g. `{"error": "invalid_grant",
+/// "error_description": "Token is not active"}` — used to tell a genuinely
+/// dead refresh token apart from other (transient) failures.
+struct OAuthErrorResponse: Codable {
+    let error: String
+    let errorDescription: String?
+
+    enum CodingKeys: String, CodingKey {
+        case error
+        case errorDescription = "error_description"
+    }
+}
+
 enum AuthError: LocalizedError {
     case invalidURL
     case invalidCallback
@@ -670,6 +753,11 @@ enum AuthError: LocalizedError {
     case authenticationFailed(String)
     case tokenExchangeFailed
     case tokenRefreshFailed
+    /// The refresh token is confirmed dead (Keycloak returned `invalid_grant`),
+    /// as opposed to `tokenRefreshFailed`, which covers transient failures
+    /// (network errors, timeouts, unexpected server errors) that should be
+    /// retried rather than ending the session.
+    case refreshTokenInvalid
     case notAuthenticated
     case deleteAccountFailed(String)
 
@@ -686,6 +774,8 @@ enum AuthError: LocalizedError {
         case .tokenExchangeFailed:
             return "Failed to exchange authorization code for token"
         case .tokenRefreshFailed:
+            return "Session expired. Please sign in again."
+        case .refreshTokenInvalid:
             return "Session expired. Please sign in again."
         case .notAuthenticated:
             return "Not authenticated"
