@@ -64,7 +64,19 @@ final class VoiceInputManager: ObservableObject {
     }
 
     private func requestMicrophonePermission() async -> Bool {
-        #if os(iOS)
+        // #if os(iOS) is true for Mac Catalyst too (it compiles against the iOS
+        // SDK), so Catalyst must be checked first: AVAudioApplication's
+        // permission API doesn't correctly bridge to macOS's mic prompt under
+        // Catalyst -- it silently reports "denied" without ever showing a
+        // dialog. AVCaptureDevice.requestAccess is the macOS-native path that
+        // actually triggers the system permission sheet there.
+        #if targetEnvironment(macCatalyst)
+        return await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+        #elseif os(iOS)
         return await withCheckedContinuation { continuation in
             AVAudioApplication.requestRecordPermission { granted in
                 continuation.resume(returning: granted)
