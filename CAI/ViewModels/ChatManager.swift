@@ -888,13 +888,12 @@ struct LLMModel: Identifiable, Hashable {
     let name: String
     let provider: String
 
-    static let defaultModel = LLMModel(id: "deepseek", name: "DeepSeek", provider: "DeepSeek")
+    static let defaultModel = LLMModel(id: "groq", name: "Groq", provider: "Groq")
 
     static let defaultModels: [LLMModel] = [
-        LLMModel(id: "deepseek",  name: "DeepSeek",  provider: "DeepSeek"),
+        LLMModel(id: "groq",      name: "Groq",      provider: "Groq"),
         LLMModel(id: "gemini",    name: "Gemini",    provider: "Gemini"),
         LLMModel(id: "anthropic", name: "Anthropic", provider: "Anthropic"),
-        LLMModel(id: "llama",     name: "Llama",     provider: "Groq"),
         LLMModel(id: "sarvam",    name: "Sarvam",    provider: "Sarvam"),
         LLMModel(id: "openai",    name: "OpenAI",    provider: "OpenAI"),
     ]
