@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/bluefunda/cai-ios/compare/v1.8.0...v1.8.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** fall back to a PR when the release-sync push to main is rejected ([#153](https://github.com/bluefunda/cai-ios/issues/153)) ([318d64d](https://github.com/bluefunda/cai-ios/commit/318d64d573087a50355a80a57b2f8ccd356182df))
+
 ## [1.8.0](https://github.com/bluefunda/cai-ios/compare/v1.7.1...v1.8.0) (2026-07-25)
 
 
