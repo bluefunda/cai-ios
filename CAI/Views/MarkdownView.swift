@@ -266,8 +266,12 @@ private enum DisplaySegment {
 
 struct MarkdownView: View {
     let content: String
+    private let blocks: [MarkdownBlock]
 
-    private var blocks: [MarkdownBlock] { MarkdownParser.parse(content) }
+    init(content: String) {
+        self.content = content
+        self.blocks = MarkdownParser.parse(content)
+    }
 
     private var segments: [DisplaySegment] {
         var result: [DisplaySegment] = []
