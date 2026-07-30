@@ -791,24 +791,29 @@ struct ModeModelPicker: View {
     @EnvironmentObject var chatManager: ChatManager
 
     private func modeIsActive(_ mode: ThinkingMode) -> Bool {
-        chatManager.selectedMCPServer == nil && !chatManager.userPickedModel
+        chatManager.enabledMCPServers.isEmpty && !chatManager.userPickedModel
             && chatManager.thinkingMode == mode
     }
     private func modelIsActive(_ model: LLMModel) -> Bool {
-        chatManager.selectedMCPServer == nil
+        chatManager.enabledMCPServers.isEmpty
             && chatManager.userPickedModel && chatManager.selectedModel.id == model.id
     }
     private func agentIsActive(_ server: MCPServer) -> Bool {
-        chatManager.selectedMCPServer?.id == server.id
+        chatManager.enabledMCPServers.contains(server.id)
+    }
+
+    private var enabledAgents: [MCPServer] {
+        chatManager.visibleMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
     }
 
     private var label: String {
-        if let agent = chatManager.selectedMCPServer { return agent.displayName }
+        if enabledAgents.count == 1 { return enabledAgents[0].displayName }
+        if enabledAgents.count > 1 { return "\(enabledAgents.count) Assistants" }
         if chatManager.userPickedModel { return chatManager.selectedModel.name }
         return chatManager.thinkingMode.label
     }
     private var icon: String {
-        if chatManager.selectedMCPServer != nil { return "cpu.fill" }
+        if !enabledAgents.isEmpty { return "cpu.fill" }
         if chatManager.userPickedModel { return "cpu" }
         return chatManager.thinkingMode.icon
     }
@@ -819,7 +824,7 @@ struct ModeModelPicker: View {
             Section {
                 ForEach(ThinkingMode.allCases) { mode in
                     Button {
-                        chatManager.selectedMCPServer = nil
+                        chatManager.enabledMCPServers = []
                         chatManager.selectThinkingMode(mode)
                     } label: {
                         if modeIsActive(mode) {
@@ -835,7 +840,7 @@ struct ModeModelPicker: View {
             Section("LLM") {
                 ForEach(chatManager.availableModels) { model in
                     Button {
-                        chatManager.selectedMCPServer = nil
+                        chatManager.enabledMCPServers = []
                         chatManager.selectModel(model)
                     } label: {
                         if modelIsActive(model) {
@@ -847,24 +852,32 @@ struct ModeModelPicker: View {
                 }
             }
 
-            // Assistants (MCP servers)
-            if !chatManager.availableMCPServers.isEmpty {
+            // Assistants (MCP servers) — multi-select: tapping toggles a
+            // server's membership without closing this dropdown's overall
+            // selection state (SwiftUI Menu still dismisses per-tap; reopen
+            // to toggle another). Full checkbox UX lives in Settings ›
+            // Assistants (MCPServerSelectionView).
+            if !chatManager.visibleMCPServers.isEmpty {
                 Section("Assistants") {
-                    // "None" option to clear agent selection
+                    // "None" option clears all enabled agents
                     Button {
-                        chatManager.selectedMCPServer = nil
+                        chatManager.enabledMCPServers = []
                     } label: {
-                        if chatManager.selectedMCPServer == nil {
+                        if chatManager.enabledMCPServers.isEmpty {
                             Label("None", systemImage: "checkmark")
                         } else {
                             Text("None")
                         }
                     }
 
-                    ForEach(chatManager.availableMCPServers) { server in
+                    ForEach(chatManager.visibleMCPServers) { server in
                         Button {
-                            chatManager.selectedMCPServer = server
-                            chatManager.userPickedModel = false
+                            if chatManager.enabledMCPServers.contains(server.id) {
+                                chatManager.enabledMCPServers.remove(server.id)
+                            } else {
+                                chatManager.enabledMCPServers.insert(server.id)
+                                chatManager.userPickedModel = false
+                            }
                         } label: {
                             if agentIsActive(server) {
                                 Label(server.displayName, systemImage: "checkmark")

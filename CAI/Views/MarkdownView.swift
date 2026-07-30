@@ -101,9 +101,12 @@ private enum MarkdownParser {
                 }
                 if tableLines.count >= 2 {
                     let headers = parseTableRow(tableLines[0])
-                    // tableLines[1] is the separator (| --- | --- |) — skip it
+                    // tableLines[1] is normally the separator (| --- | --- |) — only
+                    // skip it if it actually looks like one, otherwise treat it as data
+                    // so a malformed/missing separator doesn't drop a real row.
+                    let dataStart = isTableSeparatorRow(tableLines[1]) ? 2 : 1
                     var rows: [[String]] = []
-                    for j in 2..<tableLines.count {
+                    for j in dataStart..<tableLines.count {
                         let row = parseTableRow(tableLines[j])
                         if !row.isEmpty { rows.append(row) }
                     }
@@ -201,8 +204,49 @@ private enum MarkdownParser {
         return blocks
     }
 
+    /// A GFM table separator row consists only of `|`, `-`, `:` and whitespace,
+    /// and must contain at least one dash (otherwise it's indistinguishable from
+    /// an empty/blank data row).
+    private static func isTableSeparatorRow(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.contains("-") else { return false }
+        return trimmed.allSatisfy { $0 == "|" || $0 == "-" || $0 == ":" || $0 == " " }
+    }
+
+    /// Splits a table row on unescaped `|`. Respects `\|` as a literal pipe and
+    /// treats pipes inside inline code spans (`` `a|b` ``) as literal content
+    /// rather than cell delimiters.
     private static func parseTableRow(_ row: String) -> [String] {
-        row.components(separatedBy: "|")
+        var cells: [String] = []
+        var current = ""
+        var inCode = false
+        let chars = Array(row)
+        var idx = 0
+        while idx < chars.count {
+            let c = chars[idx]
+            if c == "\\" && idx + 1 < chars.count && chars[idx + 1] == "|" {
+                current.append("|")
+                idx += 2
+                continue
+            }
+            if c == "`" {
+                inCode.toggle()
+                current.append(c)
+                idx += 1
+                continue
+            }
+            if c == "|" && !inCode {
+                cells.append(current)
+                current = ""
+                idx += 1
+                continue
+            }
+            current.append(c)
+            idx += 1
+        }
+        cells.append(current)
+
+        return cells
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { cell in
                 !cell.isEmpty &&
@@ -222,8 +266,12 @@ private enum DisplaySegment {
 
 struct MarkdownView: View {
     let content: String
+    private let blocks: [MarkdownBlock]
 
-    private var blocks: [MarkdownBlock] { MarkdownParser.parse(content) }
+    init(content: String) {
+        self.content = content
+        self.blocks = MarkdownParser.parse(content)
+    }
 
     private var segments: [DisplaySegment] {
         var result: [DisplaySegment] = []
@@ -294,6 +342,8 @@ private struct MarkdownBlockView: View {
 
 private struct InlineMarkdownText: View {
     let text: String
+    var font: Font = BFFont.responseBody
+    var fillWidth: Bool = true
 
     var body: some View {
         Group {
@@ -301,20 +351,28 @@ private struct InlineMarkdownText: View {
                 markdown: text,
                 options: .init(interpretedSyntax: .inlineOnly)
             ) {
-                Text(attr)
-                    .font(BFFont.responseBody)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(4)
+                styled(Text(attr))
             } else {
-                Text(text)
-                    .font(BFFont.responseBody)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lineSpacing(4)
+                styled(Text(text))
             }
+        }
+    }
+
+    @ViewBuilder
+    private func styled(_ text: Text) -> some View {
+        if fillWidth {
+            text
+                .font(font)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(4)
+        } else {
+            text
+                .font(font)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(4)
         }
     }
 }
@@ -530,13 +588,10 @@ private struct DefinitionListView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(row.first ?? "")
-                        .font(BFFont.responseTableHeader)
+                    InlineMarkdownText(text: row.first ?? "", font: BFFont.responseTableHeader, fillWidth: false)
                     if row.count > 1 {
-                        Text(row[1])
-                            .font(BFFont.responseTable)
+                        InlineMarkdownText(text: row[1], font: BFFont.responseTable, fillWidth: false)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -566,9 +621,7 @@ private struct WrappingTableView: View {
                 // Header row
                 HStack(alignment: .top, spacing: 0) {
                     ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
-                        Text(header)
-                            .font(BFFont.responseTableHeader)
-                            .fixedSize(horizontal: false, vertical: true)
+                        InlineMarkdownText(text: header, font: BFFont.responseTableHeader, fillWidth: false)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 9)
                             .frame(minWidth: minColWidth, alignment: .leading)
@@ -581,10 +634,8 @@ private struct WrappingTableView: View {
                 // Data rows
                 ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
                     HStack(alignment: .top, spacing: 0) {
-                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
-                            Text(cell)
-                                .font(BFFont.responseTable)
-                                .fixedSize(horizontal: false, vertical: true)
+                        ForEach(Array(row.prefix(headers.count).enumerated()), id: \.offset) { _, cell in
+                            InlineMarkdownText(text: cell, font: BFFont.responseTable, fillWidth: false)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .frame(minWidth: minColWidth, alignment: .leading)
