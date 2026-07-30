@@ -19,7 +19,25 @@ final class ChatManager: ObservableObject {
     @Published var connectionStatus: ConnectionStatus = .disconnected
 
     @Published var selectedModel: LLMModel = LLMModel.defaultModel
+
+    /// Legacy single-agent selection, kept as the source of truth for the
+    /// outgoing chat request wire format until cai-bff/cai-llm-router ship
+    /// list-based MCP support (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231).
+    /// Derived automatically from `enabledMCPServers` below.
     @Published var selectedMCPServer: MCPServer?
+
+    /// User-facing multi-select state (bluefunda/cai-ios#167). Exactly one
+    /// enabled server maps onto the legacy `selectedMCPServer` field so the
+    /// network payload and backend agent-persona behavior are unchanged;
+    /// zero or multiple enabled servers fall back to no agent persona until
+    /// the backend contract supports a real list.
+    @Published var enabledMCPServers: Set<String> = [] {
+        didSet {
+            selectedMCPServer = enabledMCPServers.count == 1
+                ? availableMCPServers.first(where: { enabledMCPServers.contains($0.id) })
+                : nil
+        }
+    }
 
     /// Reasoning effort sent with each message. Persisted across launches.
     @Published var thinkingMode: ThinkingMode = {
@@ -156,7 +174,7 @@ final class ChatManager: ObservableObject {
         conversations = []
         currentConversation = nil
         subscribedMCPServerIds = []
-        selectedMCPServer = nil
+        enabledMCPServers = []
         rateLimit = nil
     }
 
@@ -401,6 +419,10 @@ final class ChatManager: ObservableObject {
             prompt: text,
             model: selectedModel.id,
             isNewChat: isFirstMessage,
+            // TODO(bluefunda/cai-ios#167): send the full enabledMCPServers set
+            // once cai-bff/cai-llm-router ship list-based MCP support
+            // (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231). Until then
+            // this stays on the legacy single-server field derived above.
             mcpServerName: selectedMCPServer?.name,
             mcpServerURL: selectedMCPServer?.url,
             thinkingMode: thinkingMode.rawValue,
