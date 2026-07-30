@@ -15,6 +15,13 @@ struct SettingsView: View {
     private var isTrmRealm: Bool { authManager.realm == "trm" }
     private var isIndividualRealm: Bool { authManager.realm == "individual" }
 
+    private var assistantsSummary: String {
+        let enabled = chatManager.availableMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
+        if enabled.isEmpty { return "None" }
+        if enabled.count == 1 { return enabled[0].displayName }
+        return "\(enabled.count) Selected"
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -35,7 +42,7 @@ struct SettingsView: View {
                         HStack {
                             Label("Assistant", systemImage: "sparkles")
                             Spacer()
-                            Text(chatManager.selectedMCPServer?.displayName ?? "None")
+                            Text(assistantsSummary)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -359,36 +366,32 @@ struct UserInfoRow: View {
 
 struct MCPServerSelectionView: View {
     @EnvironmentObject var chatManager: ChatManager
-    @Environment(\.dismiss) private var dismiss
-
-    private let noneServer = MCPServer(id: "none", name: "None", url: "", description: nil)
-
-    private var displayServers: [MCPServer] {
-        [noneServer] + chatManager.availableMCPServers
-    }
 
     var body: some View {
         List {
-            ForEach(displayServers) { server in
-                Button {
-                    chatManager.selectedMCPServer = server.id == "none" ? nil : server
-                    dismiss()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(server.displayName)
-                                .foregroundColor(.primary)
-                                .fontWeight(isSelected(server) ? .semibold : .regular)
-                        }
+            Section {
+                ForEach(chatManager.availableMCPServers) { server in
+                    Button {
+                        toggle(server)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(server.displayName)
+                                    .foregroundColor(.primary)
+                                    .fontWeight(isSelected(server) ? .semibold : .regular)
+                            }
 
-                        Spacer()
+                            Spacer()
 
-                        if isSelected(server) {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(BFColor.primary)
+                            if isSelected(server) {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(BFColor.primary)
+                            }
                         }
                     }
                 }
+            } footer: {
+                Text("Enable one or more assistants to make their tools available in chat.")
             }
         }
         .navigationTitle("Assistants")
@@ -404,9 +407,16 @@ struct MCPServerSelectionView: View {
         }
     }
 
+    private func toggle(_ server: MCPServer) {
+        if chatManager.enabledMCPServers.contains(server.id) {
+            chatManager.enabledMCPServers.remove(server.id)
+        } else {
+            chatManager.enabledMCPServers.insert(server.id)
+        }
+    }
+
     private func isSelected(_ server: MCPServer) -> Bool {
-        if server.id == "none" { return chatManager.selectedMCPServer == nil }
-        return chatManager.selectedMCPServer?.id == server.id
+        chatManager.enabledMCPServers.contains(server.id)
     }
 }
 
