@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/bluefunda/cai-ios/compare/v1.8.1...v1.8.2) (2026-07-30)
+
+
+### Bug Fixes
+
+* **markdown:** table rendering + perf; feat(mcp): multi-select assistants ([#166](https://github.com/bluefunda/cai-ios/issues/166)) ([378cea9](https://github.com/bluefunda/cai-ios/commit/378cea9a147329b533dfe010faec61866c6ae3ca))
+
 ## [1.8.1](https://github.com/bluefunda/cai-ios/compare/v1.8.0...v1.8.1) (2026-07-28)
 
 
