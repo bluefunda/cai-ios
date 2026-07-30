@@ -189,126 +189,6 @@ final class ChatManager: ObservableObject {
         rateLimit = nil
     }
 
-    // MARK: - Data Loading
-
-    private func loadInitialData() async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.loadChats() }
-            group.addTask { await self.loadModels() }
-            group.addTask { await self.loadMCPServers() }
-            group.addTask { await self.loadGreeting() }
-        }
-    }
-
-    func loadChats() async {
-        guard let api = apiService else { return }
-        isLoadingChats = true
-
-        do {
-            let dtos = try await api.fetchChats()
-            let loaded = dtos.map { dto -> Conversation in
-                Conversation(
-                    id: dto.id,
-                    title: dto.title ?? dto.firstMessage?.truncated(to: 50) ?? "Chat",
-                    messages: [],
-                    model: dto.model ?? selectedModel.id,
-                    createdAt: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
-                )
-            }
-            // Merge: keep cached messages for conversations that were already loaded
-            let mergedIds = Set(conversations.map(\.id))
-            let merged = loaded.map { conv -> Conversation in
-                if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
-                    return Conversation(id: conv.id, title: conv.title,
-                                        messages: cached.messages, model: conv.model, createdAt: conv.createdAt)
-                }
-                return conv
-            }
-            let localOnly = conversations.filter { !mergedIds.contains($0.id) }
-            conversations = merged + localOnly
-            cacheConversations(loaded)
-            retryStuckTitles(dtos)
-        } catch {
-            // Don't surface load errors — user can still create new chats
-            print("[ChatManager] loadChats error: \(error)")
-        }
-
-        isLoadingChats = false
-    }
-
-    func loadModels() async {
-        guard let api = apiService else { return }
-
-        do {
-            let dtos = try await api.fetchModels()
-            guard !dtos.isEmpty else { return }
-
-            availableModels = dtos.map { dto in
-                LLMModel(id: dto.id, name: dto.name, provider: dto.provider ?? dto.id)
-            }
-
-            // Keep selected model valid
-            if !availableModels.contains(where: { $0.id == selectedModel.id }),
-               let first = availableModels.first {
-                selectedModel = first
-            }
-        } catch {
-            // Fallback to hardcoded defaults already in place
-            print("[ChatManager] loadModels error: \(error)")
-        }
-    }
-
-    func loadMCPServers() async {
-        guard let api = apiService else { return }
-
-        async let allServers = api.fetchAllMCPServers()
-        async let userServers = api.fetchUserMCPServers()
-
-        do {
-            let (all, user) = try await (allServers, userServers)
-            let subscribedIds = Set(user.map(\.id))
-            subscribedMCPServerIds = subscribedIds
-
-            availableMCPServers = all.map { dto in
-                MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description)
-            }
-        } catch {
-            print("[ChatManager] loadMCPServers error: \(error)")
-        }
-    }
-
-    func loadRateLimit() async {
-        guard let api = apiService else { return }
-
-        do {
-            let dto = try await api.fetchRateLimit()
-            rateLimit = RateLimitInfo(
-                planName: dto.stats?.planName ?? "—",
-                dailyUsed: dto.stats?.dailyTokensUsed ?? 0,
-                dailyLimit: dto.stats?.dailyTokensLimit ?? 0,
-                monthlyUsed: dto.stats?.monthlyTokensUsed ?? 0,
-                monthlyLimit: dto.stats?.monthlyTokensLimit ?? 0,
-                isBlocked: dto.isBlocked ?? false,
-                blockReason: dto.blockReason,
-                resetLabel: dto.resetLabel ?? "midnight"
-            )
-        } catch {
-            print("[ChatManager] loadRateLimit error: \(error)")
-        }
-    }
-
-    private func loadGreeting() async {
-        guard let api = apiService else { return }
-
-        do {
-            let dto = try await api.fetchGreetings()
-            let text = dto.displayGreeting
-            if !text.isEmpty { greeting = text }
-        } catch {
-            // Non-critical
-        }
-    }
-
     // MARK: - Message History
 
     /// Loads full message history for a conversation from the API (lazy on selection).
@@ -707,6 +587,130 @@ final class ChatManager: ObservableObject {
         if let existing = try? ctx.fetch(desc).first {
             ctx.delete(existing)
             try? ctx.save()
+        }
+    }
+}
+
+// MARK: - Data Loading
+// Split from the main ChatManager body to stay under SwiftLint's
+// type_body_length limit — extensions are measured independently even
+// within the same file.
+extension ChatManager {
+    private func loadInitialData() async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.loadChats() }
+            group.addTask { await self.loadModels() }
+            group.addTask { await self.loadMCPServers() }
+            group.addTask { await self.loadGreeting() }
+        }
+    }
+
+    func loadChats() async {
+        guard let api = apiService else { return }
+        isLoadingChats = true
+
+        do {
+            let dtos = try await api.fetchChats()
+            let loaded = dtos.map { dto -> Conversation in
+                Conversation(
+                    id: dto.id,
+                    title: dto.title ?? dto.firstMessage?.truncated(to: 50) ?? "Chat",
+                    messages: [],
+                    model: dto.model ?? selectedModel.id,
+                    createdAt: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
+                )
+            }
+            // Merge: keep cached messages for conversations that were already loaded
+            let mergedIds = Set(conversations.map(\.id))
+            let merged = loaded.map { conv -> Conversation in
+                if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
+                    return Conversation(id: conv.id, title: conv.title,
+                                        messages: cached.messages, model: conv.model, createdAt: conv.createdAt)
+                }
+                return conv
+            }
+            let localOnly = conversations.filter { !mergedIds.contains($0.id) }
+            conversations = merged + localOnly
+            cacheConversations(loaded)
+            retryStuckTitles(dtos)
+        } catch {
+            // Don't surface load errors — user can still create new chats
+            print("[ChatManager] loadChats error: \(error)")
+        }
+
+        isLoadingChats = false
+    }
+
+    func loadModels() async {
+        guard let api = apiService else { return }
+
+        do {
+            let dtos = try await api.fetchModels()
+            guard !dtos.isEmpty else { return }
+
+            availableModels = dtos.map { dto in
+                LLMModel(id: dto.id, name: dto.name, provider: dto.provider ?? dto.id)
+            }
+
+            // Keep selected model valid
+            if !availableModels.contains(where: { $0.id == selectedModel.id }),
+               let first = availableModels.first {
+                selectedModel = first
+            }
+        } catch {
+            // Fallback to hardcoded defaults already in place
+            print("[ChatManager] loadModels error: \(error)")
+        }
+    }
+
+    func loadMCPServers() async {
+        guard let api = apiService else { return }
+
+        async let allServers = api.fetchAllMCPServers()
+        async let userServers = api.fetchUserMCPServers()
+
+        do {
+            let (all, user) = try await (allServers, userServers)
+            let subscribedIds = Set(user.map(\.id))
+            subscribedMCPServerIds = subscribedIds
+
+            availableMCPServers = all.map { dto in
+                MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description)
+            }
+        } catch {
+            print("[ChatManager] loadMCPServers error: \(error)")
+        }
+    }
+
+    func loadRateLimit() async {
+        guard let api = apiService else { return }
+
+        do {
+            let dto = try await api.fetchRateLimit()
+            rateLimit = RateLimitInfo(
+                planName: dto.stats?.planName ?? "—",
+                dailyUsed: dto.stats?.dailyTokensUsed ?? 0,
+                dailyLimit: dto.stats?.dailyTokensLimit ?? 0,
+                monthlyUsed: dto.stats?.monthlyTokensUsed ?? 0,
+                monthlyLimit: dto.stats?.monthlyTokensLimit ?? 0,
+                isBlocked: dto.isBlocked ?? false,
+                blockReason: dto.blockReason,
+                resetLabel: dto.resetLabel ?? "midnight"
+            )
+        } catch {
+            print("[ChatManager] loadRateLimit error: \(error)")
+        }
+    }
+
+    private func loadGreeting() async {
+        guard let api = apiService else { return }
+
+        do {
+            let dto = try await api.fetchGreetings()
+            let text = dto.displayGreeting
+            if !text.isEmpty { greeting = text }
+        } catch {
+            // Non-critical
         }
     }
 }
