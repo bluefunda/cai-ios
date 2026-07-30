@@ -70,6 +70,17 @@ final class ChatManager: ObservableObject {
     @Published var availableMCPServers: [MCPServer] = []
     @Published var subscribedMCPServerIds: Set<String> = []
 
+    /// SAP assistants (ABAPer, SAP Analytics) hidden from all selection UI —
+    /// use this instead of `availableMCPServers` in every picker/list view.
+    private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
+
+    var visibleMCPServers: [MCPServer] {
+        availableMCPServers.filter { server in
+            let name = server.displayName.lowercased()
+            return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
+        }
+    }
+
     @Published var rateLimit: RateLimitInfo?
     @Published var showRateLimitModal = false
     // Fallback data from the rate_limited event itself, used when API call fails

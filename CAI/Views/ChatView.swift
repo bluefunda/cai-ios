@@ -803,7 +803,7 @@ struct ModeModelPicker: View {
     }
 
     private var enabledAgents: [MCPServer] {
-        chatManager.availableMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
+        chatManager.visibleMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
     }
 
     private var label: String {
@@ -857,7 +857,7 @@ struct ModeModelPicker: View {
             // selection state (SwiftUI Menu still dismisses per-tap; reopen
             // to toggle another). Full checkbox UX lives in Settings ›
             // Assistants (MCPServerSelectionView).
-            if !chatManager.availableMCPServers.isEmpty {
+            if !chatManager.visibleMCPServers.isEmpty {
                 Section("Assistants") {
                     // "None" option clears all enabled agents
                     Button {
@@ -870,7 +870,7 @@ struct ModeModelPicker: View {
                         }
                     }
 
-                    ForEach(chatManager.availableMCPServers) { server in
+                    ForEach(chatManager.visibleMCPServers) { server in
                         Button {
                             if chatManager.enabledMCPServers.contains(server.id) {
                                 chatManager.enabledMCPServers.remove(server.id)

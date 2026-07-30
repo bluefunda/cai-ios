@@ -16,7 +16,7 @@ struct SettingsView: View {
     private var isIndividualRealm: Bool { authManager.realm == "individual" }
 
     private var assistantsSummary: String {
-        let enabled = chatManager.availableMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
+        let enabled = chatManager.visibleMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
         if enabled.isEmpty { return "None" }
         if enabled.count == 1 { return enabled[0].displayName }
         return "\(enabled.count) Selected"
@@ -370,7 +370,7 @@ struct MCPServerSelectionView: View {
     var body: some View {
         List {
             Section {
-                ForEach(chatManager.availableMCPServers) { server in
+                ForEach(chatManager.visibleMCPServers) { server in
                     Button {
                         toggle(server)
                     } label: {
@@ -397,7 +397,7 @@ struct MCPServerSelectionView: View {
         .navigationTitle("Assistants")
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
-            if chatManager.availableMCPServers.isEmpty {
+            if chatManager.visibleMCPServers.isEmpty {
                 ContentUnavailableView(
                     "No Assistants",
                     systemImage: "sparkles",
