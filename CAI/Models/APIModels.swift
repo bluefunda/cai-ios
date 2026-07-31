@@ -392,6 +392,36 @@ struct MCPListResponse: Codable {
     enum CodingKeys: String, CodingKey { case servers, mcpInfo, mcpForUser }
 }
 
+struct SubscriptionStripeDTO: Codable {
+    let hasSubscription: Bool
+    let plan: String
+
+    enum CodingKeys: String, CodingKey {
+        case hasSubscription = "has_subscription"
+        case plan
+    }
+}
+
+struct SubscriptionAppleDTO: Codable {
+    let registered: Bool
+    let plan: String
+    let status: String
+}
+
+struct SubscriptionDTO: Codable {
+    let plan: String
+    let source: String
+    let isPro: Bool
+    let stripe: SubscriptionStripeDTO
+    let apple: SubscriptionAppleDTO
+
+    enum CodingKeys: String, CodingKey {
+        case plan, source
+        case isPro = "is_pro"
+        case stripe, apple
+    }
+}
+
 /// Backend MCPInfo: {server_id (int), name, mcp_server_url, shortDescription, isAvailable}
 struct MCPServerDTO: Codable, Identifiable {
     let id: String           // derived from server_id (int → string)

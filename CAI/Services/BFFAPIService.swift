@@ -90,6 +90,22 @@ final class BFFAPIService {
         try await client.get("/rate-limit")
     }
 
+    // MARK: - Subscription
+
+    /// Registers an Apple IAP transaction with the backend so it can verify the
+    /// purchase with Apple and cache the subscription state.
+    func registerAppleSubscription(originalTransactionId: String) async throws {
+        try await client.postIgnoringResponse("/subscription/apple", body: [
+            "original_transaction_id": originalTransactionId
+        ])
+    }
+
+    /// Returns the user's active plan from whichever payment source (Stripe or
+    /// Apple IAP) grants the highest tier.
+    func fetchSubscription() async throws -> SubscriptionDTO {
+        try await client.get("/subscription")
+    }
+
     // MARK: - Greetings
 
     func fetchGreetings() async throws -> GreetingsDTO {

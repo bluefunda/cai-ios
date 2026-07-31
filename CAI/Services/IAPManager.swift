@@ -13,6 +13,9 @@ final class IAPManager: ObservableObject {
     @Published var purchaseError: String?
     @Published var isLoadingProducts = false
 
+    /// Injected after init so IAPManager can register purchases with the backend.
+    var bffService: BFFAPIService?
+
     private var transactionListener: Task<Void, Never>?
 
     init() {
@@ -66,6 +69,8 @@ final class IAPManager: ObservableObject {
                 }
                 await tx.finish()
                 hasActiveSubscription = true
+                let txID = String(tx.originalID)
+                Task { try? await self.bffService?.registerAppleSubscription(originalTransactionId: txID) }
             case .userCancelled:
                 break
             case .pending:
@@ -98,6 +103,8 @@ final class IAPManager: ObservableObject {
                    Self.productIDs.contains(tx.productID) {
                     await tx.finish()
                     await self.checkSubscriptionStatus()
+                    let txID = String(tx.originalID)
+                    Task { try? await self.bffService?.registerAppleSubscription(originalTransactionId: txID) }
                 }
             }
         }
