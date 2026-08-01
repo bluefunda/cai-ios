@@ -151,8 +151,13 @@ struct ChatView: View {
                         LazyVStack(spacing: 0) {
                             if let conversation = chatManager.currentConversation,
                                !conversation.messages.isEmpty {
-                                ForEach(conversation.messages) { message in
-                                    MessageView(message: message)
+                                ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
+                                    // The question this answer was replying to, so a shared
+                                    // card (bluefunda/cai-ios#197) can show both — looked up
+                                    // here where the surrounding list is available, since
+                                    // MessageView only sees a single message.
+                                    let precedingQuestion = index > 0 ? conversation.messages[index - 1].content : nil
+                                    MessageView(message: message, precedingQuestion: precedingQuestion)
                                         .id(message.id)
                                 }
                                 if chatManager.isStreaming {
@@ -472,7 +477,22 @@ struct ConnectionBanner: View {
 
 struct MessageView: View {
     let message: ChatMessage
+    /// The user's question this answer replied to, if any — used only to
+    /// build the shareable answer card (bluefunda/cai-ios#197); nil for user
+    /// messages and for the very first message in a conversation.
+    var precedingQuestion: String?
     @State private var didCopy = false
+
+    /// Rendered on demand (not cached) since it's only needed when the user
+    /// actually taps "Share as Card" — recomputing per tap is cheap for a
+    /// single small card image.
+    private var cardImage: UIImage? {
+        guard !message.content.isEmpty else { return nil }
+        let card = ShareableAnswerCard(question: precedingQuestion, answer: message.content)
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = UIScreen.main.scale
+        return renderer.uiImage
+    }
 
     var body: some View {
         if message.role == .user {
@@ -559,6 +579,17 @@ struct MessageView: View {
                             .font(.caption)
                     }
                     .foregroundStyle(.secondary)
+
+                    if let cardImage {
+                        ShareLink(
+                            item: Image(uiImage: cardImage),
+                            preview: SharePreview("BlueFunda AI Answer", image: Image(uiImage: cardImage))
+                        ) {
+                            Label("Share as Card", systemImage: "photo.badge.arrow.down.fill")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.secondary)
+                    }
                 }
                 .buttonStyle(.plain)
             }
