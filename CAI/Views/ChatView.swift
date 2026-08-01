@@ -35,6 +35,17 @@ struct ChatView: View {
     /// Keeps the document-picker delegate alive for the duration of an
     /// imperative presentation (see DocumentPickerCoordinator).
     @State private var documentPickerCoordinator: DocumentPickerCoordinator?
+    /// Set when the in-flight photo pick was started via "Decode ST22 Dump"
+    /// rather than the plain photo-library action (bluefunda/cai-ios#182) —
+    /// read once at send time to decide whether to wrap the request prompt.
+    @State private var attachmentIsForDumpDecode = false
+
+    /// True when the composer's current text looks like a pasted ST22 short
+    /// dump (bluefunda/cai-ios#182) — offers to decode it instead of sending
+    /// it as a plain question.
+    private var showDumpDecodeBanner: Bool {
+        ST22DumpDetector.looksLikeDump(inputText)
+    }
 
     private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
 
@@ -238,6 +249,9 @@ struct ChatView: View {
                     resetLabel: info.resetLabel
                 )
             }
+            if showDumpDecodeBanner {
+                ST22DumpBanner(onDecode: decodeDump)
+            }
             ChatInputView(
                 text: $inputText,
                 isStreaming: chatManager.isStreaming,
@@ -251,6 +265,10 @@ struct ChatView: View {
                 onClearAttachment: { clearAttachment() },
                 onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
                 onPickFile:  BFFeatureFlags.fileUploadEnabled ? { presentDocumentPicker() } : nil,
+                onPickDumpScreenshot: BFFeatureFlags.fileUploadEnabled ? {
+                    attachmentIsForDumpDecode = true
+                    showPhotoPicker = true
+                } : nil,
                 onMicTap: startRecording,
                 onCancelRecording: cancelRecording,
                 onConfirmRecording: confirmRecording
@@ -284,6 +302,7 @@ struct ChatView: View {
         if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
             let d = data; let f = filename; let m = mime
             let localMetadata = attachmentLocalMetadata
+            let isDumpScreenshot = attachmentIsForDumpDecode
             clearAttachment(deleteLocal: false)
             Task {
                 let fileUrl = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
@@ -291,10 +310,30 @@ struct ChatView: View {
                     chatManager.markAttachmentUploaded(localMetadata, remoteURL: fileUrl)
                 }
                 let prompt = text.isEmpty ? "Analyze the attached file." : text
-                await chatManager.sendMessage(prompt, fileUrl: fileUrl)
+                let override = isDumpScreenshot
+                    ? ST22PromptBuilder.buildPrompt(rawDump: text.isEmpty ? nil : text)
+                    : nil
+                await chatManager.sendMessage(prompt, fileUrl: fileUrl, requestPromptOverride: override)
             }
         } else {
             Task { await chatManager.sendMessage(text) }
+        }
+    }
+
+    /// Sends the composer's pasted dump text wrapped in the decoder's
+    /// instruction template (bluefunda/cai-ios#182), triggered by the
+    /// "Decode" banner shown when the text looks like an ST22 short dump.
+    private func decodeDump() {
+        guard !inputText.isEmpty else { return }
+        isInputFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+        let text = inputText
+        inputText = ""
+        if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
+        Task {
+            await chatManager.sendMessage(text, requestPromptOverride: ST22PromptBuilder.buildPrompt(rawDump: text))
         }
     }
 
@@ -320,6 +359,7 @@ struct ChatView: View {
         attachmentData = nil; attachmentFilename = nil
         attachmentMIME = nil; selectedPhotoItem = nil
         attachmentLocalMetadata = nil
+        attachmentIsForDumpDecode = false
     }
 
     /// Presents the document picker imperatively — SwiftUI's `.fileImporter`
@@ -652,6 +692,9 @@ struct ChatInputView: View {
     /// nil = file upload feature disabled; non-nil = show the attach button
     let onPickPhoto: (() -> Void)?
     let onPickFile: (() -> Void)?
+    /// nil = file upload feature disabled; non-nil = show the "Decode ST22
+    /// Dump" attach option (bluefunda/cai-ios#182).
+    var onPickDumpScreenshot: (() -> Void)? = nil
     var onMicTap: (() -> Void)? = nil
     var onCancelRecording: (() -> Void)? = nil
     var onConfirmRecording: (() -> Void)? = nil
@@ -696,6 +739,11 @@ struct ChatInputView: View {
                     if let pickFile = onPickFile {
                         Button { pickFile() } label: {
                             Label("Browse Files", systemImage: "folder")
+                        }
+                    }
+                    if let pickDumpScreenshot = onPickDumpScreenshot {
+                        Button { pickDumpScreenshot() } label: {
+                            Label("Decode ST22 Dump", systemImage: "exclamationmark.triangle")
                         }
                     }
                 } label: {
@@ -914,6 +962,34 @@ private struct AtBottomPreferenceKey: PreferenceKey {
     static var defaultValue: Bool = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = nextValue()
+    }
+}
+
+// MARK: - ST22 Dump Decode Banner
+
+/// Shown above the composer when the pasted text looks like an ST22 short
+/// dump (bluefunda/cai-ios#182), offering a structured decode instead of
+/// sending it as a plain question.
+struct ST22DumpBanner: View {
+    let onDecode: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(BFColor.warning)
+            Text("This looks like an ST22 dump")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("Decode", action: onDecode)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .buttonStyle(.plain)
+                .foregroundStyle(BFColor.primary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(BFColor.warning.opacity(0.1))
     }
 }
 

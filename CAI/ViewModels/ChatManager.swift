@@ -270,7 +270,12 @@ final class ChatManager: ObservableObject {
 
     // MARK: - Messaging
 
-    func sendMessage(_ text: String, fileUrl: String? = nil) async {
+    /// - Parameter requestPromptOverride: When set, sent to the backend as
+    ///   `ChatRequest.prompt` instead of `text` — used by the ST22 dump
+    ///   decoder (bluefunda/cai-ios#182) to wrap the user's pasted dump in a
+    ///   structured instruction template without cluttering their own chat
+    ///   bubble (which always shows exactly what they typed/pasted).
+    func sendMessage(_ text: String, fileUrl: String? = nil, requestPromptOverride: String? = nil) async {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
 
@@ -307,7 +312,7 @@ final class ChatManager: ObservableObject {
 
         let request = ChatRequest(
             chatId: conversation.id,
-            prompt: text,
+            prompt: requestPromptOverride ?? text,
             model: selectedModel.id,
             isNewChat: isFirstMessage,
             // TODO(bluefunda/cai-ios#167): send the full enabledMCPServers set

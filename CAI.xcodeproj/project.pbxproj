@@ -10,6 +10,9 @@
 		30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */; };
 		36DD901178353045CBE6B0C0 /* ChatManagerFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */; };
 		4825950C249ABF3CC61D75F0 /* ChatManagerTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */; };
+		69F0B45B00A5035BE0701E0D /* ST22DumpDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */; };
+		59C558A0A2B783F5B3683A6F /* ST22PromptBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */; };
+		DF8D3362FE5CA2884F421C9D /* ChatManagerDumpDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CA4969932ABC3335DC2AB /* ChatManagerDumpDecodeTests.swift */; };
 		4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */; };
 		78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */; };
 		A1000001201BCDEF /* CAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011201BCDEF /* CAIApp.swift */; };
@@ -57,6 +60,8 @@
 		G1000020201BCDEF /* CodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000010201BCDEF /* CodeView.swift */; };
 		G1000021201BCDEF /* CodeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000011201BCDEF /* CodeManager.swift */; };
 		H1000011201BCDEF /* SAPSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000001201BCDEF /* SAPSystem.swift */; };
+		95BD0266946254A562F61DD4 /* ST22DumpDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */; };
+		0F39E987AB185A7D67292A1D /* ST22PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C28B5B3AA1A956C85653B8 /* ST22PromptBuilder.swift */; };
 		H1000012201BCDEF /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000002201BCDEF /* KeychainStore.swift */; };
 		H1000013201BCDEF /* SAPSystemStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000003201BCDEF /* SAPSystemStore.swift */; };
 		H1000014201BCDEF /* CodeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000004201BCDEF /* CodeAPIService.swift */; };
@@ -85,6 +90,9 @@
 		22141F06B6EDC35EA631E85A /* FileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileStore.swift; sourceTree = "<group>"; };
 		280DCA3012561F192CB19BAA /* VoiceInputManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceInputManager.swift; sourceTree = "<group>"; };
 		310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerTitleTests.swift; sourceTree = "<group>"; };
+		2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ST22DumpDetectorTests.swift; sourceTree = "<group>"; };
+		00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ST22PromptBuilderTests.swift; sourceTree = "<group>"; };
+		A22CA4969932ABC3335DC2AB /* ChatManagerDumpDecodeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerDumpDecodeTests.swift; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
 		9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageFileLinks.swift; sourceTree = "<group>"; };
 		A1000011201BCDEF /* CAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAIApp.swift; sourceTree = "<group>"; };
@@ -135,6 +143,8 @@
 		G1000010201BCDEF /* CodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/CodeView.swift; sourceTree = "<group>"; };
 		G1000011201BCDEF /* CodeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeManager.swift; sourceTree = "<group>"; };
 		H1000001201BCDEF /* SAPSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystem.swift; sourceTree = "<group>"; };
+		0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ST22DumpDetector.swift; sourceTree = "<group>"; };
+		A7C28B5B3AA1A956C85653B8 /* ST22PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ST22PromptBuilder.swift; sourceTree = "<group>"; };
 		H1000002201BCDEF /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		H1000003201BCDEF /* SAPSystemStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystemStore.swift; sourceTree = "<group>"; };
 		H1000004201BCDEF /* CodeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAPIService.swift; sourceTree = "<group>"; };
@@ -278,6 +288,8 @@
 				K1000001201BCDEF /* HapticManager.swift */,
 				FF000001201BCDEF /* BFFeatureFlags.swift */,
 				9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */,
+				0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */,
+				A7C28B5B3AA1A956C85653B8 /* ST22PromptBuilder.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -304,6 +316,9 @@
 				E100002001BCDEF /* CAITests.swift */,
 				E100002101BCDEF /* MockChatService.swift */,
 				A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */,
+				2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */,
+				00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */,
+				A22CA4969932ABC3335DC2AB /* ChatManagerDumpDecodeTests.swift */,
 				0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */,
 				310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */,
 			);
@@ -433,6 +448,8 @@
 				G1000020201BCDEF /* CodeView.swift in Sources */,
 				G1000021201BCDEF /* CodeManager.swift in Sources */,
 				H1000011201BCDEF /* SAPSystem.swift in Sources */,
+				95BD0266946254A562F61DD4 /* ST22DumpDetector.swift in Sources */,
+				0F39E987AB185A7D67292A1D /* ST22PromptBuilder.swift in Sources */,
 				H1000012201BCDEF /* KeychainStore.swift in Sources */,
 				K1000011201BCDEF /* HapticManager.swift in Sources */,
 				FF000011201BCDEF /* BFFeatureFlags.swift in Sources */,
@@ -471,6 +488,9 @@
 				E100001001BCDEF /* CAITests.swift in Sources */,
 				E100001101BCDEF /* MockChatService.swift in Sources */,
 				36DD901178353045CBE6B0C0 /* ChatManagerFileTests.swift in Sources */,
+				69F0B45B00A5035BE0701E0D /* ST22DumpDetectorTests.swift in Sources */,
+				59C558A0A2B783F5B3683A6F /* ST22PromptBuilderTests.swift in Sources */,
+				DF8D3362FE5CA2884F421C9D /* ChatManagerDumpDecodeTests.swift in Sources */,
 				A44A9A13E45DC61CD42C68CB /* AuthTokenRefreshTests.swift in Sources */,
 				4825950C249ABF3CC61D75F0 /* ChatManagerTitleTests.swift in Sources */,
 			);
