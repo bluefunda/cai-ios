@@ -20,6 +20,16 @@ final class ChatManager: ObservableObject {
 
     @Published var selectedModel: LLMModel = LLMModel.defaultModel
 
+    /// The user's home SAP persona (bluefunda/cai-ios#177), sent as chat
+    /// context on every request. Persisted across launches; takes effect on
+    /// the next message sent, no restart required.
+    @Published var persona: Persona = {
+        let raw = UserDefaults.standard.string(forKey: "cai_persona") ?? Persona.general.rawValue
+        return Persona(rawValue: raw) ?? .general
+    }() {
+        didSet { UserDefaults.standard.set(persona.rawValue, forKey: "cai_persona") }
+    }
+
     /// Legacy single-agent selection, kept as the source of truth for the
     /// outgoing chat request wire format until cai-bff/cai-llm-router ship
     /// list-based MCP support (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231).
@@ -319,7 +329,8 @@ final class ChatManager: ObservableObject {
             thinkingMode: thinkingMode.rawValue,
             modelExplicit: userPickedModel,
             fileUrl: fileUrl,
-            agentName: agentNameForSelectedServer
+            agentName: agentNameForSelectedServer,
+            persona: persona.rawValue
         )
 
         isStreaming = true

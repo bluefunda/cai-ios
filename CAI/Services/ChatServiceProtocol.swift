@@ -96,6 +96,10 @@ struct ChatRequest {
     /// Explicit agent name for routing (e.g. "abaper"). When set, cai-llm-router routes
     /// to the named agent rather than the default MCP agent.
     let agentName: String?
+    /// The user's selected SAP persona (bluefunda/cai-ios#177), e.g. "abap" or
+    /// "fi". Additive context for response tuning — independent of `agentName`,
+    /// which is reserved for actual backend agent routing.
+    let persona: String
 
     init(
         chatId: String,
@@ -108,7 +112,8 @@ struct ChatRequest {
         thinkingMode: String = "auto",
         modelExplicit: Bool = false,
         fileUrl: String? = nil,
-        agentName: String? = nil
+        agentName: String? = nil,
+        persona: String = Persona.general.rawValue
     ) {
         self.chatId = chatId
         self.prompt = prompt
@@ -121,6 +126,7 @@ struct ChatRequest {
         self.modelExplicit = modelExplicit
         self.fileUrl = fileUrl
         self.agentName = agentName
+        self.persona = persona
     }
 
     /// Convert to JSON payload for NATS/BFF
@@ -131,7 +137,8 @@ struct ChatRequest {
             "prompt": prompt,
             "isNewChat": isNewChat,
             "thinkingMode": thinkingMode,
-            "modelExplicit": modelExplicit
+            "modelExplicit": modelExplicit,
+            "persona": persona
         ]
 
         if let mcpName = mcpServerName { json["mcp_server_name"] = mcpName }

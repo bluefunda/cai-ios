@@ -61,7 +61,8 @@ final class BFFChatService: ChatServiceProtocol {
                     "model": request.model,
                     "prompt": request.prompt,
                     "thinkingMode": request.thinkingMode,
-                    "modelExplicit": request.modelExplicit
+                    "modelExplicit": request.modelExplicit,
+                    "persona": request.persona
                 ]
                 if let mcpName = request.mcpServerName { payload["mcp_server_name"] = mcpName }
                 if let mcpURL  = request.mcpServerURL  { payload["mcp_server_url"]  = mcpURL  }
