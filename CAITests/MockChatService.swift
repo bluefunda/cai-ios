@@ -12,7 +12,8 @@ final class MockChatService: ChatServiceProtocol {
     var sendMessageCalled = false
     var stopStreamingCalled = false
     /// The most recent request passed to sendMessage, for assertions on the
-    /// outgoing wire format (e.g. persona field).
+    /// outgoing wire format (e.g. persona field, requestPromptOverride
+    /// reaching request.prompt).
     var lastRequest: ChatRequest?
 
     var mockEvents: [ChatEvent] = []
