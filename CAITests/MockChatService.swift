@@ -11,6 +11,9 @@ final class MockChatService: ChatServiceProtocol {
     var disconnectCalled = false
     var sendMessageCalled = false
     var stopStreamingCalled = false
+    /// The most recent request passed to sendMessage, for assertions on the
+    /// outgoing wire format (e.g. mcpServers population).
+    var lastRequest: ChatRequest?
 
     var mockEvents: [ChatEvent] = []
     var mockError: Error?
@@ -31,6 +34,7 @@ final class MockChatService: ChatServiceProtocol {
 
     func sendMessage(_ request: ChatRequest) -> AsyncThrowingStream<ChatEvent, Error> {
         sendMessageCalled = true
+        lastRequest = request
         let events = mockEvents
         let error = mockError
 
