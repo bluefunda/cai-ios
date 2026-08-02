@@ -128,17 +128,10 @@ final class ChatManager: ObservableObject {
     private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
 
     var visibleMCPServers: [MCPServer] {
-        // TEMPORARY (bluefunda/cai-ios#171/#172 local testing only): this test
-        // account's only two web-channel MCP servers (abaper-mcp, cai-odata-cache
-        // — "SAP Analytics") both match hiddenMCPServerNameFragments, so the
-        // filter below is disabled to make them selectable for testing the
-        // multi-MCP wire format and per-conversation scoping. MUST be reverted
-        // (restore the filter) before merging this branch.
-        return availableMCPServers
-        // availableMCPServers.filter { server in
-        //     let name = server.displayName.lowercased()
-        //     return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
-        // }
+        availableMCPServers.filter { server in
+            let name = server.displayName.lowercased()
+            return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
+        }
     }
 
     @Published var rateLimit: RateLimitInfo?
