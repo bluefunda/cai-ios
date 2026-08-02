@@ -46,8 +46,27 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+
+                    Toggle(isOn: $chatManager.personaEnabled) {
+                        Label("SAP Persona", systemImage: "person.text.rectangle")
+                    }
+
+                    NavigationLink {
+                        PersonaSelectionView()
+                    } label: {
+                        HStack {
+                            Label("Default Persona", systemImage: chatManager.persona.icon)
+                            Spacer()
+                            Text(chatManager.persona.label)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .disabled(!chatManager.personaEnabled)
+                    .opacity(chatManager.personaEnabled ? 1 : 0.4)
                 } header: {
                     Text("AI Settings")
+                } footer: {
+                    Text("Tunes terminology and depth to your SAP specialty. Turn off to use the assistant with no persona.")
                 }
 
                 // Usage
@@ -417,6 +436,50 @@ struct MCPServerSelectionView: View {
 
     private func isSelected(_ server: MCPServer) -> Bool {
         chatManager.enabledMCPServers.contains(server.id)
+    }
+}
+
+// MARK: - Persona Selection View
+
+struct PersonaSelectionView: View {
+    @EnvironmentObject var chatManager: ChatManager
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(Persona.allCases) { persona in
+                    Button {
+                        chatManager.persona = persona
+                    } label: {
+                        HStack {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(persona.label)
+                                        .foregroundColor(.primary)
+                                        .fontWeight(chatManager.persona == persona ? .semibold : .regular)
+                                    Text(persona.detail)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: persona.icon)
+                            }
+
+                            Spacer()
+
+                            if chatManager.persona == persona {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(BFColor.primary)
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("Used to tune terminology and depth in chat responses.")
+            }
+        }
+        .navigationTitle("SAP Persona")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -12,6 +12,7 @@ import Foundation
 enum BFFeatureFlags {
     enum Keys {
         static let fileUpload = "bf_feature_file_upload"
+        static let personaWire = "bf_feature_persona_wire"
     }
 
     /// File attachment (photo library + document picker) in the chat input bar.
@@ -22,5 +23,20 @@ enum BFFeatureFlags {
         UserDefaults.standard.object(forKey: Keys.fileUpload) != nil
             ? UserDefaults.standard.bool(forKey: Keys.fileUpload)
             : true
+    }
+
+    /// Whether the resolved persona (global default or per-message override)
+    /// is actually sent to the backend on `ChatRequest.persona`. Off by
+    /// default (2026-08-02) — none of the backend-side work (cai-bff#110-112,
+    /// cai-llm-router#242-244, cai-mcp-go#180-182) has shipped yet, and every
+    /// message failed in the first live end-to-end test with this on. The
+    /// Settings toggle, composer chip, override, and local history metadata
+    /// (bluefunda/cai-ios#203-207) stay fully functional either way — this
+    /// flag only gates what goes out over the wire. Flip to true once the
+    /// backend confirms it's ready.
+    static var personaWireEnabled: Bool {
+        UserDefaults.standard.object(forKey: Keys.personaWire) != nil
+            ? UserDefaults.standard.bool(forKey: Keys.personaWire)
+            : false
     }
 }

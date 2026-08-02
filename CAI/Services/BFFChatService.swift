@@ -65,6 +65,10 @@ final class BFFChatService: ChatServiceProtocol {
                 ]
                 if let mcpName = request.mcpServerName { payload["mcp_server_name"] = mcpName }
                 if let mcpURL  = request.mcpServerURL  { payload["mcp_server_url"]  = mcpURL  }
+                if let servers = request.mcpServers, !servers.isEmpty {
+                    payload["mcpServers"] = servers.map { $0.toJSON() }
+                }
+                if let persona = request.persona        { payload["persona"]        = persona  }
                 if let fileUrl = request.fileUrl        { payload["fileUrl"]         = fileUrl  }
                 if let agent   = request.agentName      { payload["agentName"]       = agent    }
 

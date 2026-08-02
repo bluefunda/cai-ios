@@ -35,6 +35,29 @@ struct ChatView: View {
     /// Keeps the document-picker delegate alive for the duration of an
     /// imperative presentation (see DocumentPickerCoordinator).
     @State private var documentPickerCoordinator: DocumentPickerCoordinator?
+    /// Set when the in-flight photo pick was started via "Decode ST22 Dump"
+    /// rather than the plain photo-library action (bluefunda/cai-ios#182) —
+    /// read once at send time to decide whether to wrap the request prompt.
+    @State private var attachmentIsForDumpDecode = false
+
+    /// True when the composer's current text looks like a pasted ST22 short
+    /// dump (bluefunda/cai-ios#182) — offers to decode it instead of sending
+    /// it as a plain question.
+    private var showDumpDecodeBanner: Bool {
+        ST22DumpDetector.looksLikeDump(inputText)
+    }
+
+    /// One-off persona override for the message currently being composed
+    /// (bluefunda/cai-ios#205) — nil means "inherit the global default".
+    /// Reset to nil immediately after every send (#206); never persists to
+    /// the next message.
+    @State private var messagePersonaOverride: Persona?
+
+    /// What the chip actually displays: the override if one is set, else the
+    /// global default.
+    private var chipPersona: Persona {
+        messagePersonaOverride ?? chatManager.persona
+    }
 
     private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
 
@@ -151,8 +174,13 @@ struct ChatView: View {
                         LazyVStack(spacing: 0) {
                             if let conversation = chatManager.currentConversation,
                                !conversation.messages.isEmpty {
-                                ForEach(conversation.messages) { message in
-                                    MessageView(message: message)
+                                ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
+                                    // The question this answer was replying to, so a shared
+                                    // card (bluefunda/cai-ios#197) can show both — looked up
+                                    // here where the surrounding list is available, since
+                                    // MessageView only sees a single message.
+                                    let precedingQuestion = index > 0 ? conversation.messages[index - 1].content : nil
+                                    MessageView(message: message, precedingQuestion: precedingQuestion)
                                         .id(message.id)
                                 }
                                 if chatManager.isStreaming {
@@ -238,6 +266,21 @@ struct ChatView: View {
                     resetLabel: info.resetLabel
                 )
             }
+            if showDumpDecodeBanner {
+                ST22DumpBanner(onDecode: decodeDump)
+            }
+            if chatManager.personaEnabled {
+                HStack {
+                    PersonaChip(
+                        persona: chipPersona,
+                        isOverride: messagePersonaOverride != nil,
+                        onSelect: { messagePersonaOverride = $0 }
+                    )
+                    Spacer()
+                }
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.top, 6)
+            }
             ChatInputView(
                 text: $inputText,
                 isStreaming: chatManager.isStreaming,
@@ -251,6 +294,10 @@ struct ChatView: View {
                 onClearAttachment: { clearAttachment() },
                 onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
                 onPickFile:  BFFeatureFlags.fileUploadEnabled ? { presentDocumentPicker() } : nil,
+                onPickDumpScreenshot: BFFeatureFlags.fileUploadEnabled ? {
+                    attachmentIsForDumpDecode = true
+                    showPhotoPicker = true
+                } : nil,
                 onMicTap: startRecording,
                 onCancelRecording: cancelRecording,
                 onConfirmRecording: confirmRecording
@@ -277,6 +324,11 @@ struct ChatView: View {
         )
         let text = inputText
         inputText = ""
+        // Resolved once per send, then reset immediately — an override never
+        // carries over to the next message (bluefunda/cai-ios#206), regardless
+        // of how this send turns out.
+        let personaForThisSend = messagePersonaOverride
+        messagePersonaOverride = nil
 
         // Scroll to bottom so the user's prompt is visible when streaming starts.
         if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
@@ -284,6 +336,7 @@ struct ChatView: View {
         if let data = attachmentData, let filename = attachmentFilename, let mime = attachmentMIME {
             let d = data; let f = filename; let m = mime
             let localMetadata = attachmentLocalMetadata
+            let isDumpScreenshot = attachmentIsForDumpDecode
             clearAttachment(deleteLocal: false)
             Task {
                 let fileUrl = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
@@ -291,10 +344,38 @@ struct ChatView: View {
                     chatManager.markAttachmentUploaded(localMetadata, remoteURL: fileUrl)
                 }
                 let prompt = text.isEmpty ? "Analyze the attached file." : text
-                await chatManager.sendMessage(prompt, fileUrl: fileUrl)
+                let override = isDumpScreenshot
+                    ? ST22PromptBuilder.buildPrompt(rawDump: text.isEmpty ? nil : text)
+                    : nil
+                await chatManager.sendMessage(
+                    prompt, fileUrl: fileUrl, requestPromptOverride: override, personaOverride: personaForThisSend
+                )
             }
         } else {
-            Task { await chatManager.sendMessage(text) }
+            Task { await chatManager.sendMessage(text, personaOverride: personaForThisSend) }
+        }
+    }
+
+    /// Sends the composer's pasted dump text wrapped in the decoder's
+    /// instruction template (bluefunda/cai-ios#182), triggered by the
+    /// "Decode" banner shown when the text looks like an ST22 short dump.
+    private func decodeDump() {
+        guard !inputText.isEmpty else { return }
+        isInputFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+        let text = inputText
+        inputText = ""
+        let personaForThisSend = messagePersonaOverride
+        messagePersonaOverride = nil
+        if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
+        Task {
+            await chatManager.sendMessage(
+                text,
+                requestPromptOverride: ST22PromptBuilder.buildPrompt(rawDump: text),
+                personaOverride: personaForThisSend
+            )
         }
     }
 
@@ -320,6 +401,7 @@ struct ChatView: View {
         attachmentData = nil; attachmentFilename = nil
         attachmentMIME = nil; selectedPhotoItem = nil
         attachmentLocalMetadata = nil
+        attachmentIsForDumpDecode = false
     }
 
     /// Presents the document picker imperatively — SwiftUI's `.fileImporter`
@@ -472,13 +554,42 @@ struct ConnectionBanner: View {
 
 struct MessageView: View {
     let message: ChatMessage
+    /// The user's question this answer replied to, if any — used only to
+    /// build the shareable answer card (bluefunda/cai-ios#197); nil for user
+    /// messages and for the very first message in a conversation.
+    var precedingQuestion: String?
     @State private var didCopy = false
+
+    /// Rendered on demand (not cached) since it's only needed when the user
+    /// actually taps "Share as Card" — recomputing per tap is cheap for a
+    /// single small card image.
+    private var cardImage: UIImage? {
+        guard !message.content.isEmpty else { return nil }
+        let card = ShareableAnswerCard(question: precedingQuestion, answer: message.content)
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = UIScreen.main.scale
+        return renderer.uiImage
+    }
 
     var body: some View {
         if message.role == .user {
             userBubble
         } else {
             assistantContent
+        }
+    }
+
+    /// Small "· FI" style tag shown next to the timestamp when this message
+    /// carried a specific persona (bluefunda/cai-ios#207) — omitted for
+    /// `.general` (the no-specific-persona baseline) and for messages with no
+    /// recorded persona at all (predates the field, or the feature was off).
+    @ViewBuilder
+    private var personaBadge: some View {
+        if let raw = message.persona, let persona = Persona(rawValue: raw), persona != .general {
+            HStack(spacing: 3) {
+                Image(systemName: persona.icon)
+                Text(persona.shortLabel)
+            }
         }
     }
 
@@ -514,9 +625,12 @@ struct MessageView: View {
                         in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                     )
                     .contextMenu { messageActions }
-                Text(message.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
+                    personaBadge
+                    Text(message.timestamp, style: .time)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, BFSpacing._4)
@@ -559,13 +673,27 @@ struct MessageView: View {
                             .font(.caption)
                     }
                     .foregroundStyle(.secondary)
+
+                    if let cardImage {
+                        ShareLink(
+                            item: Image(uiImage: cardImage),
+                            preview: SharePreview("BlueFunda AI Answer", image: Image(uiImage: cardImage))
+                        ) {
+                            Label("Share as Card", systemImage: "photo.badge.arrow.down.fill")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.secondary)
+                    }
                 }
                 .buttonStyle(.plain)
             }
 
-            Text(message.timestamp, style: .time)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: 6) {
+                personaBadge
+                Text(message.timestamp, style: .time)
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
@@ -652,6 +780,9 @@ struct ChatInputView: View {
     /// nil = file upload feature disabled; non-nil = show the attach button
     let onPickPhoto: (() -> Void)?
     let onPickFile: (() -> Void)?
+    /// nil = file upload feature disabled; non-nil = show the "Decode ST22
+    /// Dump" attach option (bluefunda/cai-ios#182).
+    var onPickDumpScreenshot: (() -> Void)? = nil
     var onMicTap: (() -> Void)? = nil
     var onCancelRecording: (() -> Void)? = nil
     var onConfirmRecording: (() -> Void)? = nil
@@ -696,6 +827,11 @@ struct ChatInputView: View {
                     if let pickFile = onPickFile {
                         Button { pickFile() } label: {
                             Label("Browse Files", systemImage: "folder")
+                        }
+                    }
+                    if let pickDumpScreenshot = onPickDumpScreenshot {
+                        Button { pickDumpScreenshot() } label: {
+                            Label("Decode ST22 Dump", systemImage: "exclamationmark.triangle")
                         }
                     }
                 } label: {
@@ -914,6 +1050,79 @@ private struct AtBottomPreferenceKey: PreferenceKey {
     static var defaultValue: Bool = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = nextValue()
+    }
+}
+
+// MARK: - Persona Chip
+
+/// Shown above the composer, only when the SAP persona feature is enabled
+/// (bluefunda/cai-ios#204), reflecting the persona that will be used for the
+/// message currently being composed. Tapping it overrides the persona for
+/// that one message only (#205) — the override is reset by the caller right
+/// after send (#206), not by this view.
+struct PersonaChip: View {
+    let persona: Persona
+    let isOverride: Bool
+    let onSelect: (Persona) -> Void
+
+    private var label: String {
+        isOverride ? persona.shortLabel : "\(persona.shortLabel) · from settings"
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(Persona.allCases) { option in
+                Button {
+                    onSelect(option)
+                } label: {
+                    if option == persona {
+                        Label(option.label, systemImage: "checkmark")
+                    } else {
+                        Text(option.label)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: persona.icon)
+                    .font(.caption2)
+                Text(label)
+                    .font(.caption2)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(BFColor.primaryTint, in: Capsule())
+            .foregroundStyle(BFColor.primary)
+        }
+    }
+}
+
+// MARK: - ST22 Dump Decode Banner
+
+/// Shown above the composer when the pasted text looks like an ST22 short
+/// dump (bluefunda/cai-ios#182), offering a structured decode instead of
+/// sending it as a plain question.
+struct ST22DumpBanner: View {
+    let onDecode: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(BFColor.warning)
+            Text("This looks like an ST22 dump")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("Decode", action: onDecode)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .buttonStyle(.plain)
+                .foregroundStyle(BFColor.primary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(BFColor.warning.opacity(0.1))
     }
 }
 
