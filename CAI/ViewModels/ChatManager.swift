@@ -406,7 +406,11 @@ final class ChatManager: ObservableObject {
             modelExplicit: userPickedModel,
             fileUrl: fileUrl,
             agentName: agentNameForSelectedServer,
-            persona: effectivePersona?.rawValue
+            // Gated separately from the local metadata above (bluefunda/cai-ios#203-207
+            // keep working purely client-side) — the backend doesn't support this field
+            // yet, so it's held back from the wire until BFFeatureFlags.personaWireEnabled
+            // is flipped on.
+            persona: BFFeatureFlags.personaWireEnabled ? effectivePersona?.rawValue : nil
         )
 
         isStreaming = true

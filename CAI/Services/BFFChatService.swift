@@ -97,18 +97,27 @@ final class BFFChatService: ChatServiceProtocol {
                         return
                     }
 
-                    // Decode per-byte via SSEEventFramer (not per-byte UnicodeScalar,
-                    // which is Latin-1 and corrupts any multi-byte character — em
-                    // dash, arrows, accents, emoji…). The framer only treats a
-                    // "\n\n" as a real event boundary once the bytes before it
-                    // actually parse, so a blank line inside a chunk's own content
-                    // can't be mistaken for the end of the stream.
-                    var framer = SSEEventFramer()
+                    // TEMPORARY REVERT (2026-08-02): back to the original inline
+                    // byte-buffer parser. SSEEventFramer/the "hardening fix" had
+                    // never been exercised against a real backend response before
+                    // this session's first live end-to-end test, which failed on
+                    // every message (including "hi") — reverting this as the prime
+                    // suspect while investigating. See SSEEventFramer.swift/
+                    // SSEEventFramerTests.swift, kept but currently unused.
+                    var byteBuffer = Data()
+                    let delimiter = Data([0x0A, 0x0A]) // "\n\n"
                     for try await byte in bytes {
                         if Task.isCancelled { break }
-                        for event in framer.feed(byte: byte) {
-                            continuation.yield(event)
-                            if event.isTerminal { continuation.finish(); return }
+                        byteBuffer.append(byte)
+                        guard byte == 0x0A else { continue }
+                        while let range = byteBuffer.range(of: delimiter) {
+                            let eventData = byteBuffer.subdata(in: byteBuffer.startIndex..<range.lowerBound)
+                            byteBuffer.removeSubrange(byteBuffer.startIndex..<range.upperBound)
+                            let eventText = String(decoding: eventData, as: UTF8.self)
+                            if let event = SSEEventFramer.parseEvent(eventText) {
+                                continuation.yield(event)
+                                if event.isTerminal { continuation.finish(); return }
+                            }
                         }
                     }
                     continuation.finish()
