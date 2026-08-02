@@ -60,6 +60,19 @@ final class ChatManager: ObservableObject {
         didSet { UserDefaults.standard.set(persona.rawValue, forKey: "cai_persona") }
     }
 
+    /// Whether the SAP persona feature is on at all (bluefunda/cai-ios#203).
+    /// Defaults to true (the key is absent pre-upgrade) so users who already
+    /// had a persona selected under #177 see no behavior change. When false:
+    /// no persona is applied anywhere, regardless of the stored default above
+    /// or any per-message override.
+    @Published var personaEnabled: Bool = {
+        UserDefaults.standard.object(forKey: "cai_persona_enabled") == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: "cai_persona_enabled")
+    }() {
+        didSet { UserDefaults.standard.set(personaEnabled, forKey: "cai_persona_enabled") }
+    }
+
     /// Legacy single-agent selection, kept as the source of truth for the
     /// outgoing chat request wire format until cai-bff/cai-llm-router ship
     /// list-based MCP support (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231).
@@ -260,7 +273,8 @@ final class ChatManager: ObservableObject {
                     content: dto.content,
                     timestamp: dto.createdAt.flatMap(Date.fromISO8601) ?? Date(),
                     fileUrl: dto.fileUrl,
-                    fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:))
+                    fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:)),
+                    persona: dto.persona
                 )
             }
             conversations[idx].messages = messages
@@ -329,7 +343,16 @@ final class ChatManager: ObservableObject {
     ///   decoder (bluefunda/cai-ios#182) to wrap the user's pasted dump in a
     ///   structured instruction template without cluttering their own chat
     ///   bubble (which always shows exactly what they typed/pasted).
-    func sendMessage(_ text: String, fileUrl: String? = nil, requestPromptOverride: String? = nil) async {
+    /// - Parameter personaOverride: When set, used as this message's persona
+    ///   instead of the global default (bluefunda/cai-ios#205) — a one-off
+    ///   override for this send only, resolved once here and never persisted;
+    ///   the composer's own override state resets independently (#206).
+    func sendMessage(
+        _ text: String,
+        fileUrl: String? = nil,
+        requestPromptOverride: String? = nil,
+        personaOverride: Persona? = nil
+    ) async {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
 
@@ -343,12 +366,19 @@ final class ChatManager: ObservableObject {
 
         let isFirstMessage = conversation.messages.isEmpty
 
+        // Resolved once per send (bluefunda/cai-ios#177/#205/#208): override
+        // takes precedence over the global default; disabled means no persona
+        // at all, regardless of any override that may have been set before
+        // the feature was turned off.
+        let effectivePersona: Persona? = personaEnabled ? (personaOverride ?? persona) : nil
+
         // Append user message
-        let userMessage = ChatMessage(role: .user, content: text, fileUrl: fileUrl)
+        let userMessage = ChatMessage(role: .user, content: text, fileUrl: fileUrl, persona: effectivePersona?.rawValue)
         conversation.messages.append(userMessage)
 
-        // Append empty assistant placeholder
-        var assistantMessage = ChatMessage(role: .assistant, content: "")
+        // Append empty assistant placeholder — same persona as the user
+        // message it's answering, so the turn's lens stays paired (#207).
+        var assistantMessage = ChatMessage(role: .assistant, content: "", persona: effectivePersona?.rawValue)
         conversation.messages.append(assistantMessage)
 
         // Show truncated prompt immediately so sidebar isn't blank while API generates a real title.
@@ -376,7 +406,7 @@ final class ChatManager: ObservableObject {
             modelExplicit: userPickedModel,
             fileUrl: fileUrl,
             agentName: agentNameForSelectedServer,
-            persona: persona.rawValue
+            persona: effectivePersona?.rawValue
         )
 
         isStreaming = true
@@ -397,7 +427,8 @@ final class ChatManager: ObservableObject {
                             id: assistantMessage.id,
                             role: .assistant,
                             content: finalContent,
-                            timestamp: assistantMessage.timestamp
+                            timestamp: assistantMessage.timestamp,
+                            persona: assistantMessage.persona
                         )
                         updateLastMessage(assistantMessage, in: conversation.id)
 
@@ -407,7 +438,8 @@ final class ChatManager: ObservableObject {
                             id: assistantMessage.id,
                             role: .assistant,
                             content: finalContent,
-                            timestamp: assistantMessage.timestamp
+                            timestamp: assistantMessage.timestamp,
+                            persona: assistantMessage.persona
                         )
                         updateLastMessage(assistantMessage, in: conversation.id)
                         Haptic.impact(.light)   // response complete
@@ -474,7 +506,8 @@ final class ChatManager: ObservableObject {
                     id: assistantMessage.id,
                     role: .assistant,
                     content: "I couldn't generate a response for that. Please try rephrasing or send it again.",
-                    timestamp: assistantMessage.timestamp
+                    timestamp: assistantMessage.timestamp,
+                    persona: assistantMessage.persona
                 )
                 updateLastMessage(assistantMessage, in: conversation.id)
             }
@@ -620,7 +653,7 @@ final class ChatManager: ObservableObject {
         for msg in messages where !existingIds.contains(msg.id) {
             let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
                                       roleRaw: msg.role.rawValue, content: msg.content,
-                                      timestamp: msg.timestamp)
+                                      timestamp: msg.timestamp, persona: msg.persona)
             pm.conversation = persisted
             ctx.insert(pm)
         }

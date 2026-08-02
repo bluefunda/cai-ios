@@ -47,6 +47,18 @@ struct ChatView: View {
         ST22DumpDetector.looksLikeDump(inputText)
     }
 
+    /// One-off persona override for the message currently being composed
+    /// (bluefunda/cai-ios#205) — nil means "inherit the global default".
+    /// Reset to nil immediately after every send (#206); never persists to
+    /// the next message.
+    @State private var messagePersonaOverride: Persona?
+
+    /// What the chip actually displays: the override if one is set, else the
+    /// global default.
+    private var chipPersona: Persona {
+        messagePersonaOverride ?? chatManager.persona
+    }
+
     private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
 
     // Voice input state
@@ -257,6 +269,18 @@ struct ChatView: View {
             if showDumpDecodeBanner {
                 ST22DumpBanner(onDecode: decodeDump)
             }
+            if chatManager.personaEnabled {
+                HStack {
+                    PersonaChip(
+                        persona: chipPersona,
+                        isOverride: messagePersonaOverride != nil,
+                        onSelect: { messagePersonaOverride = $0 }
+                    )
+                    Spacer()
+                }
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.top, 6)
+            }
             ChatInputView(
                 text: $inputText,
                 isStreaming: chatManager.isStreaming,
@@ -300,6 +324,11 @@ struct ChatView: View {
         )
         let text = inputText
         inputText = ""
+        // Resolved once per send, then reset immediately — an override never
+        // carries over to the next message (bluefunda/cai-ios#206), regardless
+        // of how this send turns out.
+        let personaForThisSend = messagePersonaOverride
+        messagePersonaOverride = nil
 
         // Scroll to bottom so the user's prompt is visible when streaming starts.
         if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
@@ -318,10 +347,12 @@ struct ChatView: View {
                 let override = isDumpScreenshot
                     ? ST22PromptBuilder.buildPrompt(rawDump: text.isEmpty ? nil : text)
                     : nil
-                await chatManager.sendMessage(prompt, fileUrl: fileUrl, requestPromptOverride: override)
+                await chatManager.sendMessage(
+                    prompt, fileUrl: fileUrl, requestPromptOverride: override, personaOverride: personaForThisSend
+                )
             }
         } else {
-            Task { await chatManager.sendMessage(text) }
+            Task { await chatManager.sendMessage(text, personaOverride: personaForThisSend) }
         }
     }
 
@@ -336,9 +367,15 @@ struct ChatView: View {
         )
         let text = inputText
         inputText = ""
+        let personaForThisSend = messagePersonaOverride
+        messagePersonaOverride = nil
         if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
         Task {
-            await chatManager.sendMessage(text, requestPromptOverride: ST22PromptBuilder.buildPrompt(rawDump: text))
+            await chatManager.sendMessage(
+                text,
+                requestPromptOverride: ST22PromptBuilder.buildPrompt(rawDump: text),
+                personaOverride: personaForThisSend
+            )
         }
     }
 
@@ -542,6 +579,20 @@ struct MessageView: View {
         }
     }
 
+    /// Small "· FI" style tag shown next to the timestamp when this message
+    /// carried a specific persona (bluefunda/cai-ios#207) — omitted for
+    /// `.general` (the no-specific-persona baseline) and for messages with no
+    /// recorded persona at all (predates the field, or the feature was off).
+    @ViewBuilder
+    private var personaBadge: some View {
+        if let raw = message.persona, let persona = Persona(rawValue: raw), persona != .general {
+            HStack(spacing: 3) {
+                Image(systemName: persona.icon)
+                Text(persona.shortLabel)
+            }
+        }
+    }
+
     // Long-press actions shared by user prompts and assistant responses.
     @ViewBuilder
     private var messageActions: some View {
@@ -574,9 +625,12 @@ struct MessageView: View {
                         in: RoundedRectangle(cornerRadius: 18, style: .continuous)
                     )
                     .contextMenu { messageActions }
-                Text(message.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
+                    personaBadge
+                    Text(message.timestamp, style: .time)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, BFSpacing._4)
@@ -634,9 +688,12 @@ struct MessageView: View {
                 .buttonStyle(.plain)
             }
 
-            Text(message.timestamp, style: .time)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: 6) {
+                personaBadge
+                Text(message.timestamp, style: .time)
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
@@ -993,6 +1050,51 @@ private struct AtBottomPreferenceKey: PreferenceKey {
     static var defaultValue: Bool = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) {
         value = nextValue()
+    }
+}
+
+// MARK: - Persona Chip
+
+/// Shown above the composer, only when the SAP persona feature is enabled
+/// (bluefunda/cai-ios#204), reflecting the persona that will be used for the
+/// message currently being composed. Tapping it overrides the persona for
+/// that one message only (#205) — the override is reset by the caller right
+/// after send (#206), not by this view.
+struct PersonaChip: View {
+    let persona: Persona
+    let isOverride: Bool
+    let onSelect: (Persona) -> Void
+
+    private var label: String {
+        isOverride ? persona.shortLabel : "\(persona.shortLabel) · from settings"
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(Persona.allCases) { option in
+                Button {
+                    onSelect(option)
+                } label: {
+                    if option == persona {
+                        Label(option.label, systemImage: "checkmark")
+                    } else {
+                        Text(option.label)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: persona.icon)
+                    .font(.caption2)
+                Text(label)
+                    .font(.caption2)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(BFColor.primaryTint, in: Capsule())
+            .foregroundStyle(BFColor.primary)
+        }
     }
 }
 

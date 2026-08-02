@@ -47,20 +47,26 @@ struct SettingsView: View {
                         }
                     }
 
+                    Toggle(isOn: $chatManager.personaEnabled) {
+                        Label("SAP Persona", systemImage: "person.text.rectangle")
+                    }
+
                     NavigationLink {
                         PersonaSelectionView()
                     } label: {
                         HStack {
-                            Label("SAP Persona", systemImage: chatManager.persona.icon)
+                            Label("Default Persona", systemImage: chatManager.persona.icon)
                             Spacer()
                             Text(chatManager.persona.label)
                                 .foregroundColor(.secondary)
                         }
                     }
+                    .disabled(!chatManager.personaEnabled)
+                    .opacity(chatManager.personaEnabled ? 1 : 0.4)
                 } header: {
                     Text("AI Settings")
                 } footer: {
-                    Text("Tunes terminology and depth to your SAP specialty.")
+                    Text("Tunes terminology and depth to your SAP specialty. Turn off to use the assistant with no persona.")
                 }
 
                 // Usage

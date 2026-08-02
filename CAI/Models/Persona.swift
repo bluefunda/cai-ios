@@ -10,17 +10,32 @@ enum Persona: String, CaseIterable, Identifiable, Codable {
     case abap
     case basis
     case fi
+    case fiCA = "fi-ca"
     case isU = "is-u"
     case leader
 
     var id: String { rawValue }
+
+    /// Short form for compact UI (the composer chip, bluefunda/cai-ios#204).
+    var shortLabel: String {
+        switch self {
+        case .general: return "General"
+        case .abap:    return "ABAP"
+        case .basis:   return "BASIS"
+        case .fi:      return "FI"
+        case .fiCA:    return "FI-CA"
+        case .isU:     return "IS-U"
+        case .leader:  return "Leader"
+        }
+    }
 
     var label: String {
         switch self {
         case .general: return "General"
         case .abap:    return "ABAP Developer"
         case .basis:   return "BASIS Admin"
-        case .fi:      return "FI / FI-CA Consultant"
+        case .fi:      return "FI Consultant"
+        case .fiCA:    return "FI-CA Consultant"
         case .isU:     return "IS-U Consultant"
         case .leader:  return "Leader / SI Founder"
         }
@@ -31,7 +46,8 @@ enum Persona: String, CaseIterable, Identifiable, Codable {
         case .general: return "No specific SAP focus"
         case .abap:    return "Custom development, dumps, and code review"
         case .basis:   return "System administration and technical operations"
-        case .fi:      return "Financial Accounting and Contract Accounting"
+        case .fi:      return "Financial Accounting"
+        case .fiCA:    return "Contract Accounting (utilities/telecom billing)"
         case .isU:     return "Utilities industry solution"
         case .leader:  return "Engagement scoping and client delivery"
         }
@@ -43,6 +59,7 @@ enum Persona: String, CaseIterable, Identifiable, Codable {
         case .abap:    return "chevron.left.forwardslash.chevron.right"
         case .basis:   return "server.rack"
         case .fi:      return "dollarsign.circle"
+        case .fiCA:    return "doc.text.magnifyingglass"
         case .isU:     return "bolt.fill"
         case .leader:  return "briefcase"
         }

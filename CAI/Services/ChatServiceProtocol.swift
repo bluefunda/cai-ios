@@ -119,10 +119,14 @@ struct ChatRequest {
     /// Explicit agent name for routing (e.g. "abaper"). When set, cai-llm-router routes
     /// to the named agent rather than the default MCP agent.
     let agentName: String?
-    /// The user's selected SAP persona (bluefunda/cai-ios#177), e.g. "abap" or
-    /// "fi". Additive context for response tuning — independent of `agentName`,
-    /// which is reserved for actual backend agent routing.
-    let persona: String
+    /// The persona active for this specific message (bluefunda/cai-ios#177,
+    /// #208), e.g. "abap" or "fi-ca" — override-or-inherited, resolved once
+    /// per send. Additive context for response tuning, independent of
+    /// `agentName` (reserved for actual backend agent routing). `nil` when
+    /// the SAP persona feature is disabled — omitted from the wire payload
+    /// entirely rather than sent as a placeholder value, so the backend
+    /// applies its own default assistant behavior.
+    let persona: String?
 
     init(
         chatId: String,
@@ -137,7 +141,7 @@ struct ChatRequest {
         modelExplicit: Bool = false,
         fileUrl: String? = nil,
         agentName: String? = nil,
-        persona: String = Persona.general.rawValue
+        persona: String? = nil
     ) {
         self.chatId = chatId
         self.prompt = prompt
@@ -162,8 +166,7 @@ struct ChatRequest {
             "prompt": prompt,
             "isNewChat": isNewChat,
             "thinkingMode": thinkingMode,
-            "modelExplicit": modelExplicit,
-            "persona": persona
+            "modelExplicit": modelExplicit
         ]
 
         if let mcpName = mcpServerName { json["mcp_server_name"] = mcpName }
@@ -172,6 +175,7 @@ struct ChatRequest {
             json["mcpServers"] = servers.map { $0.toJSON() }
         }
         if let agent   = agentName     { json["agentName"]        = agent   }
+        if let persona                 { json["persona"]          = persona }
 
         return json
     }
@@ -207,6 +211,12 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     var fileUrl: String? = nil
     /// Structured reference(s) for LLM-generated files, relayed by cai-bff from history.
     var fileMetadata: [MessageFileMetadata]? = nil
+    /// Persona active when this message was sent/answered (bluefunda/cai-ios#207)
+    /// — the same value for a user message and the assistant reply that answered
+    /// it, so history stays consistent per turn even after the global default
+    /// changes. `nil` when the feature was disabled for that send, or when
+    /// loaded from history that predates this field.
+    var persona: String? = nil
 
     init(
         id: String = UUID().uuidString,
@@ -214,7 +224,8 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         content: String,
         timestamp: Date = Date(),
         fileUrl: String? = nil,
-        fileMetadata: [MessageFileMetadata]? = nil
+        fileMetadata: [MessageFileMetadata]? = nil,
+        persona: String? = nil
     ) {
         self.id = id
         self.role = role
@@ -222,6 +233,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.timestamp = timestamp
         self.fileUrl = fileUrl
         self.fileMetadata = fileMetadata
+        self.persona = persona
     }
 
 }
@@ -255,6 +267,7 @@ extension ChatMessage {
         self.role = role
         self.content = persisted.content
         self.timestamp = persisted.timestamp
+        self.persona = persisted.persona
     }
 }
 
