@@ -16,6 +16,7 @@
 		DF8D3362FE5CA2884F421C9D /* ChatManagerDumpDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CA4969932ABC3335DC2AB /* ChatManagerDumpDecodeTests.swift */; };
 		44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */; };
 		C05E6C031E922452DCABED2B /* ChatManagerMCPTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */; };
+		1A531116760F0B5F77398ED9 /* SSEEventFramerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EE84BB3BA48746B6AA22F3 /* SSEEventFramerTests.swift */; };
 		4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */; };
 		78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */; };
 		A1000001201BCDEF /* CAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011201BCDEF /* CAIApp.swift */; };
@@ -27,6 +28,7 @@
 		A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017201BCDEF /* ChatServiceProtocol.swift */; };
 		A1000008201BCDEF /* NATSChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018201BCDEF /* NATSChatService.swift */; };
 		A1000009201BCDEF /* BFFChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019201BCDEF /* BFFChatService.swift */; };
+		818E85D6CB707E7F6E02AE78 /* SSEEventFramer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E098E9242FF9425ABA559D6 /* SSEEventFramer.swift */; };
 		A100000A201BCDEF /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001A201BCDEF /* AuthManager.swift */; };
 		A100000B201BCDEF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A100001B201BCDEF /* Assets.xcassets */; };
 		A44A9A13E45DC61CD42C68CB /* AuthTokenRefreshTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */; };
@@ -101,6 +103,7 @@
 		00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ST22PromptBuilderTests.swift; sourceTree = "<group>"; };
 		A22CA4969932ABC3335DC2AB /* ChatManagerDumpDecodeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerDumpDecodeTests.swift; sourceTree = "<group>"; };
 		BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareCardFormatterTests.swift; sourceTree = "<group>"; };
+		30EE84BB3BA48746B6AA22F3 /* SSEEventFramerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSEEventFramerTests.swift; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
 		9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageFileLinks.swift; sourceTree = "<group>"; };
 		A1000011201BCDEF /* CAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAIApp.swift; sourceTree = "<group>"; };
@@ -112,6 +115,7 @@
 		A1000017201BCDEF /* ChatServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatServiceProtocol.swift; sourceTree = "<group>"; };
 		A1000018201BCDEF /* NATSChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NATSChatService.swift; sourceTree = "<group>"; };
 		A1000019201BCDEF /* BFFChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFChatService.swift; sourceTree = "<group>"; };
+		7E098E9242FF9425ABA559D6 /* SSEEventFramer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEEventFramer.swift; sourceTree = "<group>"; };
 		A100001A201BCDEF /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		A100001B201BCDEF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A100001C201BCDEF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -261,6 +265,7 @@
 				A1000017201BCDEF /* ChatServiceProtocol.swift */,
 				A1000018201BCDEF /* NATSChatService.swift */,
 				A1000019201BCDEF /* BFFChatService.swift */,
+				7E098E9242FF9425ABA559D6 /* SSEEventFramer.swift */,
 				A100001A201BCDEF /* AuthManager.swift */,
 				EE000002201BCDEF /* Environment.swift */,
 				B1000004201BCDEF /* BFFAPIService.swift */,
@@ -336,6 +341,7 @@
 				00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */,
 				A22CA4969932ABC3335DC2AB /* ChatManagerDumpDecodeTests.swift */,
 				BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */,
+				30EE84BB3BA48746B6AA22F3 /* SSEEventFramerTests.swift */,
 				0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */,
 				310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */,
 				E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */,
@@ -452,6 +458,7 @@
 				A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */,
 				A1000008201BCDEF /* NATSChatService.swift in Sources */,
 				A1000009201BCDEF /* BFFChatService.swift in Sources */,
+				818E85D6CB707E7F6E02AE78 /* SSEEventFramer.swift in Sources */,
 				A100000A201BCDEF /* AuthManager.swift in Sources */,
 				EE000001201BCDEF /* Environment.swift in Sources */,
 				B1000011201BCDEF /* APIModels.swift in Sources */,
@@ -514,6 +521,7 @@
 				59C558A0A2B783F5B3683A6F /* ST22PromptBuilderTests.swift in Sources */,
 				DF8D3362FE5CA2884F421C9D /* ChatManagerDumpDecodeTests.swift in Sources */,
 				44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */,
+				1A531116760F0B5F77398ED9 /* SSEEventFramerTests.swift in Sources */,
 				A44A9A13E45DC61CD42C68CB /* AuthTokenRefreshTests.swift in Sources */,
 				4825950C249ABF3CC61D75F0 /* ChatManagerTitleTests.swift in Sources */,
 				C05E6C031E922452DCABED2B /* ChatManagerMCPTests.swift in Sources */,
