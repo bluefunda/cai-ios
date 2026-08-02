@@ -97,24 +97,23 @@ final class BFFChatService: ChatServiceProtocol {
                         return
                     }
 
-                    // TEMPORARY REVERT (2026-08-02): back to the original inline
-                    // byte-buffer parser. SSEEventFramer/the "hardening fix" had
-                    // never been exercised against a real backend response before
-                    // this session's first live end-to-end test, which failed on
-                    // every message (including "hi") — reverting this as the prime
-                    // suspect while investigating. See SSEEventFramer.swift/
-                    // SSEEventFramerTests.swift, kept but currently unused.
+                    // Accumulate raw bytes and decode complete SSE events as UTF-8.
+                    // Decoding per-byte (UnicodeScalar(UInt8)) is Latin-1 and corrupts
+                    // any multi-byte character (em dash, arrows, accents, emoji…).
+                    // SSE events are separated by a blank line ("\n\n"); that delimiter
+                    // is pure ASCII, so splitting on it never bisects a UTF-8 sequence.
                     var byteBuffer = Data()
                     let delimiter = Data([0x0A, 0x0A]) // "\n\n"
                     for try await byte in bytes {
                         if Task.isCancelled { break }
                         byteBuffer.append(byte)
+                        // A "\n\n" can only complete when we just appended a newline.
                         guard byte == 0x0A else { continue }
                         while let range = byteBuffer.range(of: delimiter) {
                             let eventData = byteBuffer.subdata(in: byteBuffer.startIndex..<range.lowerBound)
                             byteBuffer.removeSubrange(byteBuffer.startIndex..<range.upperBound)
                             let eventText = String(decoding: eventData, as: UTF8.self)
-                            if let event = SSEEventFramer.parseEvent(eventText) {
+                            if let event = BFFChatService.parseSSEEvent(eventText) {
                                 continuation.yield(event)
                                 if event.isTerminal { continuation.finish(); return }
                             }
@@ -248,4 +247,72 @@ final class BFFChatService: ChatServiceProtocol {
         }
     }
 
+    // MARK: - SSE Parsing
+
+    private static func parseSSEEvent(_ eventText: String) -> ChatEvent? {
+        var eventData: String?
+
+        let lines = eventText.components(separatedBy: "\n")
+        for line in lines {
+            if line.hasPrefix("data:") {
+                let data = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                if eventData == nil {
+                    eventData = data
+                } else {
+                    eventData! += "\n" + data
+                }
+            }
+        }
+
+        guard let data = eventData,
+              !data.isEmpty,
+              let jsonData = data.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+            return nil
+        }
+
+        let type = json["type"] as? String ?? ""
+
+        switch type {
+        case "stream_start":
+            let chatId = json["chat_id"] as? String ?? json["chatId"] as? String ?? ""
+            let sessionId = json["session_id"] as? String ?? json["sessionId"] as? String ?? ""
+            return .streamStart(chatId: chatId, sessionId: sessionId)
+
+        case "stream_chunk":
+            let content = json["content"] as? String ?? ""
+            let chunkId = json["chunk_id"] as? Int ?? json["chunkId"] as? Int ?? 0
+            let totalLength = json["total_content_length"] as? Int ?? json["totalContentLength"] as? Int ?? 0
+            return .chunk(content: content, chunkId: chunkId, totalLength: totalLength)
+
+        case "stream_end":
+            let totalChunks = json["total_chunks"] as? Int ?? json["totalChunks"] as? Int ?? 0
+            let fullContent = json["full_content"] as? String ?? json["fullContent"] as? String ?? ""
+            let stopped = json["stopped"] as? Bool ?? false
+            return .streamEnd(totalChunks: totalChunks, fullContent: fullContent, stopped: stopped)
+
+        case "stream_heartbeat":
+            let sessionId = json["session_id"] as? String ?? json["sessionId"] as? String ?? ""
+            let chunks = json["chunks"] as? Int ?? 0
+            let contentLength = json["content_length"] as? Int ?? json["contentLength"] as? Int ?? 0
+            return .heartbeat(sessionId: sessionId, chunks: chunks, contentLength: contentLength)
+
+        case "stream_error", "error":
+            let message = json["message"] as? String ?? json["error"] as? String ?? "Unknown error"
+            let details = json["details"] as? String
+            return .error(message: message, details: details)
+
+        case "rate_limited":
+            let period = json["period"] as? String ?? "daily"
+            let resetLabel = json["reset_label"] as? String ?? ""
+            return .rateLimited(period: period, resetLabel: resetLabel)
+
+        default:
+            // Try to parse as chunk if content exists
+            if let content = json["content"] as? String, !content.isEmpty {
+                return .chunk(content: content, chunkId: 0, totalLength: 0)
+            }
+            return nil
+        }
+    }
 }
