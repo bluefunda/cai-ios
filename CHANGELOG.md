@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/bluefunda/cai-ios/compare/v1.8.2...v1.9.0) (2026-08-02)
+
+
+### Features
+
+* multi-MCP wire format, SAP persona (selector + depth epic), ST22 decoder, shareable answer card ([#212](https://github.com/bluefunda/cai-ios/issues/212)) ([0c7dfae](https://github.com/bluefunda/cai-ios/commit/0c7dfaeb813385a9e6c850f46fd9a6c762ba9f62))
+
 ## [1.8.2](https://github.com/bluefunda/cai-ios/compare/v1.8.1...v1.8.2) (2026-07-30)
 
 
