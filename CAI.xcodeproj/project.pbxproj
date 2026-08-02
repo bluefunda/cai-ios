@@ -15,6 +15,7 @@
 		59C558A0A2B783F5B3683A6F /* ST22PromptBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */; };
 		DF8D3362FE5CA2884F421C9D /* ChatManagerDumpDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22CA4969932ABC3335DC2AB /* ChatManagerDumpDecodeTests.swift */; };
 		44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */; };
+		C05E6C031E922452DCABED2B /* ChatManagerMCPTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */; };
 		4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */; };
 		78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */; };
 		A1000001201BCDEF /* CAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011201BCDEF /* CAIApp.swift */; };
@@ -116,6 +117,7 @@
 		A100001C201BCDEF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000020201BCDEF /* BlueFunda AI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BlueFunda AI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerFileTests.swift; sourceTree = "<group>"; };
+		E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerMCPTests.swift; sourceTree = "<group>"; };
 		B1000001201BCDEF /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
 		B1000002201BCDEF /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		B1000003201BCDEF /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
@@ -336,6 +338,7 @@
 				BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */,
 				0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */,
 				310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */,
+				E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */,
 			);
 			path = CAITests;
 			sourceTree = "<group>";
@@ -513,6 +516,7 @@
 				44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */,
 				A44A9A13E45DC61CD42C68CB /* AuthTokenRefreshTests.swift in Sources */,
 				4825950C249ABF3CC61D75F0 /* ChatManagerTitleTests.swift in Sources */,
+				C05E6C031E922452DCABED2B /* ChatManagerMCPTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

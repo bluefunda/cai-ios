@@ -10,7 +10,37 @@ final class ChatManager: ObservableObject {
     // MARK: - Published State
 
     @Published var conversations: [Conversation] = []
-    @Published var currentConversation: Conversation?
+
+    /// Which MCP servers were enabled the last time each conversation was
+    /// active (bluefunda/cai-ios#172). Keyed by conversation id, in-memory
+    /// only for now (not persisted across relaunches). A conversation with no
+    /// entry — including every brand-new chat — defaults to no tools enabled,
+    /// rather than inheriting whatever was active elsewhere.
+    private var enabledMCPServersByConversationID: [String: Set<String>] = [:]
+
+    @Published var currentConversation: Conversation? {
+        didSet {
+            // Guard against in-place refreshes of the *same* conversation
+            // (e.g. loadMessages replacing it with an updated copy) — only
+            // save/restore the tool selection on an actual conversation switch.
+            guard oldValue?.id != currentConversation?.id else { return }
+            if let previous = oldValue {
+                // A real switch between two conversations — persist the
+                // outgoing one's selection and restore the incoming one's
+                // (defaulting to none for a conversation never seen before).
+                enabledMCPServersByConversationID[previous.id] = enabledMCPServers
+                enabledMCPServers = currentConversation.flatMap { enabledMCPServersByConversationID[$0.id] } ?? []
+            } else if let new = currentConversation {
+                // No prior "current" conversation — this is the first one
+                // established this session, e.g. a lazily-created draft from
+                // sendMessage(), possibly after the user already picked tools
+                // via the composer before any conversation existed. Keep the
+                // active selection as-is rather than resetting it; just start
+                // tracking it under this conversation's id going forward.
+                enabledMCPServersByConversationID[new.id] = enabledMCPServers
+            }
+        }
+    }
     @Published var isStreaming = false
     @Published var isLoadingChats = false
     @Published var error: String? {
@@ -49,6 +79,19 @@ final class ChatManager: ObservableObject {
         }
     }
 
+    /// Client-driven multi-select payload (bluefunda/cai-ios#171). `nil` unless
+    /// more than one server is enabled — a single enabled server keeps using
+    /// `selectedMCPServer`/the legacy singular fields so persona-swap behavior
+    /// (e.g. ABAPer's tuned model/prompt) is unaffected, and matches
+    /// cai-llm-router's client-driven multi-MCP path, which only activates
+    /// when the list has more than one entry.
+    private var enabledMCPServerRefs: [MCPServerRef]? {
+        guard enabledMCPServers.count > 1 else { return nil }
+        let servers = availableMCPServers.filter { enabledMCPServers.contains($0.id) }
+        guard !servers.isEmpty else { return nil }
+        return servers.map { MCPServerRef(name: $0.name, url: $0.url) }
+    }
+
     /// Reasoning effort sent with each message. Persisted across launches.
     @Published var thinkingMode: ThinkingMode = {
         let raw = UserDefaults.standard.string(forKey: "cai_thinking_mode") ?? "auto"
@@ -85,10 +128,17 @@ final class ChatManager: ObservableObject {
     private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
 
     var visibleMCPServers: [MCPServer] {
-        availableMCPServers.filter { server in
-            let name = server.displayName.lowercased()
-            return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
-        }
+        // TEMPORARY (bluefunda/cai-ios#171/#172 local testing only): this test
+        // account's only two web-channel MCP servers (abaper-mcp, cai-odata-cache
+        // — "SAP Analytics") both match hiddenMCPServerNameFragments, so the
+        // filter below is disabled to make them selectable for testing the
+        // multi-MCP wire format and per-conversation scoping. MUST be reverted
+        // (restore the filter) before merging this branch.
+        return availableMCPServers
+        // availableMCPServers.filter { server in
+        //     let name = server.displayName.lowercased()
+        //     return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
+        // }
     }
 
     @Published var rateLimit: RateLimitInfo?
@@ -196,6 +246,7 @@ final class ChatManager: ObservableObject {
         currentConversation = nil
         subscribedMCPServerIds = []
         enabledMCPServers = []
+        enabledMCPServersByConversationID = [:]
         rateLimit = nil
     }
 
@@ -325,12 +376,9 @@ final class ChatManager: ObservableObject {
             prompt: requestPromptOverride ?? text,
             model: selectedModel.id,
             isNewChat: isFirstMessage,
-            // TODO(bluefunda/cai-ios#167): send the full enabledMCPServers set
-            // once cai-bff/cai-llm-router ship list-based MCP support
-            // (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231). Until then
-            // this stays on the legacy single-server field derived above.
             mcpServerName: selectedMCPServer?.name,
             mcpServerURL: selectedMCPServer?.url,
+            mcpServers: enabledMCPServerRefs,
             thinkingMode: thinkingMode.rawValue,
             modelExplicit: userPickedModel,
             fileUrl: fileUrl,

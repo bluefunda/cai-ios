@@ -77,6 +77,22 @@ enum ConnectionStatus: Equatable {
     }
 }
 
+/// A single MCP server reference for the client-driven multi-select wire
+/// format (bluefunda/cai-ios#171). Mirrors cai-bff's `MCPServerRef{Name, URL}`
+/// (internal/nats/models/messages.go) — only `name` is required; `url` is
+/// resolved server-side from the account's MCP registry when omitted/empty,
+/// same as the legacy singular `mcpServerName` field already does.
+struct MCPServerRef {
+    let name: String
+    let url: String?
+
+    func toJSON() -> [String: Any] {
+        var json: [String: Any] = ["name": name]
+        if let url { json["url"] = url }
+        return json
+    }
+}
+
 // MARK: - Chat Request
 struct ChatRequest {
     let chatId: String
@@ -85,6 +101,13 @@ struct ChatRequest {
     let isNewChat: Bool
     let mcpServerName: String?
     let mcpServerURL: String?
+    /// Multiple simultaneously-enabled MCP servers (bluefunda/cai-ios#171).
+    /// Additive to `mcpServerName`/`mcpServerURL` above: only populated when
+    /// more than one assistant is enabled at once, since cai-llm-router's
+    /// client-driven multi-MCP path activates specifically on `count > 1`
+    /// (a single enabled server keeps using the legacy singular fields, which
+    /// preserve persona-swap behavior like ABAPer's tuned model/prompt).
+    let mcpServers: [MCPServerRef]?
     let messages: [ChatMessage]?
     /// Reasoning effort: "auto", "quick", or "deep".
     let thinkingMode: String
@@ -108,6 +131,7 @@ struct ChatRequest {
         isNewChat: Bool = true,
         mcpServerName: String? = nil,
         mcpServerURL: String? = nil,
+        mcpServers: [MCPServerRef]? = nil,
         messages: [ChatMessage]? = nil,
         thinkingMode: String = "auto",
         modelExplicit: Bool = false,
@@ -121,6 +145,7 @@ struct ChatRequest {
         self.isNewChat = isNewChat
         self.mcpServerName = mcpServerName
         self.mcpServerURL = mcpServerURL
+        self.mcpServers = mcpServers
         self.messages = messages
         self.thinkingMode = thinkingMode
         self.modelExplicit = modelExplicit
@@ -143,6 +168,9 @@ struct ChatRequest {
 
         if let mcpName = mcpServerName { json["mcp_server_name"] = mcpName }
         if let mcpURL  = mcpServerURL  { json["mcp_server_url"]  = mcpURL  }
+        if let servers = mcpServers, !servers.isEmpty {
+            json["mcpServers"] = servers.map { $0.toJSON() }
+        }
         if let agent   = agentName     { json["agentName"]        = agent   }
 
         return json
