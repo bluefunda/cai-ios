@@ -556,25 +556,18 @@ private struct SummaryCardView: View {
     }
 }
 
-// MARK: - Table (adaptive: definition list, wrapping, or scrollable)
+// MARK: - Table (adaptive: definition list or stacked row card — never horizontal scroll)
 
 private struct TableBlockView: View {
     let headers: [String]
     let rows: [[String]]
 
     var body: some View {
-        if isDefinitionList {
+        if headers.count <= 2 {
             DefinitionListView(headers: headers, rows: rows)
         } else {
-            WrappingTableView(headers: headers, rows: rows)
+            StackedRowCardView(headers: headers, rows: rows)
         }
-    }
-
-    /// 2-column tables with reasonably short cells render as key-value pairs.
-    private var isDefinitionList: Bool {
-        guard headers.count == 2 else { return false }
-        let maxLen = (rows.flatMap { $0 } + headers).map(\.count).max() ?? 0
-        return maxLen < 80
     }
 }
 
@@ -607,58 +600,47 @@ private struct DefinitionListView: View {
     }
 }
 
-// MARK: - Wrapping Table (3+ columns — horizontal scroll with text wrap)
+// MARK: - Stacked Row Card (3+ columns — each row becomes a labeled card, no scrolling)
 
-private struct WrappingTableView: View {
+private struct StackedRowCardView: View {
     let headers: [String]
     let rows: [[String]]
 
-    private let minColWidth: CGFloat = 140
-
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Header row
-                HStack(alignment: .top, spacing: 0) {
-                    ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
-                        InlineMarkdownText(text: header, font: BFFont.responseTableHeader, fillWidth: false)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .frame(minWidth: minColWidth, alignment: .leading)
-                    }
-                }
-                .background(Color.secondary.opacity(0.18))
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
+                VStack(alignment: .leading, spacing: 6) {
+                    // First column doubles as the card title.
+                    InlineMarkdownText(
+                        text: row.first ?? "",
+                        font: BFFont.responseTableHeader,
+                        fillWidth: true
+                    )
 
-                Divider()
-
-                // Data rows
-                ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
-                    HStack(alignment: .top, spacing: 0) {
-                        ForEach(Array(row.prefix(headers.count).enumerated()), id: \.offset) { _, cell in
-                            InlineMarkdownText(text: cell, font: BFFont.responseTable, fillWidth: false)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .frame(minWidth: minColWidth, alignment: .leading)
-                        }
-                        if row.count < headers.count {
-                            ForEach(row.count..<headers.count, id: \.self) { _ in
-                                Text("—")
-                                    .font(BFFont.responseTable)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .frame(minWidth: minColWidth, alignment: .leading)
-                            }
+                    // Remaining columns render as "Header: value" lines that wrap in place.
+                    ForEach(1..<headers.count, id: \.self) { colIdx in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(headers[colIdx])
+                                .font(BFFont.responseTable)
+                                .foregroundStyle(.secondary)
+                            InlineMarkdownText(
+                                text: colIdx < row.count ? row[colIdx] : "—",
+                                font: BFFont.responseTable,
+                                fillWidth: true
+                            )
                         }
                     }
-                    .background(rowIdx % 2 == 1 ? Color.secondary.opacity(0.05) : .clear)
-
-                    if rowIdx < rows.count - 1 { Divider() }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(rowIdx % 2 == 0 ? Color.secondary.opacity(0.05) : Color.clear)
+
+                if rowIdx < rows.count - 1 { Divider() }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
     }
 }
 
