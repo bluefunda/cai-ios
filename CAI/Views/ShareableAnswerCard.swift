@@ -26,9 +26,13 @@ struct ShareableAnswerCard: View {
                     .foregroundStyle(Color(white: 0.15))
             }
 
-            Text(ShareCardFormatter.truncatedAnswer(answer))
+            // MarkdownView (not plain Text) so headers/tables/code render
+            // properly instead of showing raw ##/|/``` syntax in the image —
+            // real answers are markdown-formatted, same as in the chat itself.
+            MarkdownView(content: ShareCardFormatter.truncatedAnswer(answer))
                 .font(BFFont.body)
                 .foregroundStyle(Color(white: 0.25))
+                .environment(\.colorScheme, .light)
 
             Divider()
 
