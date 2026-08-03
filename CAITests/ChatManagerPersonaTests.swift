@@ -38,7 +38,7 @@ final class ChatManagerPersonaTests: XCTestCase {
     }
 
     func test_sendMessage_includesSelectedPersonaInRequest() async throws {
-        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire) // simulates backend being ready
+        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire) // explicit override, same as the default
         let mockService = MockChatService()
         let chatManager = ChatManager(service: mockService)
         chatManager.persona = .fi
@@ -51,7 +51,7 @@ final class ChatManagerPersonaTests: XCTestCase {
     }
 
     func test_switchingPersona_appliesToNextMessage_withoutRestart() async throws {
-        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire) // simulates backend being ready
+        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire) // explicit override, same as the default
         let mockService = MockChatService()
         let chatManager = ChatManager(service: mockService)
         mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: "Answer", stopped: false)]
@@ -67,15 +67,34 @@ final class ChatManagerPersonaTests: XCTestCase {
         XCTAssertEqual(mockService.lastRequest?.persona, Persona.leader.rawValue)
     }
 
-    // MARK: - Wire kill-switch (BFFeatureFlags.personaWireEnabled)
-    // Off by default (2026-08-02): no backend support yet (cai-bff#110-112,
-    // cai-llm-router#242-244, cai-mcp-go#180-182 unimplemented), and every
-    // message failed with it on in the first live end-to-end test. Local UI
-    // (toggle, chip, override, history metadata) stays fully functional.
+    // Guards bluefunda/cai-bff#110: cai-bff's persona allowlist has no
+    // "general" entry (it recognizes "none"/empty for "no persona lens").
+    // Sending the literal string "general" would get normalized away
+    // server-side too, but the client should never rely on that — it must
+    // omit persona entirely for .general, exactly like the feature-disabled
+    // case, even with the wire switch on.
+    func test_generalPersona_omittedFromRequest_evenWithWireEnabled() async throws {
+        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire)
+        let mockService = MockChatService()
+        let chatManager = ChatManager(service: mockService)
+        chatManager.persona = .general
+        mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: "Answer", stopped: false)]
 
-    func test_personaWireDisabledByDefault_omitsPersonaFromRequest() async throws {
+        await chatManager.sendMessage("Hi")
+        try await waitForStreamingToFinish(chatManager)
+
+        XCTAssertNil(mockService.lastRequest?.persona, "general has no wire representation — must not send the literal string \"general\"")
+    }
+
+    // MARK: - Wire kill-switch (BFFeatureFlags.personaWireEnabled)
+    // On by default (2026-08-03): backend support shipped and confirmed
+    // working end-to-end in a live device test (cai-bff#110-112,
+    // cai-llm-router#242-244, cai-mcp-go#180-182). The UserDefaults override
+    // remains as an emergency kill-switch if a regression turns up.
+
+    func test_personaWireEnabledByDefault_includesPersonaInRequest() async throws {
         UserDefaults.standard.removeObject(forKey: BFFeatureFlags.Keys.personaWire)
-        XCTAssertFalse(BFFeatureFlags.personaWireEnabled)
+        XCTAssertTrue(BFFeatureFlags.personaWireEnabled)
 
         let mockService = MockChatService()
         let chatManager = ChatManager(service: mockService)
@@ -85,11 +104,11 @@ final class ChatManagerPersonaTests: XCTestCase {
         await chatManager.sendMessage("How does dunning work?")
         try await waitForStreamingToFinish(chatManager)
 
-        XCTAssertNil(mockService.lastRequest?.persona, "wire must stay off until explicitly re-enabled")
+        XCTAssertEqual(mockService.lastRequest?.persona, Persona.fi.rawValue, "wire is on by default")
     }
 
-    func test_personaWireDisabled_localMetadataStillRecorded() async throws {
-        UserDefaults.standard.removeObject(forKey: BFFeatureFlags.Keys.personaWire)
+    func test_personaWireKillSwitched_omitsPersonaFromRequestButKeepsLocalMetadata() async throws {
+        UserDefaults.standard.set(false, forKey: BFFeatureFlags.Keys.personaWire)
 
         let mockService = MockChatService()
         let chatManager = ChatManager(service: mockService)
@@ -99,11 +118,11 @@ final class ChatManagerPersonaTests: XCTestCase {
         await chatManager.sendMessage("Question")
         try await waitForStreamingToFinish(chatManager)
 
-        XCTAssertNil(mockService.lastRequest?.persona, "still gated off the wire")
+        XCTAssertNil(mockService.lastRequest?.persona, "kill-switch must still be able to gate the wire off")
         let messages = chatManager.currentConversation?.messages ?? []
         XCTAssertEqual(
             messages.first(where: { $0.role == .user })?.persona, Persona.abap.rawValue,
-            "local history/UI metadata keeps working even while the wire is gated off"
+            "local history/UI metadata keeps working even while the wire is killed"
         )
     }
 
@@ -139,7 +158,7 @@ final class ChatManagerPersonaTests: XCTestCase {
     // MARK: - Per-message override (bluefunda/cai-ios#205/#206)
 
     func test_personaOverride_appliesOnlyToThatMessage() async throws {
-        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire) // simulates backend being ready
+        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire) // explicit override, same as the default
         let mockService = MockChatService()
         let chatManager = ChatManager(service: mockService)
         chatManager.persona = .basis
