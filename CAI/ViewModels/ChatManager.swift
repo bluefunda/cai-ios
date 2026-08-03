@@ -409,8 +409,9 @@ final class ChatManager: ObservableObject {
             // Gated separately from the local metadata above (bluefunda/cai-ios#203-207
             // keep working purely client-side) — the backend doesn't support this field
             // yet, so it's held back from the wire until BFFeatureFlags.personaWireEnabled
-            // is flipped on.
-            persona: BFFeatureFlags.personaWireEnabled ? effectivePersona?.rawValue : nil
+            // is flipped on. Uses wireValue (not rawValue) so .general is omitted rather
+            // than sent as the literal string "general" — see Persona.wireValue.
+            persona: BFFeatureFlags.personaWireEnabled ? effectivePersona?.wireValue : nil
         )
 
         isStreaming = true

@@ -26,17 +26,15 @@ enum BFFeatureFlags {
     }
 
     /// Whether the resolved persona (global default or per-message override)
-    /// is actually sent to the backend on `ChatRequest.persona`. Off by
-    /// default (2026-08-02) — none of the backend-side work (cai-bff#110-112,
-    /// cai-llm-router#242-244, cai-mcp-go#180-182) has shipped yet, and every
-    /// message failed in the first live end-to-end test with this on. The
-    /// Settings toggle, composer chip, override, and local history metadata
-    /// (bluefunda/cai-ios#203-207) stay fully functional either way — this
-    /// flag only gates what goes out over the wire. Flip to true once the
-    /// backend confirms it's ready.
+    /// is actually sent to the backend on `ChatRequest.persona`. On by default
+    /// (2026-08-03) — backend-side work (cai-bff#110-112, cai-llm-router#242-244,
+    /// cai-mcp-go#180-182) shipped and confirmed working end-to-end in a live
+    /// device test (groq and gemini models; IS-U persona verified against real
+    /// SAP tcodes). Override to false via UserDefaults/launch argument to
+    /// kill-switch it if a regression turns up.
     static var personaWireEnabled: Bool {
         UserDefaults.standard.object(forKey: Keys.personaWire) != nil
             ? UserDefaults.standard.bool(forKey: Keys.personaWire)
-            : false
+            : true
     }
 }

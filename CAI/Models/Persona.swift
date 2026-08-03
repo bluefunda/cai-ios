@@ -16,6 +16,15 @@ enum Persona: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// The identifier sent to the backend (bluefunda/cai-bff#110). `.general`
+    /// has no wire representation — cai-bff/cai-llm-router treat an absent
+    /// persona as "no persona lens", the same behavior `.general` means
+    /// locally, so it's omitted rather than sent as the literal string
+    /// "general" (which cai-bff's persona allowlist doesn't recognize).
+    var wireValue: String? {
+        self == .general ? nil : rawValue
+    }
+
     /// Short form for compact UI (the composer chip, bluefunda/cai-ios#204).
     var shortLabel: String {
         switch self {
