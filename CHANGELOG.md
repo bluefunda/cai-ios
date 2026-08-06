@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.0.0](https://github.com/bluefunda/cai-ios/compare/v1.9.0...v2.0.0) (2026-08-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* enable SAP persona wire by default, fix .general omission bug ([#217](https://github.com/bluefunda/cai-ios/issues/217))
+
+### Features
+
+* enable SAP persona wire by default, fix .general omission bug ([#217](https://github.com/bluefunda/cai-ios/issues/217)) ([608fd71](https://github.com/bluefunda/cai-ios/commit/608fd71c83786dec1550ce1a3e1744c8d25cc63a))
+
+
+### Bug Fixes
+
+* **markdown:** render tables as stacked cards instead of horizontal scroll ([#215](https://github.com/bluefunda/cai-ios/issues/215)) ([5c8969f](https://github.com/bluefunda/cai-ios/commit/5c8969f204666f5516d1a5da3f023c6fa79b26ca))
+
+## [1.9.0](https://github.com/bluefunda/cai-ios/compare/v1.8.2...v1.9.0) (2026-08-02)
+
+
+### Features
+
+* multi-MCP wire format, SAP persona (selector + depth epic), ST22 decoder, shareable answer card ([#212](https://github.com/bluefunda/cai-ios/issues/212)) ([0c7dfae](https://github.com/bluefunda/cai-ios/commit/0c7dfaeb813385a9e6c850f46fd9a6c762ba9f62))
+
 ## [1.8.2](https://github.com/bluefunda/cai-ios/compare/v1.8.1...v1.8.2) (2026-07-30)
 
 

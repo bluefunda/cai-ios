@@ -152,9 +152,13 @@ struct ChatMessageDTO: Codable {
     let fileDownloadUrl: String?
     /// Structured reference(s) for LLM-generated files.
     let fileMetadata: [FileMetadataDTO]?
+    /// Persona active for this message (bluefunda/cai-ios#207). Optional
+    /// since older history predates this field on the backend
+    /// (cai-mcp-go#181) — absent means "unknown", not "none".
+    let persona: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, role, content, createdAt, fileUrl, fileDownloadUrl
+        case id, role, content, createdAt, fileUrl, fileDownloadUrl, persona
         case fileMetadata = "file_metadata"
     }
 

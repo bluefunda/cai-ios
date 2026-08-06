@@ -10,7 +10,37 @@ final class ChatManager: ObservableObject {
     // MARK: - Published State
 
     @Published var conversations: [Conversation] = []
-    @Published var currentConversation: Conversation?
+
+    /// Which MCP servers were enabled the last time each conversation was
+    /// active (bluefunda/cai-ios#172). Keyed by conversation id, in-memory
+    /// only for now (not persisted across relaunches). A conversation with no
+    /// entry — including every brand-new chat — defaults to no tools enabled,
+    /// rather than inheriting whatever was active elsewhere.
+    private var enabledMCPServersByConversationID: [String: Set<String>] = [:]
+
+    @Published var currentConversation: Conversation? {
+        didSet {
+            // Guard against in-place refreshes of the *same* conversation
+            // (e.g. loadMessages replacing it with an updated copy) — only
+            // save/restore the tool selection on an actual conversation switch.
+            guard oldValue?.id != currentConversation?.id else { return }
+            if let previous = oldValue {
+                // A real switch between two conversations — persist the
+                // outgoing one's selection and restore the incoming one's
+                // (defaulting to none for a conversation never seen before).
+                enabledMCPServersByConversationID[previous.id] = enabledMCPServers
+                enabledMCPServers = currentConversation.flatMap { enabledMCPServersByConversationID[$0.id] } ?? []
+            } else if let new = currentConversation {
+                // No prior "current" conversation — this is the first one
+                // established this session, e.g. a lazily-created draft from
+                // sendMessage(), possibly after the user already picked tools
+                // via the composer before any conversation existed. Keep the
+                // active selection as-is rather than resetting it; just start
+                // tracking it under this conversation's id going forward.
+                enabledMCPServersByConversationID[new.id] = enabledMCPServers
+            }
+        }
+    }
     @Published var isStreaming = false
     @Published var isLoadingChats = false
     @Published var error: String? {
@@ -19,6 +49,29 @@ final class ChatManager: ObservableObject {
     @Published var connectionStatus: ConnectionStatus = .disconnected
 
     @Published var selectedModel: LLMModel = LLMModel.defaultModel
+
+    /// The user's home SAP persona (bluefunda/cai-ios#177), sent as chat
+    /// context on every request. Persisted across launches; takes effect on
+    /// the next message sent, no restart required.
+    @Published var persona: Persona = {
+        let raw = UserDefaults.standard.string(forKey: "cai_persona") ?? Persona.general.rawValue
+        return Persona(rawValue: raw) ?? .general
+    }() {
+        didSet { UserDefaults.standard.set(persona.rawValue, forKey: "cai_persona") }
+    }
+
+    /// Whether the SAP persona feature is on at all (bluefunda/cai-ios#203).
+    /// Defaults to true (the key is absent pre-upgrade) so users who already
+    /// had a persona selected under #177 see no behavior change. When false:
+    /// no persona is applied anywhere, regardless of the stored default above
+    /// or any per-message override.
+    @Published var personaEnabled: Bool = {
+        UserDefaults.standard.object(forKey: "cai_persona_enabled") == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: "cai_persona_enabled")
+    }() {
+        didSet { UserDefaults.standard.set(personaEnabled, forKey: "cai_persona_enabled") }
+    }
 
     /// Legacy single-agent selection, kept as the source of truth for the
     /// outgoing chat request wire format until cai-bff/cai-llm-router ship
@@ -37,6 +90,19 @@ final class ChatManager: ObservableObject {
                 ? availableMCPServers.first(where: { enabledMCPServers.contains($0.id) })
                 : nil
         }
+    }
+
+    /// Client-driven multi-select payload (bluefunda/cai-ios#171). `nil` unless
+    /// more than one server is enabled — a single enabled server keeps using
+    /// `selectedMCPServer`/the legacy singular fields so persona-swap behavior
+    /// (e.g. ABAPer's tuned model/prompt) is unaffected, and matches
+    /// cai-llm-router's client-driven multi-MCP path, which only activates
+    /// when the list has more than one entry.
+    private var enabledMCPServerRefs: [MCPServerRef]? {
+        guard enabledMCPServers.count > 1 else { return nil }
+        let servers = availableMCPServers.filter { enabledMCPServers.contains($0.id) }
+        guard !servers.isEmpty else { return nil }
+        return servers.map { MCPServerRef(name: $0.name, url: $0.url) }
     }
 
     /// Reasoning effort sent with each message. Persisted across launches.
@@ -186,6 +252,7 @@ final class ChatManager: ObservableObject {
         currentConversation = nil
         subscribedMCPServerIds = []
         enabledMCPServers = []
+        enabledMCPServersByConversationID = [:]
         rateLimit = nil
     }
 
@@ -206,7 +273,8 @@ final class ChatManager: ObservableObject {
                     content: dto.content,
                     timestamp: dto.createdAt.flatMap(Date.fromISO8601) ?? Date(),
                     fileUrl: dto.fileUrl,
-                    fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:))
+                    fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:)),
+                    persona: dto.persona
                 )
             }
             conversations[idx].messages = messages
@@ -270,7 +338,21 @@ final class ChatManager: ObservableObject {
 
     // MARK: - Messaging
 
-    func sendMessage(_ text: String, fileUrl: String? = nil) async {
+    /// - Parameter requestPromptOverride: When set, sent to the backend as
+    ///   `ChatRequest.prompt` instead of `text` — used by the ST22 dump
+    ///   decoder (bluefunda/cai-ios#182) to wrap the user's pasted dump in a
+    ///   structured instruction template without cluttering their own chat
+    ///   bubble (which always shows exactly what they typed/pasted).
+    /// - Parameter personaOverride: When set, used as this message's persona
+    ///   instead of the global default (bluefunda/cai-ios#205) — a one-off
+    ///   override for this send only, resolved once here and never persisted;
+    ///   the composer's own override state resets independently (#206).
+    func sendMessage(
+        _ text: String,
+        fileUrl: String? = nil,
+        requestPromptOverride: String? = nil,
+        personaOverride: Persona? = nil
+    ) async {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
 
@@ -284,12 +366,19 @@ final class ChatManager: ObservableObject {
 
         let isFirstMessage = conversation.messages.isEmpty
 
+        // Resolved once per send (bluefunda/cai-ios#177/#205/#208): override
+        // takes precedence over the global default; disabled means no persona
+        // at all, regardless of any override that may have been set before
+        // the feature was turned off.
+        let effectivePersona: Persona? = personaEnabled ? (personaOverride ?? persona) : nil
+
         // Append user message
-        let userMessage = ChatMessage(role: .user, content: text, fileUrl: fileUrl)
+        let userMessage = ChatMessage(role: .user, content: text, fileUrl: fileUrl, persona: effectivePersona?.rawValue)
         conversation.messages.append(userMessage)
 
-        // Append empty assistant placeholder
-        var assistantMessage = ChatMessage(role: .assistant, content: "")
+        // Append empty assistant placeholder — same persona as the user
+        // message it's answering, so the turn's lens stays paired (#207).
+        var assistantMessage = ChatMessage(role: .assistant, content: "", persona: effectivePersona?.rawValue)
         conversation.messages.append(assistantMessage)
 
         // Show truncated prompt immediately so sidebar isn't blank while API generates a real title.
@@ -307,19 +396,22 @@ final class ChatManager: ObservableObject {
 
         let request = ChatRequest(
             chatId: conversation.id,
-            prompt: text,
+            prompt: requestPromptOverride ?? text,
             model: selectedModel.id,
             isNewChat: isFirstMessage,
-            // TODO(bluefunda/cai-ios#167): send the full enabledMCPServers set
-            // once cai-bff/cai-llm-router ship list-based MCP support
-            // (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231). Until then
-            // this stays on the legacy single-server field derived above.
             mcpServerName: selectedMCPServer?.name,
             mcpServerURL: selectedMCPServer?.url,
+            mcpServers: enabledMCPServerRefs,
             thinkingMode: thinkingMode.rawValue,
             modelExplicit: userPickedModel,
             fileUrl: fileUrl,
-            agentName: agentNameForSelectedServer
+            agentName: agentNameForSelectedServer,
+            // Gated separately from the local metadata above (bluefunda/cai-ios#203-207
+            // keep working purely client-side) — the backend doesn't support this field
+            // yet, so it's held back from the wire until BFFeatureFlags.personaWireEnabled
+            // is flipped on. Uses wireValue (not rawValue) so .general is omitted rather
+            // than sent as the literal string "general" — see Persona.wireValue.
+            persona: BFFeatureFlags.personaWireEnabled ? effectivePersona?.wireValue : nil
         )
 
         isStreaming = true
@@ -340,7 +432,8 @@ final class ChatManager: ObservableObject {
                             id: assistantMessage.id,
                             role: .assistant,
                             content: finalContent,
-                            timestamp: assistantMessage.timestamp
+                            timestamp: assistantMessage.timestamp,
+                            persona: assistantMessage.persona
                         )
                         updateLastMessage(assistantMessage, in: conversation.id)
 
@@ -350,7 +443,8 @@ final class ChatManager: ObservableObject {
                             id: assistantMessage.id,
                             role: .assistant,
                             content: finalContent,
-                            timestamp: assistantMessage.timestamp
+                            timestamp: assistantMessage.timestamp,
+                            persona: assistantMessage.persona
                         )
                         updateLastMessage(assistantMessage, in: conversation.id)
                         Haptic.impact(.light)   // response complete
@@ -417,7 +511,8 @@ final class ChatManager: ObservableObject {
                     id: assistantMessage.id,
                     role: .assistant,
                     content: "I couldn't generate a response for that. Please try rephrasing or send it again.",
-                    timestamp: assistantMessage.timestamp
+                    timestamp: assistantMessage.timestamp,
+                    persona: assistantMessage.persona
                 )
                 updateLastMessage(assistantMessage, in: conversation.id)
             }
@@ -563,7 +658,7 @@ final class ChatManager: ObservableObject {
         for msg in messages where !existingIds.contains(msg.id) {
             let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
                                       roleRaw: msg.role.rawValue, content: msg.content,
-                                      timestamp: msg.timestamp)
+                                      timestamp: msg.timestamp, persona: msg.persona)
             pm.conversation = persisted
             ctx.insert(pm)
         }
