@@ -198,4 +198,141 @@ final class ChatManagerPersonaTests: XCTestCase {
         XCTAssertNotEqual(Persona.fi, Persona.fiCA)
         XCTAssertEqual(Persona.fiCA.rawValue, "fi-ca")
     }
+
+    // MARK: - Chat-local SAP Persona toggle/override (bluefunda/cai-ios#217)
+    // The composer's toggle/dropdown live on ChatManager, scoped per
+    // conversation exactly like enabledMCPServers (see ChatManagerMCPTests).
+    // These tests drive `chatPersonaEnabled`/`chatPersonaOverride` the same
+    // way ChatView's composer does, then assert through the existing wire
+    // seam (`sendMessage(personaOverride:)` → `mockService.lastRequest?.persona`)
+    // rather than inventing a new one.
+
+    /// Mirrors ChatView.personaForActiveChat exactly — what the composer
+    /// hands to `sendMessage(personaOverride:)` for the chat's next message.
+    private func composerPersonaOverride(for chatManager: ChatManager) -> Persona {
+        chatManager.chatPersonaEnabled ? (chatManager.chatPersonaOverride ?? chatManager.persona) : .general
+    }
+
+    func test_newChat_defaultsToGeneralWithToggleOff_regardlessOfSettingsPersona() {
+        let chatManager = ChatManager(service: MockChatService())
+        chatManager.persona = .abap // Settings default — must not leak into a new chat
+
+        chatManager.currentConversation = Conversation(id: "conv-new", title: "New", messages: [], model: "auto", createdAt: Date())
+
+        XCTAssertFalse(chatManager.chatPersonaEnabled)
+        XCTAssertNil(chatManager.chatPersonaOverride)
+        XCTAssertEqual(composerPersonaOverride(for: chatManager), .general)
+    }
+
+    func test_togglingOn_preSelectsSettingsPersona() {
+        let chatManager = ChatManager(service: MockChatService())
+        chatManager.persona = .abap
+        chatManager.currentConversation = Conversation(id: "conv-a", title: "A", messages: [], model: "auto", createdAt: Date())
+
+        chatManager.chatPersonaEnabled = true
+
+        XCTAssertNil(chatManager.chatPersonaOverride, "no in-chat selection yet — falls back to the Settings default")
+        XCTAssertEqual(composerPersonaOverride(for: chatManager), .abap)
+    }
+
+    func test_changingDropdown_sticksForSubsequentMessagesInThatChat() async throws {
+        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire)
+        let mockService = MockChatService()
+        let chatManager = ChatManager(service: mockService)
+        chatManager.persona = .abap
+        chatManager.currentConversation = Conversation(id: "conv-a", title: "A", messages: [], model: "auto", createdAt: Date())
+        chatManager.chatPersonaEnabled = true
+        chatManager.chatPersonaOverride = .fiCA // simulates picking "FI-CA Consultant" from the dropdown
+        mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: "Answer", stopped: false)]
+
+        await chatManager.sendMessage("First question", personaOverride: composerPersonaOverride(for: chatManager))
+        try await waitForStreamingToFinish(chatManager)
+        XCTAssertEqual(mockService.lastRequest?.persona, Persona.fiCA.rawValue)
+
+        // No revert on redraw/backgrounding/etc. — re-reading the state and
+        // sending again must keep returning the same override.
+        await chatManager.sendMessage("Second question", personaOverride: composerPersonaOverride(for: chatManager))
+        try await waitForStreamingToFinish(chatManager)
+        XCTAssertEqual(mockService.lastRequest?.persona, Persona.fiCA.rawValue)
+        XCTAssertEqual(chatManager.chatPersonaOverride, .fiCA)
+    }
+
+    func test_inChatOverride_doesNotMutateGlobalSettingsPersona() {
+        let chatManager = ChatManager(service: MockChatService())
+        chatManager.persona = .abap
+        chatManager.currentConversation = Conversation(id: "conv-a", title: "A", messages: [], model: "auto", createdAt: Date())
+        chatManager.chatPersonaEnabled = true
+
+        chatManager.chatPersonaOverride = .fiCA
+
+        XCTAssertEqual(chatManager.persona, .abap, "the in-chat override must never write back to the Settings default")
+    }
+
+    func test_secondNewChat_startsGeneral_whileFirstChatKeepsItsOverride() {
+        let chatManager = ChatManager(service: MockChatService())
+        chatManager.persona = .abap
+
+        let conversationA = Conversation(id: "conv-a", title: "A", messages: [], model: "auto", createdAt: Date())
+        let conversationB = Conversation(id: "conv-b", title: "B", messages: [], model: "auto", createdAt: Date())
+
+        chatManager.currentConversation = conversationA
+        chatManager.chatPersonaEnabled = true
+        chatManager.chatPersonaOverride = .fiCA
+
+        chatManager.currentConversation = conversationB
+        XCTAssertFalse(chatManager.chatPersonaEnabled, "a second/new chat must start at General regardless of chat A's override")
+        XCTAssertNil(chatManager.chatPersonaOverride)
+
+        chatManager.currentConversation = conversationA
+        XCTAssertTrue(chatManager.chatPersonaEnabled)
+        XCTAssertEqual(chatManager.chatPersonaOverride, .fiCA, "switching back to A must restore exactly what A had")
+    }
+
+    func test_toggleOffThenOn_restoresLastInChatSelection_notSettingsValue() {
+        let chatManager = ChatManager(service: MockChatService())
+        chatManager.persona = .abap
+        chatManager.currentConversation = Conversation(id: "conv-a", title: "A", messages: [], model: "auto", createdAt: Date())
+        chatManager.chatPersonaEnabled = true
+        chatManager.chatPersonaOverride = .fiCA
+
+        chatManager.chatPersonaEnabled = false
+        chatManager.chatPersonaEnabled = true
+
+        XCTAssertEqual(
+            chatManager.chatPersonaOverride, .fiCA,
+            "toggling off then back on within the same chat must restore the last in-chat selection, not reset to the Settings persona"
+        )
+        XCTAssertEqual(composerPersonaOverride(for: chatManager), .fiCA)
+    }
+
+    // MARK: - Regression guard (Step 3.7)
+    // For a given effective persona, the value handed to sendMessage's
+    // existing seam is identical to what the pre-#217 code produced: the
+    // Settings default when no override is active, the override when one
+    // is, and no field at all once persona mode is off (mirrors #206's
+    // "general is omitted" behavior — now reached via the toggle instead of
+    // an unset per-message override).
+    func test_composerDrivenPersona_matchesPreChangeWireBehavior() async throws {
+        UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire)
+        let mockService = MockChatService()
+        let chatManager = ChatManager(service: mockService)
+        chatManager.persona = .basis
+        chatManager.currentConversation = Conversation(id: "conv-a", title: "A", messages: [], model: "auto", createdAt: Date())
+        mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: "Answer", stopped: false)]
+
+        chatManager.chatPersonaEnabled = true
+        await chatManager.sendMessage("Q1", personaOverride: composerPersonaOverride(for: chatManager))
+        try await waitForStreamingToFinish(chatManager)
+        XCTAssertEqual(mockService.lastRequest?.persona, Persona.basis.rawValue, "no in-chat override yet — falls back to Settings default, same as pre-#217")
+
+        chatManager.chatPersonaOverride = .leader
+        await chatManager.sendMessage("Q2", personaOverride: composerPersonaOverride(for: chatManager))
+        try await waitForStreamingToFinish(chatManager)
+        XCTAssertEqual(mockService.lastRequest?.persona, Persona.leader.rawValue)
+
+        chatManager.chatPersonaEnabled = false
+        await chatManager.sendMessage("Q3", personaOverride: composerPersonaOverride(for: chatManager))
+        try await waitForStreamingToFinish(chatManager)
+        XCTAssertNil(mockService.lastRequest?.persona, "toggle off must omit persona entirely, same as the pre-#217 disabled/general case")
+    }
 }

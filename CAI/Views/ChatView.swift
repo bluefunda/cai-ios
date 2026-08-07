@@ -47,18 +47,6 @@ struct ChatView: View {
         ST22DumpDetector.looksLikeDump(inputText)
     }
 
-    /// One-off persona override for the message currently being composed
-    /// (bluefunda/cai-ios#205) — nil means "inherit the global default".
-    /// Reset to nil immediately after every send (#206); never persists to
-    /// the next message.
-    @State private var messagePersonaOverride: Persona?
-
-    /// What the chip actually displays: the override if one is set, else the
-    /// global default.
-    private var chipPersona: Persona {
-        messagePersonaOverride ?? chatManager.persona
-    }
-
     private let importableTypes: [UTType] = [.pdf, .plainText, .commaSeparatedText, .json, .image, .zip, .data]
 
     // Voice input state
@@ -269,18 +257,6 @@ struct ChatView: View {
             if showDumpDecodeBanner {
                 ST22DumpBanner(onDecode: decodeDump)
             }
-            if chatManager.personaEnabled {
-                HStack {
-                    PersonaChip(
-                        persona: chipPersona,
-                        isOverride: messagePersonaOverride != nil,
-                        onSelect: { messagePersonaOverride = $0 }
-                    )
-                    Spacer()
-                }
-                .padding(.horizontal, BFSpacing._4)
-                .padding(.top, 6)
-            }
             ChatInputView(
                 text: $inputText,
                 isStreaming: chatManager.isStreaming,
@@ -300,7 +276,11 @@ struct ChatView: View {
                 } : nil,
                 onMicTap: startRecording,
                 onCancelRecording: cancelRecording,
-                onConfirmRecording: confirmRecording
+                onConfirmRecording: confirmRecording,
+                personaFeatureEnabled: chatManager.personaEnabled,
+                personaToggleOn: $chatManager.chatPersonaEnabled,
+                currentPersona: chatManager.chatPersonaOverride ?? chatManager.persona,
+                onSelectPersona: { chatManager.chatPersonaOverride = $0 }
             )
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
             .onChange(of: selectedPhotoItem) { _, item in
@@ -311,6 +291,18 @@ struct ChatView: View {
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 4)
         }
+    }
+
+    /// What this chat's next message should use as its persona override,
+    /// resolved from the composer's chat-local toggle/selection
+    /// (bluefunda/cai-ios#217): `.general` when the toggle is off, so the
+    /// send path's existing `personaEnabled ? (personaOverride ?? persona) :
+    /// nil` resolution in `ChatManager.sendMessage` needs no changes — a
+    /// non-nil `.general` override already means "no persona" there. Unlike
+    /// the old per-message override (#205/#206), this is never reset after
+    /// send: it's chat-scoped, not message-scoped.
+    private var personaForActiveChat: Persona {
+        chatManager.chatPersonaEnabled ? (chatManager.chatPersonaOverride ?? chatManager.persona) : .general
     }
 
     // MARK: - Actions
@@ -324,11 +316,7 @@ struct ChatView: View {
         )
         let text = inputText
         inputText = ""
-        // Resolved once per send, then reset immediately — an override never
-        // carries over to the next message (bluefunda/cai-ios#206), regardless
-        // of how this send turns out.
-        let personaForThisSend = messagePersonaOverride
-        messagePersonaOverride = nil
+        let personaForThisSend = personaForActiveChat
 
         // Scroll to bottom so the user's prompt is visible when streaming starts.
         if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
@@ -367,8 +355,7 @@ struct ChatView: View {
         )
         let text = inputText
         inputText = ""
-        let personaForThisSend = messagePersonaOverride
-        messagePersonaOverride = nil
+        let personaForThisSend = personaForActiveChat
         if let proxy = scrollProxy { scrollToBottom(proxy: proxy) }
         Task {
             await chatManager.sendMessage(
@@ -786,6 +773,12 @@ struct ChatInputView: View {
     var onMicTap: (() -> Void)? = nil
     var onCancelRecording: (() -> Void)? = nil
     var onConfirmRecording: (() -> Void)? = nil
+    /// false = the SAP persona feature is off device-wide (Settings) — the
+    /// composer's toggle/dropdown is hidden entirely rather than shown disabled.
+    var personaFeatureEnabled: Bool = false
+    var personaToggleOn: Binding<Bool> = .constant(false)
+    var currentPersona: Persona = .general
+    var onSelectPersona: (Persona) -> Void = { _ in }
 
     private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
     private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
@@ -845,6 +838,15 @@ struct ChatInputView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .disabled(isStreaming)
+            }
+
+            if personaFeatureEnabled {
+                PersonaComposerControl(
+                    isOn: personaToggleOn,
+                    currentPersona: currentPersona,
+                    onSelect: onSelectPersona
+                )
                 .disabled(isStreaming)
             }
 
@@ -1053,47 +1055,78 @@ private struct AtBottomPreferenceKey: PreferenceKey {
     }
 }
 
-// MARK: - Persona Chip
+// MARK: - Persona Composer Controls
 
-/// Shown above the composer, only when the SAP persona feature is enabled
-/// (bluefunda/cai-ios#204), reflecting the persona that will be used for the
-/// message currently being composed. Tapping it overrides the persona for
-/// that one message only (#205) — the override is reset by the caller right
-/// after send (#206), not by this view.
-struct PersonaChip: View {
-    let persona: Persona
-    let isOverride: Bool
+/// Compact toggle + dropdown living inside the composer surface itself
+/// (bluefunda/cai-ios#217), replacing the old above-input `PersonaChip`.
+/// Off = General (no persona); on = the dropdown appears, showing the
+/// chat-local selection (Settings default until the user overrides it for
+/// this conversation). Secondary chrome — kept small so the text field stays
+/// the dominant element in `ChatInputView.composerRow`.
+struct PersonaComposerControl: View {
+    @Binding var isOn: Bool
+    let currentPersona: Persona
     let onSelect: (Persona) -> Void
 
-    private var label: String {
-        isOverride ? persona.shortLabel : "\(persona.shortLabel) · from settings"
-    }
+    private let dropdownOptions = Persona.allCases.filter { $0 != .general }
 
     var body: some View {
-        Menu {
-            ForEach(Persona.allCases) { option in
-                Button {
-                    onSelect(option)
-                } label: {
-                    if option == persona {
-                        Label(option.label, systemImage: "checkmark")
-                    } else {
-                        Text(option.label)
-                    }
+        HStack(spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { isOn.toggle() }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: isOn ? "person.text.rectangle.fill" : "person.text.rectangle")
+                        .font(.system(size: 14))
+                    Text("Persona")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
                 }
+                .foregroundStyle(isOn ? BFColor.primary : .secondary)
+                .padding(.horizontal, 6)
+                .frame(height: 28)
+                .contentShape(Rectangle())
             }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: persona.icon)
-                    .font(.caption2)
-                Text(label)
-                    .font(.caption2)
-                    .lineLimit(1)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel("SAP Persona")
+            .accessibilityValue(isOn ? "On" : "Off")
+            .accessibilityHint("Toggles a SAP-specific persona for this chat")
+
+            if isOn {
+                Menu {
+                    ForEach(dropdownOptions) { option in
+                        Button {
+                            onSelect(option)
+                        } label: {
+                            if option == currentPersona {
+                                Label(option.label, systemImage: "checkmark")
+                            } else {
+                                Text(option.label)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(currentPersona.shortLabel)
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+                            .frame(maxWidth: 70, alignment: .leading)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(BFColor.primaryTint, in: Capsule())
+                    .foregroundStyle(BFColor.primary)
+                }
+                .fixedSize()
+                .accessibilityLabel("SAP Persona: \(currentPersona.label)")
+                .accessibilityHint("Choose a different SAP persona for this chat")
+                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(BFColor.primaryTint, in: Capsule())
-            .foregroundStyle(BFColor.primary)
         }
     }
 }
@@ -1148,7 +1181,7 @@ struct RateLimitBanner: View {
     }
 
     private var bannerColor: Color {
-        status == .warning ? .orange : .red
+        status == .warning ? BFColor.warning : BFColor.error
     }
 
     private var message: String {
@@ -1163,6 +1196,18 @@ struct RateLimitBanner: View {
             return ""
         }
     }
+}
+
+#Preview("Rate Limit Banner — Warning") {
+    RateLimitBanner(status: .warning, percent: 0.85, resetLabel: "6h")
+}
+
+#Preview("Rate Limit Banner — Exceeded") {
+    RateLimitBanner(status: .exceeded, percent: 1.0, resetLabel: "midnight")
+}
+
+#Preview("Rate Limit Banner — Blocked") {
+    RateLimitBanner(status: .blocked, percent: 1.0, resetLabel: "midnight")
 }
 
 // MARK: - Rate Limit Modal
@@ -1183,29 +1228,39 @@ struct RateLimitModal: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "xmark.octagon.fill")
-                    .foregroundColor(.white)
+            // Badge-icon header — mirrors the "You're on Pro" treatment in
+            // SubscriptionView (tinted circle + SF Symbol) instead of a solid
+            // color banner, so this reads as an in-brand alert rather than a
+            // raw system-red warning.
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(BFColor.error.opacity(0.12))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "xmark.octagon.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(BFColor.error)
+                }
                 Text("Token Limit Reached")
                     .font(.headline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                Spacer()
+                    .foregroundStyle(BFColor.textHeading)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(Color.red)
+            .frame(maxWidth: .infinity)
+            .padding(.top, BFSpacing._6)
+            .padding(.bottom, BFSpacing._3)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("You've reached your **\(planName)** plan's token limit.")
                     .font(.body)
+                    .foregroundStyle(BFColor.textBody)
                 Text("\(isMonthly ? "Monthly" : "Daily") limit resets in **\(resetLabel)**.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.bottom, 16)
 
             Divider()
 
@@ -1215,14 +1270,32 @@ struct RateLimitModal: View {
                     .buttonStyle(.bordered)
                 Button("Upgrade to Premium", action: onUpgrade)
                     .buttonStyle(.borderedProminent)
+                    .tint(BFColor.primary)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
         .background(Color(uiColor: .systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: BFRadius.xl))
         .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
         .padding(.horizontal, 24)
+    }
+}
+
+#Preview("Rate Limit Modal") {
+    ZStack {
+        Color.black.opacity(0.4).ignoresSafeArea()
+        RateLimitModal(
+            info: RateLimitInfo(
+                planName: "premium", dailyUsed: 10_000, dailyLimit: 10_000,
+                monthlyUsed: 45_000, monthlyLimit: 100_000,
+                isBlocked: false, blockReason: nil, resetLabel: "6h"
+            ),
+            period: "daily",
+            resetLabel: "6h",
+            onClose: {},
+            onUpgrade: {}
+        )
     }
 }
 

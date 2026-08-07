@@ -15,6 +15,10 @@ struct SettingsView: View {
     private var isTrmRealm: Bool { authManager.realm == "trm" }
     private var isIndividualRealm: Bool { authManager.realm == "individual" }
 
+    // Temporarily hidden (2026-08-07) — re-enable in a few days. Flip back
+    // to true rather than re-adding the row.
+    private let assistantRowEnabled = false
+
     private var assistantsSummary: String {
         let enabled = chatManager.visibleMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
         if enabled.isEmpty { return "None" }
@@ -36,14 +40,16 @@ struct SettingsView: View {
 
                 // Model Settings
                 Section {
-                    NavigationLink {
-                        MCPServerSelectionView()
-                    } label: {
-                        HStack {
-                            Label("Assistant", systemImage: "sparkles")
-                            Spacer()
-                            Text(assistantsSummary)
-                                .foregroundColor(.secondary)
+                    if assistantRowEnabled {
+                        NavigationLink {
+                            MCPServerSelectionView()
+                        } label: {
+                            HStack {
+                                Label("Assistant", systemImage: "sparkles")
+                                Spacer()
+                                Text(assistantsSummary)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
 
@@ -447,7 +453,10 @@ struct PersonaSelectionView: View {
     var body: some View {
         List {
             Section {
-                ForEach(Persona.allCases) { persona in
+                // "General" (no SAP focus) isn't offered as a Default Persona
+                // choice — it's only reachable in-chat via the composer's
+                // SAP Persona toggle being off.
+                ForEach(Persona.allCases.filter { $0 != .general }) { persona in
                     Button {
                         chatManager.persona = persona
                     } label: {

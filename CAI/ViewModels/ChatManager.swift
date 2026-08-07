@@ -18,6 +18,15 @@ final class ChatManager: ObservableObject {
     /// rather than inheriting whatever was active elsewhere.
     private var enabledMCPServersByConversationID: [String: Set<String>] = [:]
 
+    /// Per-conversation SAP Persona toggle/override state (bluefunda/cai-ios#217),
+    /// keyed by conversation id exactly like `enabledMCPServersByConversationID`
+    /// above — in-memory only, not persisted across relaunches. A conversation
+    /// with no entry — including every brand-new chat — defaults to the toggle
+    /// off (General), never inheriting another conversation's selection or the
+    /// Settings default persona.
+    private var personaEnabledByConversationID: [String: Bool] = [:]
+    private var personaOverrideByConversationID: [String: Persona] = [:]
+
     @Published var currentConversation: Conversation? {
         didSet {
             // Guard against in-place refreshes of the *same* conversation
@@ -30,6 +39,11 @@ final class ChatManager: ObservableObject {
                 // (defaulting to none for a conversation never seen before).
                 enabledMCPServersByConversationID[previous.id] = enabledMCPServers
                 enabledMCPServers = currentConversation.flatMap { enabledMCPServersByConversationID[$0.id] } ?? []
+
+                personaEnabledByConversationID[previous.id] = chatPersonaEnabled
+                personaOverrideByConversationID[previous.id] = chatPersonaOverride
+                chatPersonaEnabled = currentConversation.flatMap { personaEnabledByConversationID[$0.id] } ?? false
+                chatPersonaOverride = currentConversation.flatMap { personaOverrideByConversationID[$0.id] }
             } else if let new = currentConversation {
                 // No prior "current" conversation — this is the first one
                 // established this session, e.g. a lazily-created draft from
@@ -38,6 +52,8 @@ final class ChatManager: ObservableObject {
                 // active selection as-is rather than resetting it; just start
                 // tracking it under this conversation's id going forward.
                 enabledMCPServersByConversationID[new.id] = enabledMCPServers
+                personaEnabledByConversationID[new.id] = chatPersonaEnabled
+                personaOverrideByConversationID[new.id] = chatPersonaOverride
             }
         }
     }
@@ -64,7 +80,8 @@ final class ChatManager: ObservableObject {
     /// Defaults to true (the key is absent pre-upgrade) so users who already
     /// had a persona selected under #177 see no behavior change. When false:
     /// no persona is applied anywhere, regardless of the stored default above
-    /// or any per-message override.
+    /// or any per-conversation override — this is a device-wide kill-switch,
+    /// distinct from the per-conversation toggle below.
     @Published var personaEnabled: Bool = {
         UserDefaults.standard.object(forKey: "cai_persona_enabled") == nil
             ? true
@@ -72,6 +89,18 @@ final class ChatManager: ObservableObject {
     }() {
         didSet { UserDefaults.standard.set(personaEnabled, forKey: "cai_persona_enabled") }
     }
+
+    /// Whether SAP Persona mode is on for the *current* conversation
+    /// (bluefunda/cai-ios#217) — lives in the composer, not Settings. Not
+    /// persisted; every new chat starts with this off (General), swapped
+    /// per-conversation by `currentConversation`'s didSet below.
+    @Published var chatPersonaEnabled: Bool = false
+
+    /// This conversation's in-chat persona override (bluefunda/cai-ios#217) —
+    /// nil means "use the Settings default persona" (`persona` above). Sticks
+    /// for the life of the conversation once set; never written back to the
+    /// Settings default. Swapped per-conversation alongside the toggle above.
+    @Published var chatPersonaOverride: Persona?
 
     /// Legacy single-agent selection, kept as the source of truth for the
     /// outgoing chat request wire format until cai-bff/cai-llm-router ship
@@ -253,6 +282,8 @@ final class ChatManager: ObservableObject {
         subscribedMCPServerIds = []
         enabledMCPServers = []
         enabledMCPServersByConversationID = [:]
+        personaEnabledByConversationID = [:]
+        personaOverrideByConversationID = [:]
         rateLimit = nil
     }
 
