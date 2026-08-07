@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/bluefunda/cai-ios/compare/v2.0.0...v2.1.0) (2026-08-07)
+
+
+### Features
+
+* move SAP persona controls into chat composer, per-conversation scope ([#221](https://github.com/bluefunda/cai-ios/issues/221)) ([57517b4](https://github.com/bluefunda/cai-ios/commit/57517b47116ce7a8790a038fe8a24bc008baa3e4))
+
 ## [2.0.0](https://github.com/bluefunda/cai-ios/compare/v1.9.0...v2.0.0) (2026-08-03)
 
 
