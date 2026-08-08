@@ -807,82 +807,91 @@ struct ChatInputView: View {
         }
     }
 
+    // Two-row layout (text field on top, accessory controls below) —
+    // matches the Claude/ChatGPT composer shape (bluefunda/cai-ios#217
+    // follow-up). Keeps the persona toggle's visible "Persona" label from
+    // fighting the text field and send button for horizontal space on
+    // narrow screens, which is exactly what a single-row layout couldn't do.
     private var composerRow: some View {
-        HStack(alignment: .center, spacing: 6) {
-            // Attach button — only rendered when the feature flag is on
-            if attachEnabled {
-                Menu {
-                    if let pickPhoto = onPickPhoto {
-                        Button { pickPhoto() } label: {
-                            Label("Photo Library", systemImage: "photo")
-                        }
-                    }
-                    if let pickFile = onPickFile {
-                        Button { pickFile() } label: {
-                            Label("Browse Files", systemImage: "folder")
-                        }
-                    }
-                    if let pickDumpScreenshot = onPickDumpScreenshot {
-                        Button { pickDumpScreenshot() } label: {
-                            Label("Decode ST22 Dump", systemImage: "exclamationmark.triangle")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .disabled(isStreaming)
-            }
-
-            if personaFeatureEnabled {
-                PersonaComposerControl(
-                    isOn: personaToggleOn,
-                    currentPersona: currentPersona,
-                    onSelect: onSelectPersona
-                )
-                .disabled(isStreaming)
-            }
-
+        VStack(alignment: .leading, spacing: 8) {
             TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
                 .font(BFFont.body)
                 .textFieldStyle(.plain)
                 .focused(isFocused)
                 .lineLimit(1...5)
+                .padding(.horizontal, 4)
 
-            // Mic button — replaced by the send button once there's something to send
-            if let micTap = onMicTap, !canSend {
-                Button(action: micTap) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
+            HStack(alignment: .center, spacing: 6) {
+                // Attach button — only rendered when the feature flag is on
+                if attachEnabled {
+                    Menu {
+                        if let pickPhoto = onPickPhoto {
+                            Button { pickPhoto() } label: {
+                                Label("Photo Library", systemImage: "photo")
+                            }
+                        }
+                        if let pickFile = onPickFile {
+                            Button { pickFile() } label: {
+                                Label("Browse Files", systemImage: "folder")
+                            }
+                        }
+                        if let pickDumpScreenshot = onPickDumpScreenshot {
+                            Button { pickDumpScreenshot() } label: {
+                                Label("Decode ST22 Dump", systemImage: "exclamationmark.triangle")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .disabled(isStreaming)
                 }
-                .buttonStyle(.plain)
-                .disabled(isStreaming)
-            } else {
-                Button {
-                    isStreaming ? onStop() : onSend()
-                } label: {
-                    Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
+
+                if personaFeatureEnabled {
+                    PersonaComposerControl(
+                        isOn: personaToggleOn,
+                        currentPersona: currentPersona,
+                        onSelect: onSelectPersona
+                    )
+                    .disabled(isStreaming)
                 }
-                .buttonStyle(.plain)
-                .disabled(!isStreaming && !canSend)
-                // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
-                .keyboardShortcut(.return, modifiers: .command)
+
+                Spacer(minLength: 0)
+
+                // Mic button — replaced by the send button once there's something to send
+                if let micTap = onMicTap, !canSend {
+                    Button(action: micTap) {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isStreaming)
+                } else {
+                    Button {
+                        isStreaming ? onStop() : onSend()
+                    } label: {
+                        Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isStreaming && !canSend)
+                    // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
+                    .keyboardShortcut(.return, modifiers: .command)
+                }
             }
         }
-        .padding(.leading, attachEnabled ? 6 : 14)
-        .padding(.trailing, 6)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 10)
