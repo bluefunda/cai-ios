@@ -53,6 +53,7 @@
 		DS100007201BCDEF /* BFIconSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000007201BCDEF /* BFIconSize.swift */; };
 		DS100008201BCDEF /* BFLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000008201BCDEF /* BFLogo.swift */; };
 		DS100009201BCDEF /* BFButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000009201BCDEF /* BFButtonStyle.swift */; };
+		DS100010201BCDEF /* BFArrowMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = DS000010201BCDEF /* BFArrowMark.swift */; };
 		E100001001BCDEF /* CAITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002001BCDEF /* CAITests.swift */; };
 		E100001101BCDEF /* MockChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002101BCDEF /* MockChatService.swift */; };
 		E6A72825067324D318C14ECF /* Persona.swift in Sources */ = {isa = PBXBuildFile; fileRef = E69AD9A3F1811EA79D6F71AF /* Persona.swift */; };
@@ -138,6 +139,7 @@
 		DS000007201BCDEF /* BFIconSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFIconSize.swift; sourceTree = "<group>"; };
 		DS000008201BCDEF /* BFLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFLogo.swift; sourceTree = "<group>"; };
 		DS000009201BCDEF /* BFButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFButtonStyle.swift; sourceTree = "<group>"; };
+		DS000010201BCDEF /* BFArrowMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFArrowMark.swift; sourceTree = "<group>"; };
 		E100002001BCDEF /* CAITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CAITests.swift; sourceTree = "<group>"; };
 		E100002101BCDEF /* MockChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockChatService.swift; sourceTree = "<group>"; };
 		E100002201BCDEF /* CAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -321,6 +323,7 @@
 				DS000007201BCDEF /* BFIconSize.swift */,
 				DS000008201BCDEF /* BFLogo.swift */,
 				DS000009201BCDEF /* BFButtonStyle.swift */,
+				DS000010201BCDEF /* BFArrowMark.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -493,6 +496,7 @@
 				DS100007201BCDEF /* BFIconSize.swift in Sources */,
 				DS100008201BCDEF /* BFLogo.swift in Sources */,
 				DS100009201BCDEF /* BFButtonStyle.swift in Sources */,
+				DS100010201BCDEF /* BFArrowMark.swift in Sources */,
 				F7F26EF8687492EF9BC4B158 /* FileStore.swift in Sources */,
 				B21D7C5FE99EB18B79BFF586 /* LocalFileStore.swift in Sources */,
 				B9B1269D9962DEE709AD6F19 /* VoiceInputManager.swift in Sources */,
