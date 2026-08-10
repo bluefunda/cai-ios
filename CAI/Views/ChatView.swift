@@ -707,40 +707,6 @@ struct AttachmentChip: View {
     }
 }
 
-// MARK: - Streaming Indicator
-
-struct StreamingIndicator: View {
-    // Native artwork aspect ratio (364×190) — see BFArrowMark.
-    private static let aspectRatio: CGFloat = 364 / 190
-    private static let width: CGFloat = 11
-
-    // Same sequential-highlight rhythm as the old 3-dot indicator (#204-era) —
-    // a single element pulsing in place doesn't read as "in progress"; the
-    // wave across multiple elements is what signals activity.
-    @State private var phase = 0
-    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
-
-    private func arrow(lit: Bool) -> some View {
-        BFArrowMark()
-            .fill(BFColor.primary)
-            .frame(width: Self.width, height: Self.width / Self.aspectRatio)
-            .opacity(lit ? 0.9 : 0.28)
-            .animation(.easeInOut(duration: 0.3), value: phase)
-    }
-
-    var body: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<3, id: \.self) { i in
-                arrow(lit: phase == i)
-            }
-        }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
-    }
-}
-
 // MARK: - Empty State
 
 struct EmptyStateView: View {
