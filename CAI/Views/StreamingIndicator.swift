@@ -20,6 +20,10 @@ struct StreamingIndicator: View {
     private static let ringSize: CGFloat = 30
     private static let petalCount = 6
     private static let periodSeconds: Double = 1.6
+    // Ties the copy to the arrow mark's own ascend/elevate motif instead of
+    // just naming the product — the spinning pinwheel and the words reinforce
+    // the same idea rather than the brand being a name-drop next to a spinner.
+    private static let label = "Elevating your answer…"
 
     private func petal(index: Int) -> some View {
         let placementAngle = Double(index) * (360.0 / Double(Self.petalCount))
@@ -32,20 +36,27 @@ struct StreamingIndicator: View {
     }
 
     var body: some View {
-        TimelineView(.animation) { context in
-            let elapsed = context.date.timeIntervalSinceReferenceDate
-            let angle = (elapsed.truncatingRemainder(dividingBy: Self.periodSeconds) / Self.periodSeconds) * 360
+        HStack(spacing: 10) {
+            TimelineView(.animation) { context in
+                let elapsed = context.date.timeIntervalSinceReferenceDate
+                let angle = (elapsed.truncatingRemainder(dividingBy: Self.periodSeconds) / Self.periodSeconds) * 360
 
-            ZStack {
-                ForEach(0..<Self.petalCount, id: \.self) { i in
-                    petal(index: i)
+                ZStack {
+                    ForEach(0..<Self.petalCount, id: \.self) { i in
+                        petal(index: i)
+                    }
                 }
+                .frame(width: Self.ringSize, height: Self.ringSize)
+                .rotationEffect(.degrees(angle))
             }
-            .frame(width: Self.ringSize, height: Self.ringSize)
-            .rotationEffect(.degrees(angle))
+            Text(Self.label)
+                .font(.caption)
+                .foregroundStyle(BFColor.primary.opacity(0.85))
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Generating response")
     }
 }
