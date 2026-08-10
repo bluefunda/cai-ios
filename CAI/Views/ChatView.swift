@@ -712,28 +712,32 @@ struct AttachmentChip: View {
 struct StreamingIndicator: View {
     // Native artwork aspect ratio (364×190) — see BFArrowMark.
     private static let aspectRatio: CGFloat = 364 / 190
-    private static let width: CGFloat = 22
+    private static let width: CGFloat = 11
 
-    @State private var isPulsing = false
+    // Same sequential-highlight rhythm as the old 3-dot indicator (#204-era) —
+    // a single element pulsing in place doesn't read as "in progress"; the
+    // wave across multiple elements is what signals activity.
+    @State private var phase = 0
+    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
 
-    private var arrow: some View {
+    private func arrow(lit: Bool) -> some View {
         BFArrowMark()
             .fill(BFColor.primary)
             .frame(width: Self.width, height: Self.width / Self.aspectRatio)
-            .scaleEffect(isPulsing ? 1.0 : 0.72)
-            .opacity(isPulsing ? 1.0 : 0.35)
+            .opacity(lit ? 0.9 : 0.28)
+            .animation(.easeInOut(duration: 0.3), value: phase)
     }
 
     var body: some View {
-        arrow
-            .padding(.horizontal, BFSpacing._4)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                arrow(lit: phase == i)
             }
+        }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
     }
 }
 
