@@ -5,18 +5,25 @@ import SwiftUI
 /// element in place, which reads as a static logo rather than "in progress."
 /// The glyph itself never rotates (only its position sweeps the circle), so
 /// the mark never appears sideways or upside down.
+///
+/// Driven by `TimelineView(.animation)` rather than a `@State` angle animated
+/// with `withAnimation(...repeatForever...)`. That approach looked identical
+/// at rest: SwiftUI's animation only interpolates between the rendered output
+/// at the start and end values, and `cos`/`sin` at 0° and 360° are the same
+/// number — so the "animation" ran from one identical position to itself,
+/// and the arrow just sat frozen at the top of the orbit. Computing the angle
+/// directly from wall-clock time on every frame sidesteps that entirely.
 struct StreamingIndicator: View {
     // Native artwork aspect ratio (364×190) — see BFArrowMark.
     private static let aspectRatio: CGFloat = 364 / 190
     private static let arrowWidth: CGFloat = 10
     private static let orbitRadius: CGFloat = 7
     private static let orbitSize: CGFloat = 24
+    private static let periodSeconds: Double = 1.1
     // Trailing echoes, most-recent-first, each further back in the sweep.
     private static let trailOffsets: [Double] = [28, 56]
 
-    @State private var angle: Double = 0 // degrees; 0 = top of the circle
-
-    private func position(atAngleOffset degreesBack: Double) -> CGPoint {
+    private func position(angle: Double, atAngleOffset degreesBack: Double) -> CGPoint {
         let radians = (angle - degreesBack - 90) * .pi / 180
         return CGPoint(x: Self.orbitRadius * cos(radians), y: Self.orbitRadius * sin(radians))
     }
@@ -30,20 +37,20 @@ struct StreamingIndicator: View {
     }
 
     var body: some View {
-        ZStack {
-            ForEach(Array(Self.trailOffsets.enumerated()), id: \.offset) { index, degreesBack in
-                arrow(opacity: 0.18 / Double(index + 1), at: position(atAngleOffset: degreesBack))
+        TimelineView(.animation) { context in
+            let elapsed = context.date.timeIntervalSinceReferenceDate
+            let angle = (elapsed.truncatingRemainder(dividingBy: Self.periodSeconds) / Self.periodSeconds) * 360
+
+            ZStack {
+                ForEach(Array(Self.trailOffsets.enumerated()), id: \.offset) { index, degreesBack in
+                    arrow(opacity: 0.18 / Double(index + 1), at: position(angle: angle, atAngleOffset: degreesBack))
+                }
+                arrow(opacity: 0.9, at: position(angle: angle, atAngleOffset: 0))
             }
-            arrow(opacity: 0.9, at: position(atAngleOffset: 0))
+            .frame(width: Self.orbitSize, height: Self.orbitSize)
         }
-        .frame(width: Self.orbitSize, height: Self.orbitSize)
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear {
-            withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
-                angle = 360
-            }
-        }
     }
 }
