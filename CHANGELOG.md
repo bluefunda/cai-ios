@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/bluefunda/cai-ios/compare/v2.1.0...v2.1.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **chat:** move composer accessory row below the text field ([#224](https://github.com/bluefunda/cai-ios/issues/224)) ([b600be2](https://github.com/bluefunda/cai-ios/commit/b600be2f236d27abd4bf2dd2c31c291764fa6443))
+
 ## [2.1.0](https://github.com/bluefunda/cai-ios/compare/v2.0.0...v2.1.0) (2026-08-07)
 
 
