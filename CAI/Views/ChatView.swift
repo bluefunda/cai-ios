@@ -710,22 +710,30 @@ struct AttachmentChip: View {
 // MARK: - Streaming Indicator
 
 struct StreamingIndicator: View {
-    @State private var phase = 0
-    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+    // Native artwork aspect ratio (364×190) — see BFArrowMark.
+    private static let aspectRatio: CGFloat = 364 / 190
+    private static let width: CGFloat = 22
+
+    @State private var isPulsing = false
+
+    private var arrow: some View {
+        BFArrowMark()
+            .fill(BFColor.primary)
+            .frame(width: Self.width, height: Self.width / Self.aspectRatio)
+            .scaleEffect(isPulsing ? 1.0 : 0.72)
+            .opacity(isPulsing ? 1.0 : 0.35)
+    }
 
     var body: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(Color.secondary.opacity(phase == i ? 0.85 : 0.25))
-                    .frame(width: 7, height: 7)
-                    .animation(.easeInOut(duration: 0.3), value: phase)
+        arrow
+            .padding(.horizontal, BFSpacing._4)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                    isPulsing = true
+                }
             }
-        }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
     }
 }
 
