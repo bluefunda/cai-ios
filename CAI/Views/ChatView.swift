@@ -707,28 +707,6 @@ struct AttachmentChip: View {
     }
 }
 
-// MARK: - Streaming Indicator
-
-struct StreamingIndicator: View {
-    @State private var phase = 0
-    let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(Color.secondary.opacity(phase == i ? 0.85 : 0.25))
-                    .frame(width: 7, height: 7)
-                    .animation(.easeInOut(duration: 0.3), value: phase)
-            }
-        }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
-    }
-}
-
 // MARK: - Empty State
 
 struct EmptyStateView: View {
