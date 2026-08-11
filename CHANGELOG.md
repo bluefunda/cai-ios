@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/bluefunda/cai-ios/compare/v2.1.1...v2.2.0) (2026-08-11)
+
+
+### Features
+
+* **chat:** brand-refreshed app icon and streaming indicator ([#227](https://github.com/bluefunda/cai-ios/issues/227)) ([1ccc324](https://github.com/bluefunda/cai-ios/commit/1ccc3243df8dfb387daa01883ab1fbdb04228587))
+
 ## [2.1.1](https://github.com/bluefunda/cai-ios/compare/v2.1.0...v2.1.1) (2026-08-10)
 
 
