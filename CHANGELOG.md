@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/bluefunda/cai-ios/compare/v2.2.0...v2.2.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **subscription:** show correct Pro label for Stripe subscribers on iOS ([#235](https://github.com/bluefunda/cai-ios/issues/235)) ([250825c](https://github.com/bluefunda/cai-ios/commit/250825c2d5bca25599cfe3c43761e0e56f708d39))
+
 ## [2.2.0](https://github.com/bluefunda/cai-ios/compare/v2.1.1...v2.2.0) (2026-08-11)
 
 
