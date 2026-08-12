@@ -53,6 +53,20 @@ final class IAPManager: ObservableObject {
             break
         }
         hasActiveSubscription = active
+        // Also sync with backend to catch Stripe subscribers who have no Apple transactions
+        await syncWithBackend()
+    }
+
+    func syncWithBackend() async {
+        guard let bffService else { return }
+        do {
+            let subscription = try await bffService.fetchSubscription()
+            if subscription.isPro {
+                hasActiveSubscription = true
+            }
+        } catch {
+            print("[IAPManager] Backend subscription sync failed: \(error)")
+        }
     }
 
     func purchase(_ product: Product) async {

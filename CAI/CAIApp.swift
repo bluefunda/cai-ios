@@ -48,6 +48,7 @@ struct CAIApp: App {
                         // Wire the BFF service into IAPManager so it can register
                         // Apple IAP purchases with the backend.
                         iapManager.bffService = chatManager.apiService
+                        await iapManager.syncWithBackend()
                     }
                 }
                 .onChange(of: authManager.accessToken) { _, newToken in
