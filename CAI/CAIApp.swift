@@ -45,6 +45,10 @@ struct CAIApp: App {
                     guard let credentials = authManager.getCredentials() else { return }
                     Task {
                         await chatManager.connect(credentials: credentials)
+                        // Wire the BFF service into IAPManager so it can register
+                        // Apple IAP purchases with the backend.
+                        iapManager.bffService = chatManager.apiService
+                        await iapManager.syncWithBackend()
                     }
                 }
                 .onChange(of: authManager.accessToken) { _, newToken in
