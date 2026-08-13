@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.2](https://github.com/bluefunda/cai-ios/compare/v2.2.1...v2.2.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* **subscription:** correct Pro plan description to match web app ([#238](https://github.com/bluefunda/cai-ios/issues/238)) ([b5d3e8c](https://github.com/bluefunda/cai-ios/commit/b5d3e8ce57879d4760b54fff8acff81b509473c0))
+
 ## [2.2.1](https://github.com/bluefunda/cai-ios/compare/v2.2.0...v2.2.1) (2026-08-12)
 
 
