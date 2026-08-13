@@ -59,18 +59,19 @@ struct SubscriptionView: View {
                 VStack(spacing: 6) {
                     Text("You're on Pro")
                         .font(BFFont.h3)
-                    Text("Thank you for subscribing to BlueFunda AI Pro.")
+                    Text("This includes:")
                         .font(BFFont.body)
                         .foregroundStyle(BFColor.textTertiary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
 
-                VStack(spacing: 12) {
-                    FeatureBullet(icon: "bubble.left.and.bubble.right", text: "Unlimited AI chat")
-                    FeatureBullet(icon: "chevron.left.forwardslash.chevron.right", text: "ABAP code assistant")
-                    FeatureBullet(icon: "sparkles", text: "All AI assistants & models")
+                VStack(alignment: .leading, spacing: 12) {
+                    FeatureBullet(icon: "checkmark.circle", text: "Everything in Free")
+                    FeatureBullet(icon: "sparkles", text: "Extended access to models from OpenAI, Llama, DeepSeek")
+                    FeatureBullet(icon: "infinity", text: "Extended limits on general chat, file uploads and data analysis")
                 }
+                .padding(.horizontal, 32)
                 .padding(.top, 8)
             }
             Spacer()
