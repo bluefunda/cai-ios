@@ -43,6 +43,7 @@
 		970C9E9EB5920E0ECD27B356 /* TipTopic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0189A1A949EBA734CACB73C3 /* TipTopic.swift */; };
 		97EB1625B38D58E56F0AC278 /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EA037805BB647C0BE35070 /* ScreenshotFixtures.swift */; };
 		A0F6EE1CEACAC2E8BF42C453 /* TipRewardLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A9A767808271F509EF46E2 /* TipRewardLogTests.swift */; };
+		9C4A6892074AA044C5A36315 /* DebugFileLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1376BF65E44352B425E310 /* DebugFileLog.swift */; };
 		A1000001201BCDEF /* CAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011201BCDEF /* CAIApp.swift */; };
 		A1000002201BCDEF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012201BCDEF /* ContentView.swift */; };
 		A1000003201BCDEF /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013201BCDEF /* ChatView.swift */; };
@@ -251,6 +252,7 @@
 		E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerMCPTests.swift; sourceTree = "<group>"; };
 		EA47CE39743E5C5F2735C8D6 /* MacComposerTextView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MacComposerTextView.swift; sourceTree = "<group>"; };
 		ED85EC6F262946AFAEF87FE8 /* ABAPerConnectionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ABAPerConnectionView.swift; sourceTree = "<group>"; };
+		EA1376BF65E44352B425E310 /* DebugFileLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DebugFileLog.swift; sourceTree = "<group>"; };
 		EE000002201BCDEF /* Environment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Environment.swift; sourceTree = "<group>"; };
 		F07C2D3DF9E143828530204D /* ABAPerConnectFormView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ABAPerConnectFormView.swift; sourceTree = "<group>"; };
 		F1000009201BCDEF /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
@@ -477,6 +479,7 @@
 				0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */,
 				A7C28B5B3AA1A956C85653B8 /* ST22PromptBuilder.swift */,
 				8CBEEE43BF02398BFA3653C9 /* ShareCardFormatter.swift */,
+				EA1376BF65E44352B425E310 /* DebugFileLog.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -753,6 +756,7 @@
 				DE410B6C77170115CA10774E /* TipBannerPreviews.swift in Sources */,
 				67A1E6572452766E06645E42 /* ChatManager+TipEngine.swift in Sources */,
 				24ADB9C2EE8F8438FA451EE0 /* ChatManager+Cache.swift in Sources */,
+				9C4A6892074AA044C5A36315 /* DebugFileLog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

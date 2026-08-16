@@ -34,7 +34,7 @@ final class CodeAPIService {
         baseURL: String = CodeAPIService.defaultBaseURL,
         realm: String,
         system: SAPSystem,
-        session: URLSession = .shared,
+        session: URLSession = AppConfig.session,
         tokenProvider: @escaping TokenProvider
     ) {
         self.baseURL = baseURL

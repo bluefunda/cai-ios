@@ -80,15 +80,26 @@ final class BFFChatService: ChatServiceProtocol {
                 }
 
                 do {
-                    let session = URLSession(configuration: .default)
-                    let (bytes, response) = try await session.bytes(for: urlRequest)
+                    #if DEBUG
+                    DebugFileLog.log("POST \(url.absoluteString) token-prefix=\(String(credentials.accessToken.prefix(20)))")
+                    #endif
+                    let (bytes, response) = try await AppConfig.session.bytes(for: urlRequest)
 
                     guard let httpResponse = response as? HTTPURLResponse else {
                         continuation.finish(throwing: ChatServiceError.invalidResponse)
                         return
                     }
 
+                    #if DEBUG
+                    DebugFileLog.log("response status=\(httpResponse.statusCode) headers=\(httpResponse.allHeaderFields)")
+                    #endif
+
                     if httpResponse.statusCode == 401 {
+                        #if DEBUG
+                        var errBody = Data()
+                        for try await byte in bytes { errBody.append(byte) }
+                        DebugFileLog.log("401 body: \(String(decoding: errBody, as: UTF8.self))")
+                        #endif
                         continuation.finish(throwing: ChatServiceError.unauthorized)
                         return
                     }
@@ -158,7 +169,7 @@ final class BFFChatService: ChatServiceProtocol {
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = Data("{}".utf8)
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await AppConfig.session.data(for: request)
 
         // cai-bff now waits for cai-llm-router's ack before responding (previously a bare
         // fire-and-forget NATS publish, so this endpoint returned 200 unconditionally regardless
@@ -192,7 +203,7 @@ final class BFFChatService: ChatServiceProtocol {
         let payload: [String: Any] = ["message": prompt]
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await AppConfig.session.data(for: request)
 
         let rawBody = String(data: data, encoding: .utf8) ?? ""
         print("[CAI] Title API response: HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0), body: \(rawBody)")
@@ -235,7 +246,7 @@ final class BFFChatService: ChatServiceProtocol {
         request.httpMethod = "GET"
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await AppConfig.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
