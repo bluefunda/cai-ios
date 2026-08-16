@@ -18,5 +18,13 @@ enum AppConfig {
     static let authBaseURL = "https://auth.bluefunda.com"
 
     // ── BFF API ─────────────────────────────────────────────────────────────
-    static let bffBaseURL = "https://api.bluefunda.com/ai"
+    // TEMP: pointed at the local on-prem test server (cai-gw) for local
+    // testing — revert to "https://api.bluefunda.com/ai" before merging.
+    static let bffBaseURL = "https://192.168.4.171:8081"
+
+    /// Host allowed to bypass TLS certificate validation, DEBUG builds only
+    /// (see `AppConfig.session` in APIClient.swift) — the on-prem test
+    /// server's cai-gw serves a self-signed cert on this host. nil in a
+    /// normal build; only set while testing locally.
+    static let devServerTrustedHost: String? = "192.168.4.171"
 }

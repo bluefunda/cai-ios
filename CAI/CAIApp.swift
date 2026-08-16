@@ -36,9 +36,15 @@ struct CAIApp: App {
                     #endif
                 }
                 .task {
+                    #if DEBUG
+                    DebugFileLog.log("app launched, bffBaseURL=\(AppConfig.bffBaseURL)")
+                    #endif
                     chatManager.configureStorage(container.mainContext)
                     chatManager.bind(authManager: authManager)
                     await authManager.restoreSession()
+                    #if DEBUG
+                    DebugFileLog.log("restoreSession done, isAuthenticated=\(authManager.isAuthenticated)")
+                    #endif
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
                     guard isAuthenticated else { return }

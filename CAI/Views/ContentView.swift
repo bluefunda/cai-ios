@@ -946,6 +946,8 @@ struct LoginView: View {
         .confirmationDialog("Select Realm", isPresented: $showRealmPicker) {
             Button("Individual") { selectedRealm = "individual" }
             Button("TRM") { selectedRealm = "trm" }
+            // TEMP: local on-prem test server realm — remove before merging.
+            Button("Test") { selectedRealm = "test" }
         }
         .alert("Error", isPresented: .constant(authManager.error != nil)) {
             Button("OK") { authManager.error = nil }

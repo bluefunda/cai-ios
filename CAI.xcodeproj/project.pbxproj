@@ -20,6 +20,7 @@
 		69F0B45B00A5035BE0701E0D /* ST22DumpDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */; };
 		78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */; };
 		95BD0266946254A562F61DD4 /* ST22DumpDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */; };
+		9C4A6892074AA044C5A36315 /* DebugFileLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1376BF65E44352B425E310 /* DebugFileLog.swift */; };
 		A1000001201BCDEF /* CAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011201BCDEF /* CAIApp.swift */; };
 		A1000002201BCDEF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012201BCDEF /* ContentView.swift */; };
 		A1000003201BCDEF /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013201BCDEF /* ChatView.swift */; };
@@ -156,6 +157,7 @@
 		E900FE772FFC336200881287 /* IAPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IAPManager.swift; sourceTree = "<group>"; };
 		E900FE7B2FFC3FA200881287 /* SubscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionView.swift; sourceTree = "<group>"; };
 		E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerMCPTests.swift; sourceTree = "<group>"; };
+		EA1376BF65E44352B425E310 /* DebugFileLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DebugFileLog.swift; sourceTree = "<group>"; };
 		EE000002201BCDEF /* Environment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Environment.swift; sourceTree = "<group>"; };
 		F1000009201BCDEF /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		FF000001201BCDEF /* BFFeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFeatureFlags.swift; sourceTree = "<group>"; };
@@ -313,6 +315,7 @@
 				0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */,
 				A7C28B5B3AA1A956C85653B8 /* ST22PromptBuilder.swift */,
 				8CBEEE43BF02398BFA3653C9 /* ShareCardFormatter.swift */,
+				EA1376BF65E44352B425E310 /* DebugFileLog.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -511,6 +514,7 @@
 				FA0B3BA61B98A6B1BC46EA78 /* StreamingIndicator.swift in Sources */,
 				1DC4A13684F2854777BCF877 /* RateLimitBannerPreviews.swift in Sources */,
 				30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */,
+				9C4A6892074AA044C5A36315 /* DebugFileLog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

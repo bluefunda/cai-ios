@@ -7,7 +7,7 @@ import Foundation
 final class BFFAPIService {
     private let client: APIClient
 
-    init(baseURL: String, tokenProvider: @escaping TokenProvider, session: URLSession = .shared) {
+    init(baseURL: String, tokenProvider: @escaping TokenProvider, session: URLSession = AppConfig.session) {
         client = APIClient(baseURL: baseURL, tokenProvider: tokenProvider, session: session)
     }
 

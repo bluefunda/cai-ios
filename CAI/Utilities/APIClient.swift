@@ -1,5 +1,43 @@
 import Foundation
 
+// MARK: - Development Server Trust
+
+#if DEBUG
+/// Trusts the self-signed certificate on `AppConfig.devServerTrustedHost`
+/// only — every other host falls through to normal system validation.
+/// DEBUG-only so this can never compile into a release build.
+final class DevServerTrustDelegate: NSObject, URLSessionDelegate {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trustedHost = AppConfig.devServerTrustedHost,
+              challenge.protectionSpace.host == trustedHost,
+              let serverTrust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        completionHandler(.useCredential, URLCredential(trust: serverTrust))
+    }
+}
+#endif
+
+extension AppConfig {
+    /// Shared session for all backend calls. Identical to `.shared` unless
+    /// `devServerTrustedHost` is set in a DEBUG build, in which case it
+    /// trusts that one host's self-signed cert — see `DevServerTrustDelegate`.
+    static let session: URLSession = {
+        #if DEBUG
+        if devServerTrustedHost != nil {
+            return URLSession(configuration: .default, delegate: DevServerTrustDelegate(), delegateQueue: nil)
+        }
+        #endif
+        return .shared
+    }()
+}
+
 // MARK: - API Errors
 
 enum APIError: LocalizedError {

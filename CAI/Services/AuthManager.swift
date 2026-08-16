@@ -306,6 +306,9 @@ final class AuthManager: NSObject, ObservableObject {
     /// (e.g. both a proactive refresh failure and a mid-stream 401).
     func expireSession() {
         guard isAuthenticated else { return }
+        #if DEBUG
+        DebugFileLog.log("expireSession() called")
+        #endif
         clearKeychain()
         resetSession()
         error = .refreshTokenInvalid   // "Session expired. Please sign in again."
@@ -553,6 +556,10 @@ final class AuthManager: NSObject, ObservableObject {
         accessToken = response.accessToken
         tokenExpiresAt = Date().addingTimeInterval(TimeInterval(response.expiresIn))
 
+        #if DEBUG
+        DebugFileLog.log("processTokenResponse realm=\(realm) expiresIn=\(response.expiresIn) claims=\(decodedClaims(response.accessToken) ?? [:])")
+        #endif
+
         if var user = decodeJWT(response.accessToken) {
             if user.name.isEmpty, let name = appleFullName {
                 user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles)
@@ -624,6 +631,20 @@ final class AuthManager: NSObject, ObservableObject {
         request.httpBody = body.percentEncoded()
         _ = try? await session.data(for: request)
     }
+
+    #if DEBUG
+    /// TEMP: full JWT claims for local-test-server debugging — see DebugFileLog.
+    private func decodedClaims(_ token: String) -> [String: Any]? {
+        let parts = token.components(separatedBy: ".")
+        guard parts.count == 3 else { return nil }
+        var base64 = parts[1]
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64.append("=") }
+        guard let data = Data(base64Encoded: base64) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+    #endif
 
     private func decodeJWT(_ token: String) -> User? {
         let parts = token.components(separatedBy: ".")
