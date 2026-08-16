@@ -850,7 +850,9 @@ struct LoadingView: View {
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @State private var selectedRealm = "individual"
+    // TEMP: defaults to "test" for local on-prem testing — revert to
+    // "individual" before merging.
+    @State private var selectedRealm = "test"
     @State private var logoTapCount = 0
     @State private var showRealmPicker = false
     @State private var appleSignInCoordinator: AppleSignInCoordinator?
@@ -916,6 +918,20 @@ struct LoginView: View {
                         } icon: {
                             Image(systemName: "apple.logo")
                                 .font(.system(size: 20))
+                        }
+
+                        // TEMP: local on-prem test server — plain Keycloak
+                        // login/registration form, no IdP required (the
+                        // "test" realm doesn't have Google/Microsoft/Apple
+                        // brokers configured, and registrationAllowed is on).
+                        // Remove before merging.
+                        if selectedRealm == "test" {
+                            SocialSignInButton(label: "Continue (test realm, no IDP)", style: .outlined) {
+                                authManager.login(realm: "test", idpHint: nil)
+                            } icon: {
+                                Image(systemName: "flask")
+                                    .font(.system(size: 20))
+                            }
                         }
                     }
                     .frame(maxWidth: 340)
