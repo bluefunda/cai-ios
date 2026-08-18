@@ -338,6 +338,73 @@ private struct MarkdownBlockView: View {
     }
 }
 
+// MARK: - LaTeX math → Unicode
+
+/// The app has no LaTeX renderer, so `$\rightarrow$`-style math from the LLM
+/// otherwise shows up as raw TeX source. This converts a small set of common
+/// commands (arrows, comparisons, Greek letters) to their Unicode glyphs.
+private enum LaTeXMath {
+    static let symbols: [String: String] = [
+        "rightarrow": "→", "Rightarrow": "⇒",
+        "leftarrow": "←", "Leftarrow": "⇐",
+        "leftrightarrow": "↔", "Leftrightarrow": "⇔",
+        "to": "→", "implies": "⇒", "iff": "⇔",
+        "geq": "≥", "leq": "≤", "neq": "≠", "approx": "≈",
+        "times": "×", "div": "÷", "pm": "±", "mp": "∓",
+        "cdot": "⋅", "infty": "∞",
+        "alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ",
+        "epsilon": "ε", "theta": "θ", "lambda": "λ", "mu": "μ",
+        "pi": "π", "sigma": "σ", "phi": "φ", "omega": "ω",
+        "sum": "∑", "prod": "∏", "sqrt": "√", "partial": "∂",
+        "nabla": "∇", "forall": "∀", "exists": "∃",
+        "notin": "∉", "subset": "⊂", "supset": "⊃",
+        "cup": "∪", "cap": "∩", "emptyset": "∅",
+        "therefore": "∴", "because": "∵"
+    ]
+
+    /// Converts `$...$` math spans and bare `\command` sequences to Unicode.
+    /// Only touches `$...$` spans that contain a backslash command, so plain
+    /// currency text like "$5 and $10" is left untouched.
+    static func sanitize(_ text: String) -> String {
+        guard text.contains("\\") else { return text }
+
+        var result = text
+        if let mathSpan = try? NSRegularExpression(pattern: #"\$([^$\n]*\\[A-Za-z]+[^$\n]*)\$"#) {
+            result = replaceMatches(mathSpan, in: result, transform: replaceCommands)
+        }
+        return replaceCommands(in: result)
+    }
+
+    private static func replaceCommands(in text: String) -> String {
+        guard let commandPattern = try? NSRegularExpression(pattern: #"\\([A-Za-z]+)"#) else {
+            return text
+        }
+        return replaceMatches(commandPattern, in: text) { name in
+            symbols[name] ?? "\\\(name)"
+        }
+    }
+
+    private static func replaceMatches(
+        _ regex: NSRegularExpression,
+        in text: String,
+        transform: (String) -> String
+    ) -> String {
+        let ns = text as NSString
+        var result = ""
+        var lastEnd = 0
+        regex.enumerateMatches(in: text, range: NSRange(location: 0, length: ns.length)) { match, _, _ in
+            guard let match, match.numberOfRanges > 1 else { return }
+            let full = match.range
+            let group = match.range(at: 1)
+            result += ns.substring(with: NSRange(location: lastEnd, length: full.location - lastEnd))
+            result += transform(ns.substring(with: group))
+            lastEnd = full.location + full.length
+        }
+        result += ns.substring(from: lastEnd)
+        return result
+    }
+}
+
 // MARK: - Inline Markdown Text
 
 private struct InlineMarkdownText: View {
@@ -346,14 +413,15 @@ private struct InlineMarkdownText: View {
     var fillWidth: Bool = true
 
     var body: some View {
+        let sanitized = LaTeXMath.sanitize(text)
         Group {
             if let attr = try? AttributedString(
-                markdown: text,
+                markdown: sanitized,
                 options: .init(interpretedSyntax: .inlineOnly)
             ) {
                 styled(Text(attr))
             } else {
-                styled(Text(text))
+                styled(Text(sanitized))
             }
         }
     }
@@ -384,7 +452,7 @@ private struct HeadingView: View {
     let text: String
 
     var body: some View {
-        Text(text)
+        Text(LaTeXMath.sanitize(text))
             .font(headingFont)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
