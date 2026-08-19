@@ -61,9 +61,7 @@ final class IAPManager: ObservableObject {
         guard let bffService else { return }
         do {
             let subscription = try await bffService.fetchSubscription()
-            if subscription.isPro {
-                hasActiveSubscription = true
-            }
+            hasActiveSubscription = subscription.isPro
         } catch {
             print("[IAPManager] Backend subscription sync failed: \(error)")
         }
