@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.3.0](https://github.com/bluefunda/cai-ios/compare/v2.2.2...v2.3.0) (2026-08-19)
+
+
+### Features
+
+* **persona:** replace hardcoded persona enum with cai-mcp-go's /personas API ([4769be4](https://github.com/bluefunda/cai-ios/commit/4769be46ea7467a65b2c302653befbc28e80fe87))
+* **persona:** replace hardcoded persona enum with cai-mcp-go's /personas API ([7115e78](https://github.com/bluefunda/cai-ios/commit/7115e7868580011388a05e8146c1ad877474804e)), closes [#244](https://github.com/bluefunda/cai-ios/issues/244)
+
+
+### Bug Fixes
+
+* **persona:** filter General out of the fetched backend catalog ([a31ce7c](https://github.com/bluefunda/cai-ios/commit/a31ce7cf91a09dc488833e6639eddc361f9d7dcf))
+* **persona:** force a real persona when the composer toggle turns on ([1f8b94c](https://github.com/bluefunda/cai-ios/commit/1f8b94cf6401202199deabb3bb88eca7f863b2d3))
+* **persona:** sanitize pre-existing disk cache on read, not just fetch ([813d3fb](https://github.com/bluefunda/cai-ios/commit/813d3fb78299bebe0321993b851820c86ac0933d))
+
 ## [2.2.2](https://github.com/bluefunda/cai-ios/compare/v2.2.1...v2.2.2) (2026-08-13)
 
 
