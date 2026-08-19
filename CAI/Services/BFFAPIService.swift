@@ -84,6 +84,13 @@ final class BFFAPIService {
         try await client.postIgnoringResponse("/mcp/select", body: ["server_id": serverId])
     }
 
+    // MARK: - Personas
+
+    func fetchPersonas() async throws -> [Persona] {
+        let response: PersonasResponse = try await client.get("/personas")
+        return response.personas
+    }
+
     // MARK: - Rate Limit
 
     func fetchRateLimit() async throws -> RateLimitDTO {

@@ -66,14 +66,21 @@ final class ChatManager: ObservableObject {
 
     @Published var selectedModel: LLMModel = LLMModel.defaultModel
 
+    /// Backend-driven SAP persona catalog (cai-mcp-go's `/personas`,
+    /// bluefunda/cai-ios#242-ish), replacing the old hardcoded enum. Seeded
+    /// synchronously from `PersonaCatalog`'s disk cache (or the hardcoded
+    /// fallback on first-ever launch) so pickers have something to show with
+    /// zero network latency; refreshed in the background by `loadPersonas()`.
+    @Published var availablePersonas: [Persona] = PersonaCatalog.loadCached()
+
     /// The user's home SAP persona (bluefunda/cai-ios#177), sent as chat
     /// context on every request. Persisted across launches; takes effect on
     /// the next message sent, no restart required.
     @Published var persona: Persona = {
-        let raw = UserDefaults.standard.string(forKey: "cai_persona") ?? Persona.general.rawValue
-        return Persona(rawValue: raw) ?? .general
+        let raw = UserDefaults.standard.string(forKey: "cai_persona") ?? Persona.general.id
+        return Persona.resolve(raw, in: PersonaCatalog.loadCached()) ?? .general
     }() {
-        didSet { UserDefaults.standard.set(persona.rawValue, forKey: "cai_persona") }
+        didSet { UserDefaults.standard.set(persona.id, forKey: "cai_persona") }
     }
 
     /// Whether the SAP persona feature is on at all (bluefunda/cai-ios#203).
@@ -94,7 +101,22 @@ final class ChatManager: ObservableObject {
     /// (bluefunda/cai-ios#217) — lives in the composer, not Settings. Not
     /// persisted; every new chat starts with this off (General), swapped
     /// per-conversation by `currentConversation`'s didSet below.
-    @Published var chatPersonaEnabled: Bool = false
+    ///
+    /// General is meant to be reachable only by switching this off — turning
+    /// it on must always land on a real persona, never silently stay on
+    /// General because the Settings default was never changed from its
+    /// factory value. The `currentConversation` restore below assigns this
+    /// before restoring the saved override on the very next line, so this
+    /// didSet's fallback pick is harmlessly overwritten there when a real
+    /// override already exists for that conversation.
+    @Published var chatPersonaEnabled: Bool = false {
+        didSet {
+            guard chatPersonaEnabled, !oldValue else { return }
+            if chatPersonaOverride == nil, persona == .general {
+                chatPersonaOverride = availablePersonas.first
+            }
+        }
+    }
 
     /// This conversation's in-chat persona override (bluefunda/cai-ios#217) —
     /// nil means "use the Settings default persona" (`persona` above). Sticks
@@ -728,6 +750,7 @@ extension ChatManager {
             group.addTask { await self.loadModels() }
             group.addTask { await self.loadMCPServers() }
             group.addTask { await self.loadGreeting() }
+            group.addTask { await self.loadPersonas() }
         }
     }
 
@@ -786,6 +809,39 @@ extension ChatManager {
         } catch {
             // Fallback to hardcoded defaults already in place
             print("[ChatManager] loadModels error: \(error)")
+        }
+    }
+
+    /// Refreshes the persona catalog from cai-mcp-go's `/personas` (via
+    /// cai-bff), skipping the network round-trip entirely when the disk
+    /// cache is still fresh — the catalog changes rarely, so there's no
+    /// reason to pay latency for it on every launch. On failure, silently
+    /// keeps whatever was already loaded (cache or hardcoded fallback): the
+    /// persona lens is a display enhancement, never worth failing over.
+    func loadPersonas() async {
+        guard let api = apiService else { return }
+        guard PersonaCatalog.isStale || availablePersonas.isEmpty else { return }
+
+        do {
+            let fetched = try await api.fetchPersonas()
+            // The backend catalog includes a "general" entry (cai-mcp-go's
+            // personas.yaml, wire_value ""), but General is a UI sentinel
+            // reachable only by switching persona mode off — it was never
+            // meant to be a selectable list item, matching the old
+            // hardcoded-enum behavior (Persona.allCases.filter { != .general }).
+            let selectable = fetched.filter { $0.id != Persona.general.id }
+            guard !selectable.isEmpty else { return }
+
+            availablePersonas = selectable.sorted { $0.order < $1.order }
+            PersonaCatalog.store(availablePersonas)
+
+            // Keep the current default/override valid if the catalog moved on
+            // without them (e.g. a persona was retired server-side).
+            if persona != .general, !availablePersonas.contains(where: { $0.id == persona.id }) {
+                persona = .general
+            }
+        } catch {
+            print("[ChatManager] loadPersonas error: \(error)")
         }
     }
 

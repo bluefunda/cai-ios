@@ -456,7 +456,7 @@ struct PersonaSelectionView: View {
                 // "General" (no SAP focus) isn't offered as a Default Persona
                 // choice — it's only reachable in-chat via the composer's
                 // SAP Persona toggle being off.
-                ForEach(Persona.allCases.filter { $0 != .general }) { persona in
+                ForEach(chatManager.availablePersonas) { persona in
                     Button {
                         chatManager.persona = persona
                     } label: {
