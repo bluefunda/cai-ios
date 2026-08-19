@@ -280,6 +280,7 @@ struct ChatView: View {
                 personaFeatureEnabled: chatManager.personaEnabled,
                 personaToggleOn: $chatManager.chatPersonaEnabled,
                 currentPersona: chatManager.chatPersonaOverride ?? chatManager.persona,
+                personaOptions: chatManager.availablePersonas,
                 onSelectPersona: { chatManager.chatPersonaOverride = $0 }
             )
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
@@ -572,7 +573,7 @@ struct MessageView: View {
     /// recorded persona at all (predates the field, or the feature was off).
     @ViewBuilder
     private var personaBadge: some View {
-        if let raw = message.persona, let persona = Persona(rawValue: raw), persona != .general {
+        if let raw = message.persona, let persona = Persona.resolve(raw), persona != .general {
             HStack(spacing: 3) {
                 Image(systemName: persona.icon)
                 Text(persona.shortLabel)
@@ -756,6 +757,7 @@ struct ChatInputView: View {
     var personaFeatureEnabled: Bool = false
     var personaToggleOn: Binding<Bool> = .constant(false)
     var currentPersona: Persona = .general
+    var personaOptions: [Persona] = Persona.fallbackCatalog
     var onSelectPersona: (Persona) -> Void = { _ in }
 
     private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
@@ -836,6 +838,7 @@ struct ChatInputView: View {
                     PersonaComposerControl(
                         isOn: personaToggleOn,
                         currentPersona: currentPersona,
+                        options: personaOptions,
                         onSelect: onSelectPersona
                     )
                     .disabled(isStreaming)
@@ -1053,9 +1056,10 @@ private struct AtBottomPreferenceKey: PreferenceKey {
 struct PersonaComposerControl: View {
     @Binding var isOn: Bool
     let currentPersona: Persona
+    var options: [Persona] = Persona.fallbackCatalog
     let onSelect: (Persona) -> Void
 
-    private let dropdownOptions = Persona.allCases.filter { $0 != .general }
+    private var dropdownOptions: [Persona] { options }
 
     var body: some View {
         HStack(spacing: 4) {

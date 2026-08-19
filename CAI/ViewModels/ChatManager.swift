@@ -66,14 +66,21 @@ final class ChatManager: ObservableObject {
 
     @Published var selectedModel: LLMModel = LLMModel.defaultModel
 
+    /// Backend-driven SAP persona catalog (cai-mcp-go's `/personas`,
+    /// bluefunda/cai-ios#242-ish), replacing the old hardcoded enum. Seeded
+    /// synchronously from `PersonaCatalog`'s disk cache (or the hardcoded
+    /// fallback on first-ever launch) so pickers have something to show with
+    /// zero network latency; refreshed in the background by `loadPersonas()`.
+    @Published var availablePersonas: [Persona] = PersonaCatalog.loadCached()
+
     /// The user's home SAP persona (bluefunda/cai-ios#177), sent as chat
     /// context on every request. Persisted across launches; takes effect on
     /// the next message sent, no restart required.
     @Published var persona: Persona = {
-        let raw = UserDefaults.standard.string(forKey: "cai_persona") ?? Persona.general.rawValue
-        return Persona(rawValue: raw) ?? .general
+        let raw = UserDefaults.standard.string(forKey: "cai_persona") ?? Persona.general.id
+        return Persona.resolve(raw, in: PersonaCatalog.loadCached()) ?? .general
     }() {
-        didSet { UserDefaults.standard.set(persona.rawValue, forKey: "cai_persona") }
+        didSet { UserDefaults.standard.set(persona.id, forKey: "cai_persona") }
     }
 
     /// Whether the SAP persona feature is on at all (bluefunda/cai-ios#203).
@@ -728,6 +735,7 @@ extension ChatManager {
             group.addTask { await self.loadModels() }
             group.addTask { await self.loadMCPServers() }
             group.addTask { await self.loadGreeting() }
+            group.addTask { await self.loadPersonas() }
         }
     }
 
@@ -786,6 +794,33 @@ extension ChatManager {
         } catch {
             // Fallback to hardcoded defaults already in place
             print("[ChatManager] loadModels error: \(error)")
+        }
+    }
+
+    /// Refreshes the persona catalog from cai-mcp-go's `/personas` (via
+    /// cai-bff), skipping the network round-trip entirely when the disk
+    /// cache is still fresh — the catalog changes rarely, so there's no
+    /// reason to pay latency for it on every launch. On failure, silently
+    /// keeps whatever was already loaded (cache or hardcoded fallback): the
+    /// persona lens is a display enhancement, never worth failing over.
+    func loadPersonas() async {
+        guard let api = apiService else { return }
+        guard PersonaCatalog.isStale || availablePersonas.isEmpty else { return }
+
+        do {
+            let fetched = try await api.fetchPersonas()
+            guard !fetched.isEmpty else { return }
+
+            availablePersonas = fetched.sorted { $0.order < $1.order }
+            PersonaCatalog.store(availablePersonas)
+
+            // Keep the current default/override valid if the catalog moved on
+            // without them (e.g. a persona was retired server-side).
+            if persona != .general, !availablePersonas.contains(where: { $0.id == persona.id }) {
+                persona = .general
+            }
+        } catch {
+            print("[ChatManager] loadPersonas error: \(error)")
         }
     }
 

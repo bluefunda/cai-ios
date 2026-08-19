@@ -582,6 +582,15 @@ struct GreetingsDTO: Codable {
     }
 }
 
+// MARK: - Personas (/personas)
+
+/// cai-bff wraps the persona catalog as `{"personas": [...], "success": true}`
+/// (see cai-bff internal/nats/models.QueryResponse.Personas) — `Persona`
+/// itself decodes directly since its fields already match the wire shape.
+struct PersonasResponse: Codable {
+    let personas: [Persona]
+}
+
 // MARK: - Generic API Error
 
 struct APIErrorDTO: Codable {
