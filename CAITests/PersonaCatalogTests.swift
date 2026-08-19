@@ -151,4 +151,17 @@ final class PersonaCatalogTests: XCTestCase {
     func test_loadCached_fallsBackToHardcodedCatalog_whenNothingCachedYet() {
         XCTAssertEqual(PersonaCatalog.loadCached(), Persona.fallbackCatalog)
     }
+
+    /// Regression guard for the "still see General after updating" report:
+    /// simulates an on-disk cache written by a build that predates the
+    /// general-filtering fix (i.e. written directly, bypassing
+    /// PersonaCatalog.store, which already excludes it) -- loadCached() must
+    /// sanitize it on read rather than requiring a cache-clear or a 24h wait
+    /// for the TTL to force a re-fetch.
+    func test_loadCached_sanitizesAPreExistingCacheThatIncludesGeneral() {
+        let poisoned = [Persona.general, .abap, .fi]
+        UserDefaults.standard.set(try! JSONEncoder().encode(poisoned), forKey: "cai_persona_catalog_cache_v1")
+
+        XCTAssertEqual(PersonaCatalog.loadCached().map(\.id), ["abap", "fi"])
+    }
 }

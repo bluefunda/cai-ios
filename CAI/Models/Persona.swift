@@ -104,13 +104,21 @@ enum PersonaCatalog {
 
     /// Synchronous and instant — safe to call from a `@Published` property
     /// initializer, before any network call could possibly have completed.
+    ///
+    /// Filters out `general` even though `loadPersonas()` already excludes it
+    /// before writing the cache — a cache written by an older build (before
+    /// that filter existed) would otherwise keep surfacing `general` for up
+    /// to the full TTL, since a fresh cache skips the network re-fetch
+    /// entirely. Filtering here makes the fix self-heal on next launch
+    /// instead of requiring a cache clear or a 24h wait.
     static func loadCached() -> [Persona] {
         guard let data = UserDefaults.standard.data(forKey: cacheKey),
               let decoded = try? JSONDecoder().decode([Persona].self, from: data),
               !decoded.isEmpty else {
             return Persona.fallbackCatalog
         }
-        return decoded
+        let selectable = decoded.filter { $0.id != Persona.general.id }
+        return selectable.isEmpty ? Persona.fallbackCatalog : selectable
     }
 
     static var isStale: Bool {
