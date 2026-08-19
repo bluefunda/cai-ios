@@ -235,6 +235,23 @@ final class ChatManagerPersonaTests: XCTestCase {
         XCTAssertEqual(composerPersonaOverride(for: chatManager), .abap)
     }
 
+    /// General is meant to be reachable only by switching persona mode back
+    /// off — never as the live value while it's on. If the Settings default
+    /// was never changed from its factory value (.general), turning the
+    /// composer toggle on must not silently land there: it should fall back
+    /// to a real persona from the catalog instead.
+    func test_togglingOn_withGeneralAsSettingsDefault_fallsBackToARealPersona() {
+        let chatManager = ChatManager(service: MockChatService())
+        XCTAssertEqual(chatManager.persona, .general, "precondition: Settings default was never changed")
+        chatManager.currentConversation = Conversation(id: "conv-a", title: "A", messages: [], model: "auto", createdAt: Date())
+
+        chatManager.chatPersonaEnabled = true
+
+        XCTAssertNotNil(chatManager.chatPersonaOverride, "must not silently stay on General once persona mode is on")
+        XCTAssertNotEqual(composerPersonaOverride(for: chatManager), .general)
+        XCTAssertEqual(chatManager.chatPersonaOverride, chatManager.availablePersonas.first)
+    }
+
     func test_changingDropdown_sticksForSubsequentMessagesInThatChat() async throws {
         UserDefaults.standard.set(true, forKey: BFFeatureFlags.Keys.personaWire)
         let mockService = MockChatService()

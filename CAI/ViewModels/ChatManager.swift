@@ -101,7 +101,22 @@ final class ChatManager: ObservableObject {
     /// (bluefunda/cai-ios#217) — lives in the composer, not Settings. Not
     /// persisted; every new chat starts with this off (General), swapped
     /// per-conversation by `currentConversation`'s didSet below.
-    @Published var chatPersonaEnabled: Bool = false
+    ///
+    /// General is meant to be reachable only by switching this off — turning
+    /// it on must always land on a real persona, never silently stay on
+    /// General because the Settings default was never changed from its
+    /// factory value. The `currentConversation` restore below assigns this
+    /// before restoring the saved override on the very next line, so this
+    /// didSet's fallback pick is harmlessly overwritten there when a real
+    /// override already exists for that conversation.
+    @Published var chatPersonaEnabled: Bool = false {
+        didSet {
+            guard chatPersonaEnabled, !oldValue else { return }
+            if chatPersonaOverride == nil, persona == .general {
+                chatPersonaOverride = availablePersonas.first
+            }
+        }
+    }
 
     /// This conversation's in-chat persona override (bluefunda/cai-ios#217) —
     /// nil means "use the Settings default persona" (`persona` above). Sticks
