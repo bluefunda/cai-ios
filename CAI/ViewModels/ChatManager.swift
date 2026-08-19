@@ -824,9 +824,15 @@ extension ChatManager {
 
         do {
             let fetched = try await api.fetchPersonas()
-            guard !fetched.isEmpty else { return }
+            // The backend catalog includes a "general" entry (cai-mcp-go's
+            // personas.yaml, wire_value ""), but General is a UI sentinel
+            // reachable only by switching persona mode off — it was never
+            // meant to be a selectable list item, matching the old
+            // hardcoded-enum behavior (Persona.allCases.filter { != .general }).
+            let selectable = fetched.filter { $0.id != Persona.general.id }
+            guard !selectable.isEmpty else { return }
 
-            availablePersonas = fetched.sorted { $0.order < $1.order }
+            availablePersonas = selectable.sorted { $0.order < $1.order }
             PersonaCatalog.store(availablePersonas)
 
             // Keep the current default/override valid if the catalog moved on

@@ -76,6 +76,30 @@ final class PersonaCatalogTests: XCTestCase {
         XCTAssertEqual(PersonaCatalog.loadCached().map(\.id), ["abap", "leader"], "a successful fetch should update the disk cache")
     }
 
+    /// Regression guard: cai-mcp-go's real personas.yaml includes a "general"
+    /// entry (id: general, wire_value: "", detail: "No specific SAP focus")
+    /// -- it's part of the actual backend catalog, not something the app can
+    /// assume is absent. General is a UI sentinel reachable only by toggling
+    /// persona mode off, so it must never show up as a pickable row.
+    func test_loadPersonas_excludesGeneralFromTheFetchedCatalog() async {
+        MockURLProtocol.requestHandler = { request in
+            let json = """
+            {"personas": [
+                {"id": "general", "label": "General", "shortLabel": "General", "detail": "No specific SAP focus", "icon": "sparkles", "order": 0},
+                {"id": "abap", "wireValue": "abap", "label": "ABAP Developer", "shortLabel": "ABAP", "detail": "d", "icon": "chevron", "order": 1}
+            ], "success": true}
+            """
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(json.utf8))
+        }
+
+        let chatManager = mockChatManager()
+        await chatManager.loadPersonas()
+
+        XCTAssertEqual(chatManager.availablePersonas.map(\.id), ["abap"], "general must be filtered out of the selectable catalog")
+        XCTAssertFalse(PersonaCatalog.loadCached().contains(where: { $0.id == "general" }), "general must not be persisted to the disk cache either")
+    }
+
     func test_loadPersonas_skipsNetworkCall_whenCacheIsFresh() async {
         PersonaCatalog.store([.fi])
         var requestMade = false
