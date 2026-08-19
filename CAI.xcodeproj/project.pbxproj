@@ -14,8 +14,8 @@
 		44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */; };
 		45AF841CB328895A9D51B352 /* ChatManagerPersonaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3574C50AA824A38FA5694A48 /* ChatManagerPersonaTests.swift */; };
 		4825950C249ABF3CC61D75F0 /* ChatManagerTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */; };
-		536F861E705EDC6CCE7A910A /* PersonaCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C100E3C73AB54B4E17FBFBF2 /* PersonaCatalogTests.swift */; };
 		4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */; };
+		536F861E705EDC6CCE7A910A /* PersonaCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C100E3C73AB54B4E17FBFBF2 /* PersonaCatalogTests.swift */; };
 		59C558A0A2B783F5B3683A6F /* ST22PromptBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */; };
 		6330D67F156E5631C3DEED25 /* ShareCardFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CBEEE43BF02398BFA3653C9 /* ShareCardFormatter.swift */; };
 		69F0B45B00A5035BE0701E0D /* ST22DumpDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */; };
@@ -104,7 +104,6 @@
 		280DCA3012561F192CB19BAA /* VoiceInputManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceInputManager.swift; sourceTree = "<group>"; };
 		2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ST22DumpDetectorTests.swift; sourceTree = "<group>"; };
 		310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerTitleTests.swift; sourceTree = "<group>"; };
-		C100E3C73AB54B4E17FBFBF2 /* PersonaCatalogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PersonaCatalogTests.swift; sourceTree = "<group>"; };
 		3574C50AA824A38FA5694A48 /* ChatManagerPersonaTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerPersonaTests.swift; sourceTree = "<group>"; };
 		5478A24929F4E5D406E63882 /* ShareableAnswerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareableAnswerCard.swift; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
@@ -135,6 +134,7 @@
 		B1000006201BCDEF /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareCardFormatterTests.swift; sourceTree = "<group>"; };
 		C1000007201BCDEF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
+		C100E3C73AB54B4E17FBFBF2 /* PersonaCatalogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PersonaCatalogTests.swift; sourceTree = "<group>"; };
 		D1000008201BCDEF /* StorageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageViewModel.swift; sourceTree = "<group>"; };
 		DS000001201BCDEF /* BFColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFColors.swift; sourceTree = "<group>"; };
 		DS000002201BCDEF /* BFTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFTypography.swift; sourceTree = "<group>"; };
@@ -674,7 +674,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -706,7 +706,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.2.2;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -726,7 +726,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -758,7 +758,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.2.2;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -776,10 +776,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 112;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.2.2;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -794,10 +794,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 112;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.2.2;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
