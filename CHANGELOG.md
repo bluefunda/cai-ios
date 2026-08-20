@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.1](https://github.com/bluefunda/cai-ios/compare/v2.3.0...v2.3.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **chat:** render LaTeX math notation as Unicode symbols ([#243](https://github.com/bluefunda/cai-ios/issues/243)) ([b88a731](https://github.com/bluefunda/cai-ios/commit/b88a73160eb4e06636e6271f841aacadeb82c14b)), closes [#242](https://github.com/bluefunda/cai-ios/issues/242)
+* **subscription:** keep hasActiveSubscription in sync with backend ([#241](https://github.com/bluefunda/cai-ios/issues/241)) ([c2f0b25](https://github.com/bluefunda/cai-ios/commit/c2f0b25a64f5109e2d8019e3af33da87a1b41178))
+
 ## [2.3.0](https://github.com/bluefunda/cai-ios/compare/v2.2.2...v2.3.0) (2026-08-19)
 
 
