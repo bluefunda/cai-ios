@@ -1,6 +1,54 @@
 import Foundation
 import SwiftData
 
+// MARK: - Reply Reveal Ticker
+
+/// Paces how much of a streamed reply is shown on screen, decoupled from network arrival — the
+/// backend delivers chunks in bursts (sometimes a whole sentence at once, sometimes the entire
+/// reply in one streamEnd) rather than a steady token-by-token trickle, which reads as the text
+/// "dumping" onto screen instead of a smooth type-in. `totalLength` is the true target as chunks
+/// arrive; `revealedLength` trails it, catching up a little every tick — mirrors cai-android's
+/// ChatViewModel.streamAssistantReply. Not thread-safe by design: like the streaming loop it feeds,
+/// it's driven from a single `Task` on the chat manager's `@MainActor`.
+private final class ReplyRevealTicker {
+    private let tick: Duration
+    private let minCharsPerTick: Int
+    private let catchUpDivisor: Int
+    private let drainDivisor: Int
+
+    private(set) var totalLength = 0
+    private(set) var revealedLength = 0
+    /// Once the network side is done, the full text is already known — catch up faster than the
+    /// mid-stream pace so a reply delivered as one big streamEnd doesn't trickle out afterward.
+    var draining = false
+
+    var isCaughtUp: Bool { revealedLength >= totalLength }
+
+    init(tick: Duration, minCharsPerTick: Int, catchUpDivisor: Int, drainDivisor: Int) {
+        self.tick = tick
+        self.minCharsPerTick = minCharsPerTick
+        self.catchUpDivisor = catchUpDivisor
+        self.drainDivisor = drainDivisor
+    }
+
+    func extend(by delta: Int) { totalLength += delta }
+    func setTotal(_ length: Int) { totalLength = length }
+
+    /// Runs until cancelled, invoking `onReveal` whenever `revealedLength` grows.
+    func run(onReveal: (Int) -> Void) async {
+        while !Task.isCancelled {
+            if revealedLength < totalLength {
+                let backlog = totalLength - revealedLength
+                let divisor = draining ? drainDivisor : catchUpDivisor
+                let step = max(backlog / divisor, minCharsPerTick)
+                revealedLength = min(revealedLength + step, totalLength)
+                onReveal(revealedLength)
+            }
+            try? await Task.sleep(for: tick)
+        }
+    }
+}
+
 // MARK: - Chat Manager
 // Coordinates between UI, streaming chat service (BFFChatService), and REST API service (BFFAPIService).
 
@@ -215,13 +263,9 @@ final class ChatManager: ObservableObject {
     private let urlSession: URLSession
     var apiService: BFFAPIService?
     private var streamingTask: Task<Void, Never>?
-    /// Reveal-ticker pacing (mirrors cai-android's ChatViewModel.streamAssistantReply) — see
-    /// sendMessage() for why this exists.
     private static let revealTick: Duration = .milliseconds(24)
     private static let revealMinCharsPerTick = 2
     private static let revealCatchUpDivisor = 20
-    /// Once the network side is done, the full text is already known — catch up faster than the
-    /// mid-stream pace so a reply delivered as one big streamEnd doesn't trickle out afterward.
     private static let revealDrainDivisor = 4
     private var modelContext: ModelContext?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
@@ -480,40 +524,28 @@ final class ChatManager: ObservableObject {
 
         streamingTask = Task {
             var finalContent = ""
-            var totalLength = 0
-            var revealedLength = 0
-            // Once the network side finishes, we know the full text already — see
-            // revealDrainDivisor above for why the ticker speeds up at that point.
-            var draining = false
             var wasRateLimited = false
 
             let assistantId = assistantMessage.id
             let assistantTimestamp = assistantMessage.timestamp
             let assistantPersona = assistantMessage.persona
 
-            // The backend delivers chunks in bursts (sometimes a whole sentence at once,
-            // sometimes the entire reply in one streamEnd) rather than a steady token-by-token
-            // trickle, which reads as the text "dumping" onto screen instead of a smooth type-in.
-            // This ticker decouples what's on screen from network arrival: finalContent/totalLength
-            // are the true target, and revealedLength trails them, catching up a little every
-            // tick — mirrors cai-android's ChatViewModel.streamAssistantReply.
+            let ticker = ReplyRevealTicker(
+                tick: Self.revealTick,
+                minCharsPerTick: Self.revealMinCharsPerTick,
+                catchUpDivisor: Self.revealCatchUpDivisor,
+                drainDivisor: Self.revealDrainDivisor
+            )
             let revealTask = Task {
-                while !Task.isCancelled {
-                    if revealedLength < totalLength {
-                        let backlog = totalLength - revealedLength
-                        let divisor = draining ? Self.revealDrainDivisor : Self.revealCatchUpDivisor
-                        let step = max(backlog / divisor, Self.revealMinCharsPerTick)
-                        revealedLength = min(revealedLength + step, totalLength)
-                        let revealedMessage = ChatMessage(
-                            id: assistantId,
-                            role: .assistant,
-                            content: String(finalContent.prefix(revealedLength)),
-                            timestamp: assistantTimestamp,
-                            persona: assistantPersona
-                        )
-                        updateLastMessage(revealedMessage, in: conversation.id)
-                    }
-                    try? await Task.sleep(for: Self.revealTick)
+                await ticker.run { revealedLength in
+                    let revealedMessage = ChatMessage(
+                        id: assistantId,
+                        role: .assistant,
+                        content: String(finalContent.prefix(revealedLength)),
+                        timestamp: assistantTimestamp,
+                        persona: assistantPersona
+                    )
+                    updateLastMessage(revealedMessage, in: conversation.id)
                 }
             }
 
@@ -525,12 +557,12 @@ final class ChatManager: ObservableObject {
 
                     case .chunk(let content, _, _):
                         finalContent += content
-                        totalLength += content.count
+                        ticker.extend(by: content.count)
 
                     case .streamEnd(_, let full, _):
                         if !full.isEmpty {
                             finalContent = full
-                            totalLength = full.count
+                            ticker.setTotal(full.count)
                         }
                         Haptic.impact(.light)   // response complete
 
@@ -595,8 +627,8 @@ final class ChatManager: ObservableObject {
             // already cancelled above (and the placeholder it was painting into was removed), so
             // revealedLength would never catch up to totalLength and this would spin forever.
             if !wasRateLimited {
-                draining = true
-                while !Task.isCancelled, revealedLength < totalLength {
+                ticker.draining = true
+                while !Task.isCancelled, !ticker.isCaughtUp {
                     try? await Task.sleep(for: Self.revealTick)
                 }
                 revealTask.cancel()
@@ -727,8 +759,11 @@ final class ChatManager: ObservableObject {
         }
     }
 
-    // MARK: - SwiftData persistence
+}
 
+// MARK: - SwiftData persistence
+
+extension ChatManager {
     /// Call once from CAIApp after ModelContainer is ready.
     func configureStorage(_ context: ModelContext) {
         modelContext = context
