@@ -168,10 +168,20 @@ struct ChatView: View {
                                     // here where the surrounding list is available, since
                                     // MessageView only sees a single message.
                                     let precedingQuestion = index > 0 ? conversation.messages[index - 1].content : nil
-                                    MessageView(message: message, precedingQuestion: precedingQuestion)
-                                        .id(message.id)
+                                    let isThisMessageStreaming = chatManager.isStreaming
+                                        && index == conversation.messages.count - 1
+                                    MessageView(
+                                        message: message,
+                                        precedingQuestion: precedingQuestion,
+                                        isThisMessageStreaming: isThisMessageStreaming
+                                    )
+                                    .id(message.id)
                                 }
-                                if chatManager.isStreaming {
+                                // Reads "Elevating your answer…" etc., which only makes sense
+                                // before any text has appeared — once the reveal ticker starts
+                                // painting real content, the inline cursor in MessageView takes
+                                // over instead of also showing this alongside it.
+                                if chatManager.isStreaming, conversation.messages.last?.content.isEmpty != false {
                                     StreamingIndicator()
                                 }
                             } else if chatManager.isLoadingChats {
@@ -546,6 +556,8 @@ struct MessageView: View {
     /// build the shareable answer card (bluefunda/cai-ios#197); nil for user
     /// messages and for the very first message in a conversation.
     var precedingQuestion: String?
+    /// True only for the single assistant message currently being streamed into.
+    var isThisMessageStreaming: Bool = false
     @State private var didCopy = false
 
     /// Rendered on demand (not cached) since it's only needed when the user
@@ -628,7 +640,10 @@ struct MessageView: View {
     // Left-aligned response — full width, no background
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MarkdownView(content: message.content)
+            // MarkdownView embeds the streaming cursor inline at the end of the last block itself
+            // (only once text has actually started — before that, StreamingIndicator's
+            // spinner+caption above covers the "waiting for the first token" state instead).
+            MarkdownView(content: message.content, isStreaming: isThisMessageStreaming && !message.content.isEmpty)
                 .font(BFFont.body)
                 .contextMenu { if !message.content.isEmpty { messageActions } }
 

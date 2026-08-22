@@ -215,6 +215,14 @@ final class ChatManager: ObservableObject {
     private let urlSession: URLSession
     var apiService: BFFAPIService?
     private var streamingTask: Task<Void, Never>?
+    /// Reveal-ticker pacing (mirrors cai-android's ChatViewModel.streamAssistantReply) — see
+    /// sendMessage() for why this exists.
+    private static let revealTick: Duration = .milliseconds(24)
+    private static let revealMinCharsPerTick = 2
+    private static let revealCatchUpDivisor = 20
+    /// Once the network side is done, the full text is already known — catch up faster than the
+    /// mid-stream pace so a reply delivered as one big streamEnd doesn't trickle out afterward.
+    private static let revealDrainDivisor = 4
     private var modelContext: ModelContext?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
     private var currentBFFToken: String = ""
@@ -472,7 +480,43 @@ final class ChatManager: ObservableObject {
 
         streamingTask = Task {
             var finalContent = ""
+            var totalLength = 0
+            var revealedLength = 0
+            // Once the network side finishes, we know the full text already — see
+            // revealDrainDivisor above for why the ticker speeds up at that point.
+            var draining = false
             var wasRateLimited = false
+
+            let assistantId = assistantMessage.id
+            let assistantTimestamp = assistantMessage.timestamp
+            let assistantPersona = assistantMessage.persona
+
+            // The backend delivers chunks in bursts (sometimes a whole sentence at once,
+            // sometimes the entire reply in one streamEnd) rather than a steady token-by-token
+            // trickle, which reads as the text "dumping" onto screen instead of a smooth type-in.
+            // This ticker decouples what's on screen from network arrival: finalContent/totalLength
+            // are the true target, and revealedLength trails them, catching up a little every
+            // tick — mirrors cai-android's ChatViewModel.streamAssistantReply.
+            let revealTask = Task {
+                while !Task.isCancelled {
+                    if revealedLength < totalLength {
+                        let backlog = totalLength - revealedLength
+                        let divisor = draining ? Self.revealDrainDivisor : Self.revealCatchUpDivisor
+                        let step = max(backlog / divisor, Self.revealMinCharsPerTick)
+                        revealedLength = min(revealedLength + step, totalLength)
+                        let revealedMessage = ChatMessage(
+                            id: assistantId,
+                            role: .assistant,
+                            content: String(finalContent.prefix(revealedLength)),
+                            timestamp: assistantTimestamp,
+                            persona: assistantPersona
+                        )
+                        updateLastMessage(revealedMessage, in: conversation.id)
+                    }
+                    try? await Task.sleep(for: Self.revealTick)
+                }
+            }
+
             do {
                 for try await event in service.sendMessage(request) {
                     switch event {
@@ -481,25 +525,13 @@ final class ChatManager: ObservableObject {
 
                     case .chunk(let content, _, _):
                         finalContent += content
-                        assistantMessage = ChatMessage(
-                            id: assistantMessage.id,
-                            role: .assistant,
-                            content: finalContent,
-                            timestamp: assistantMessage.timestamp,
-                            persona: assistantMessage.persona
-                        )
-                        updateLastMessage(assistantMessage, in: conversation.id)
+                        totalLength += content.count
 
                     case .streamEnd(_, let full, _):
-                        if !full.isEmpty { finalContent = full }
-                        assistantMessage = ChatMessage(
-                            id: assistantMessage.id,
-                            role: .assistant,
-                            content: finalContent,
-                            timestamp: assistantMessage.timestamp,
-                            persona: assistantMessage.persona
-                        )
-                        updateLastMessage(assistantMessage, in: conversation.id)
+                        if !full.isEmpty {
+                            finalContent = full
+                            totalLength = full.count
+                        }
                         Haptic.impact(.light)   // response complete
 
                         // Persist AI message (best-effort)
@@ -524,6 +556,10 @@ final class ChatManager: ObservableObject {
                         self.error = message
 
                     case .rateLimited(let period, let resetLabel):
+                        // Stop the ticker before removing the placeholder below — otherwise a
+                        // pending tick could still fire and overwrite the (now-different) last
+                        // message in the conversation with stale assistant content.
+                        revealTask.cancel()
                         // Remove the empty assistant placeholder — keep the user message visible.
                         if var conv = currentConversation,
                            !conv.messages.isEmpty,
@@ -549,6 +585,32 @@ final class ChatManager: ObservableObject {
                 authManager?.expireSession()
             } catch {
                 self.error = error.localizedDescription
+            }
+
+            // Network side is done — let the ticker finish trickling out whatever's left, then
+            // show the exact final text (in case rounding left the reveal a character or two
+            // short). Skipped entirely on a user-initiated Stop: same as cai-android, a
+            // cancelled stream just freezes wherever the ticker last painted rather than
+            // jumping to the full received text. Also skipped when rate-limited: the ticker was
+            // already cancelled above (and the placeholder it was painting into was removed), so
+            // revealedLength would never catch up to totalLength and this would spin forever.
+            if !wasRateLimited {
+                draining = true
+                while !Task.isCancelled, revealedLength < totalLength {
+                    try? await Task.sleep(for: Self.revealTick)
+                }
+                revealTask.cancel()
+
+                if !Task.isCancelled, !finalContent.isEmpty {
+                    assistantMessage = ChatMessage(
+                        id: assistantId,
+                        role: .assistant,
+                        content: finalContent,
+                        timestamp: assistantTimestamp,
+                        persona: assistantPersona
+                    )
+                    updateLastMessage(assistantMessage, in: conversation.id)
+                }
             }
 
             // The stream ended without any text and without an explicit error
