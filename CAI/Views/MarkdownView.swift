@@ -143,7 +143,9 @@ enum MarkdownParser {
                     let l = raw.trimmingCharacters(in: .whitespaces)
                     if isUnorderedMarker(l) {
                         let depth = resolveListDepth(&indentStack, indentWidth(of: raw))
-                        items.append(MarkdownListEntry(depth: depth, ordered: false, number: 0, text: String(l.dropFirst(2))))
+                        items.append(
+                            MarkdownListEntry(depth: depth, ordered: false, number: 0, text: String(l.dropFirst(2)))
+                        )
                         i += 1
                     } else if isOrderedMarker(l) {
                         let number = Int(l.prefix(while: { $0.isNumber })) ?? 0

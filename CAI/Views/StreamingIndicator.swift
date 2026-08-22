@@ -80,4 +80,3 @@ struct StreamingIndicator: View {
         .accessibilityLabel("Generating response")
     }
 }
-

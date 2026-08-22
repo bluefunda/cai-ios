@@ -94,7 +94,11 @@ final class SyntaxHighlightingTests: XCTestCase {
     }
 
     func test_sqlIsCaseInsensitiveForKeywords() {
-        let tokens = tokenizeLine("select * from users", keywords: ["select", "SELECT", "from", "FROM"], lineCommentPrefix: "--")
+        let tokens = tokenizeLine(
+            "select * from users",
+            keywords: ["select", "SELECT", "from", "FROM"],
+            lineCommentPrefix: "--"
+        )
         XCTAssertEqual(tokens.first { $0.0 == "select" }?.1, .keyword)
         XCTAssertEqual(tokens.first { $0.0 == "from" }?.1, .keyword)
     }
