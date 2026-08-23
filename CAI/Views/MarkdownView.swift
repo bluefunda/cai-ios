@@ -2,12 +2,24 @@ import SwiftUI
 
 // MARK: - Block types
 
-private enum MarkdownBlock {
+/// One list line plus how deeply it's nested — tracked by comparing each line's leading
+/// whitespace width against a stack of previously-seen widths, robust to whichever indent width
+/// (2-space, 4-space, tabs) the source actually used, unlike assuming a fixed divisor. A single
+/// list block can mix ordered and unordered items at different depths (e.g. numbered steps with
+/// bullet sub-details) — each item carries its own marker style rather than the whole block being
+/// forced into one or the other.
+struct MarkdownListEntry: Equatable {
+    let depth: Int
+    let ordered: Bool
+    let number: Int
+    let text: String
+}
+
+enum MarkdownBlock: Equatable {
     case paragraph(String)
     case heading(level: Int, text: String)
     case codeBlock(language: String?, code: String)
-    case unorderedList(items: [String])
-    case orderedList(items: [String])
+    case list(items: [MarkdownListEntry])
     case blockquote(text: String)
     case horizontalRule
     case table(headers: [String], rows: [[String]])
@@ -15,7 +27,7 @@ private enum MarkdownBlock {
 
 // MARK: - Parser
 
-private enum MarkdownParser {
+enum MarkdownParser {
     static func parse(_ input: String) -> [MarkdownBlock] {
         let normalized = input.replacingOccurrences(of: "\r\n", with: "\n")
         let lines = normalized.components(separatedBy: "\n")
@@ -120,54 +132,42 @@ private enum MarkdownParser {
                 continue
             }
 
-            // Unordered list (- * +)
-            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
-                var items: [String] = []
+            // List (- * + for unordered, 1. 2. 3. for ordered) — a single list block can mix both
+            // marker styles across depths (e.g. numbered steps with bullet sub-details), so both
+            // are recognized in the same loop rather than two separate same-type-only loops.
+            if isUnorderedMarker(trimmed) || isOrderedMarker(trimmed) {
+                var items: [MarkdownListEntry] = []
+                var indentStack: [Int] = []
                 while i < lines.count {
-                    let l = lines[i].trimmingCharacters(in: .whitespaces)
-                    if l.hasPrefix("- ") || l.hasPrefix("* ") || l.hasPrefix("+ ") {
-                        items.append(String(l.dropFirst(2)))
-                        i += 1
-                    } else if l.isEmpty {
-                        break
-                    } else if l.hasPrefix("  ") || l.hasPrefix("\t") {
-                        // Continuation line — append to last item
-                        if !items.isEmpty {
-                            items[items.count - 1] += " " + l.trimmingCharacters(in: .whitespaces)
-                        }
-                        i += 1
-                    } else {
-                        break
-                    }
-                }
-                if !items.isEmpty { blocks.append(.unorderedList(items: items)) }
-                continue
-            }
-
-            // Ordered list (1. 2. 3.)
-            if trimmed.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
-                var items: [String] = []
-                while i < lines.count {
-                    let l = lines[i].trimmingCharacters(in: .whitespaces)
-                    if l.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
-                        let text = l.replacingOccurrences(
-                            of: #"^\d+\.\s+"#, with: "",
-                            options: .regularExpression
+                    let raw = lines[i]
+                    let l = raw.trimmingCharacters(in: .whitespaces)
+                    if isUnorderedMarker(l) {
+                        let depth = resolveListDepth(&indentStack, indentWidth(of: raw))
+                        items.append(
+                            MarkdownListEntry(depth: depth, ordered: false, number: 0, text: String(l.dropFirst(2)))
                         )
-                        items.append(text)
+                        i += 1
+                    } else if isOrderedMarker(l) {
+                        let number = Int(l.prefix(while: { $0.isNumber })) ?? 0
+                        let text = l.replacingOccurrences(of: #"^\d+\.\s+"#, with: "", options: .regularExpression)
+                        let depth = resolveListDepth(&indentStack, indentWidth(of: raw))
+                        items.append(MarkdownListEntry(depth: depth, ordered: true, number: number, text: text))
                         i += 1
                     } else if l.isEmpty {
                         break
-                    } else if l.hasPrefix("  ") || l.hasPrefix("\t") {
-                        if !items.isEmpty {
-                            items[items.count - 1] += " " + l.trimmingCharacters(in: .whitespaces)
+                    } else if raw.hasPrefix("  ") || raw.hasPrefix("\t") {
+                        // Continuation line — append to last item
+                        if let last = items.last {
+                            items[items.count - 1] = MarkdownListEntry(
+                                depth: last.depth, ordered: last.ordered, number: last.number, text: last.text + " " + l
+                            )
                         }
                         i += 1
                     } else {
                         break
                     }
                 }
-                if !items.isEmpty { blocks.append(.orderedList(items: items)) }
+                if !items.isEmpty { blocks.append(.list(items: items)) }
                 continue
             }
 
@@ -187,8 +187,7 @@ private enum MarkdownParser {
                 if lt.count >= 3 && (ns == "---" || ns == "***" || ns == "___") { break }
                 if lt.hasPrefix(">") { break }
                 if lt.hasPrefix("|") { break }
-                if lt.hasPrefix("- ") || lt.hasPrefix("* ") || lt.hasPrefix("+ ") { break }
-                if lt.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil { break }
+                if isUnorderedMarker(lt) || isOrderedMarker(lt) { break }
 
                 paraLines.append(l)
                 i += 1
@@ -202,6 +201,42 @@ private enum MarkdownParser {
         }
 
         return blocks
+    }
+
+    private static func isUnorderedMarker(_ trimmedLine: String) -> Bool {
+        trimmedLine.hasPrefix("- ") || trimmedLine.hasPrefix("* ") || trimmedLine.hasPrefix("+ ")
+    }
+
+    private static func isOrderedMarker(_ trimmedLine: String) -> Bool {
+        trimmedLine.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil
+    }
+
+    private static func indentWidth(of line: String) -> Int {
+        var count = 0
+        for ch in line {
+            if ch == " " {
+                count += 1
+            } else if ch == "\t" {
+                count += 4
+            } else {
+                break
+            }
+        }
+        return count
+    }
+
+    private static let maxListDepth = 4
+
+    /// Tracks list nesting by comparing each new item's leading-whitespace width against a stack
+    /// of previously-seen widths — mirrors cai-android's Markdown.kt `resolveListDepth`.
+    private static func resolveListDepth(_ indentStack: inout [Int], _ indent: Int) -> Int {
+        while let last = indentStack.last, indent < last {
+            indentStack.removeLast()
+        }
+        if indentStack.isEmpty || indent > indentStack.last! {
+            indentStack.append(indent)
+        }
+        return min(indentStack.count - 1, maxListDepth)
     }
 
     /// A GFM table separator row consists only of `|`, `-`, `:` and whitespace,
@@ -266,10 +301,14 @@ private enum DisplaySegment {
 
 struct MarkdownView: View {
     let content: String
+    /// True only while this is the single assistant message currently being streamed into —
+    /// shows a blinking cursor embedded right after the last character of the last block.
+    var isStreaming: Bool = false
     private let blocks: [MarkdownBlock]
 
-    init(content: String) {
+    init(content: String, isStreaming: Bool = false) {
         self.content = content
+        self.isStreaming = isStreaming
         self.blocks = MarkdownParser.parse(content)
     }
 
@@ -289,11 +328,13 @@ struct MarkdownView: View {
     }
 
     var body: some View {
+        let lastIndex = segments.count - 1
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                let showCursor = isStreaming && index == lastIndex
                 switch segment {
                 case .single(let block):
-                    MarkdownBlockView(block: block)
+                    MarkdownBlockView(block: block, showCursor: showCursor)
                 case .summaryCard(let title, let block):
                     SummaryCardView(title: title, block: block)
                 }
@@ -315,21 +356,20 @@ struct MarkdownView: View {
 
 private struct MarkdownBlockView: View {
     let block: MarkdownBlock
+    var showCursor: Bool = false
 
     var body: some View {
         switch block {
         case .paragraph(let text):
-            InlineMarkdownText(text: text)
+            InlineMarkdownText(text: text, showCursor: showCursor)
         case .heading(let level, let text):
-            HeadingView(level: level, text: text)
+            HeadingView(level: level, text: text, showCursor: showCursor)
         case .codeBlock(let language, let code):
-            CodeBlockView(language: language, code: code)
-        case .unorderedList(let items):
-            UnorderedListView(items: items)
-        case .orderedList(let items):
-            OrderedListView(items: items)
+            CodeBlockView(language: language, code: code, showCursor: showCursor)
+        case .list(let items):
+            ListItemsView(items: items, showCursor: showCursor)
         case .blockquote(let text):
-            BlockquoteView(text: text)
+            BlockquoteView(text: text, showCursor: showCursor)
         case .horizontalRule:
             Divider()
         case .table(let headers, let rows):
@@ -405,24 +445,44 @@ private enum LaTeXMath {
     }
 }
 
+// MARK: - Streaming cursor
+
+/// Blinking caret embedded inline via `Text` concatenation, so it sits right after the last
+/// character of the actively-streaming block and wraps with the surrounding text like any other
+/// character — mirrors cai-android's InlineTextContent-based cursor in Markdown.kt.
+private func cursorText(at date: Date) -> Text {
+    let elapsed = date.timeIntervalSinceReferenceDate
+    let phase = elapsed.truncatingRemainder(dividingBy: 1.0)
+    let opacity = phase < 0.5 ? 1.0 : 0.0
+    return Text("▏").foregroundColor(Color.primary.opacity(opacity))
+}
+
 // MARK: - Inline Markdown Text
 
 private struct InlineMarkdownText: View {
     let text: String
     var font: Font = BFFont.responseBody
     var fillWidth: Bool = true
+    var showCursor: Bool = false
+
+    private var baseText: Text {
+        let sanitized = LaTeXMath.sanitize(text)
+        if let attr = try? AttributedString(
+            markdown: sanitized,
+            options: .init(interpretedSyntax: .inlineOnly)
+        ) {
+            return Text(attr)
+        }
+        return Text(sanitized)
+    }
 
     var body: some View {
-        let sanitized = LaTeXMath.sanitize(text)
-        Group {
-            if let attr = try? AttributedString(
-                markdown: sanitized,
-                options: .init(interpretedSyntax: .inlineOnly)
-            ) {
-                styled(Text(attr))
-            } else {
-                styled(Text(sanitized))
+        if showCursor {
+            TimelineView(.animation) { context in
+                styled(baseText + cursorText(at: context.date))
             }
+        } else {
+            styled(baseText)
         }
     }
 
@@ -450,9 +510,22 @@ private struct InlineMarkdownText: View {
 private struct HeadingView: View {
     let level: Int
     let text: String
+    var showCursor: Bool = false
 
     var body: some View {
-        Text(LaTeXMath.sanitize(text))
+        Group {
+            if showCursor {
+                TimelineView(.animation) { context in
+                    styled(Text(LaTeXMath.sanitize(text)) + cursorText(at: context.date))
+                }
+            } else {
+                styled(Text(LaTeXMath.sanitize(text)))
+            }
+        }
+    }
+
+    private func styled(_ text: Text) -> some View {
+        text
             .font(headingFont)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -474,6 +547,7 @@ private struct HeadingView: View {
 private struct CodeBlockView: View {
     let language: String?
     let code: String
+    var showCursor: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var isCopied = false
@@ -510,11 +584,20 @@ private struct CodeBlockView: View {
 
             // Code content — horizontal scroll for long lines
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code.isEmpty ? " " : code)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    let base = Text(code.isEmpty ? AttributedString(" ") : highlightedCode(code, language: language))
+                    if showCursor {
+                        TimelineView(.animation) { context in
+                            (base + cursorText(at: context.date))
+                        }
+                    } else {
+                        base
+                    }
+                }
+                .font(.system(.caption, design: .monospaced))
+                .textSelection(.enabled)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(codeBackground)
         }
@@ -543,40 +626,37 @@ private struct CodeBlockView: View {
     }
 }
 
-// MARK: - Unordered List
+// MARK: - List (unordered and ordered items, possibly mixed/nested in one block)
 
-private struct UnorderedListView: View {
-    let items: [String]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("•")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 14, alignment: .center)
-                    InlineMarkdownText(text: item)
-                }
-            }
-        }
+private func bulletGlyph(forDepth depth: Int) -> String {
+    switch depth % 3 {
+    case 0: return "•"
+    case 1: return "◦"
+    default: return "▪"
     }
 }
 
-// MARK: - Ordered List
-
-private struct OrderedListView: View {
-    let items: [String]
+private struct ListItemsView: View {
+    let items: [MarkdownListEntry]
+    var showCursor: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("\(idx + 1).")
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: 24, alignment: .trailing)
-                        .monospacedDigit()
-                    InlineMarkdownText(text: item)
+                    if item.ordered {
+                        Text("\(item.number).")
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 24, alignment: .trailing)
+                            .monospacedDigit()
+                    } else {
+                        Text(bulletGlyph(forDepth: item.depth))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 14, alignment: .center)
+                    }
+                    InlineMarkdownText(text: item.text, showCursor: showCursor && index == items.count - 1)
                 }
+                .padding(.leading, CGFloat(item.depth) * 20)
             }
         }
     }
@@ -586,13 +666,14 @@ private struct OrderedListView: View {
 
 private struct BlockquoteView: View {
     let text: String
+    var showCursor: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color.secondary.opacity(0.4))
                 .frame(width: 3)
-            InlineMarkdownText(text: text)
+            InlineMarkdownText(text: text, showCursor: showCursor)
                 .foregroundStyle(.secondary)
         }
     }
