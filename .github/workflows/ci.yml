@@ -65,11 +65,16 @@ jobs:
         run: |
           # Pipe through tee so xcodebuild output is visible in the CI log in real-time.
           # PIPESTATUS[0] gives xcodebuild's exit code (not tee's).
+          # -parallel-testing-enabled NO: the default GitHub-hosted macos-15 runner doesn't have
+          # the CPU/RAM headroom for Xcode's default multi-clone parallel test execution — that
+          # was causing random simulator clones to fail to launch mid-suite, failing whichever
+          # test happened to be scheduled on them (a different, unrelated test each run).
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
             -destination "id=$SIM_UDID" \
             -configuration Debug \
+            -parallel-testing-enabled NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             test 2>&1 | tee /tmp/xcode.log
