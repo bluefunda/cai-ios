@@ -9,7 +9,14 @@ import SwiftData
 /// "dumping" onto screen instead of a smooth type-in. `totalLength` is the true target as chunks
 /// arrive; `revealedLength` trails it, catching up a little every tick — mirrors cai-android's
 /// ChatViewModel.streamAssistantReply. Not thread-safe by design: like the streaming loop it feeds,
-/// it's driven from a single `Task` on the chat manager's `@MainActor`.
+/// it's driven from a single `Task` on the chat manager's `@MainActor` — enforced below via an
+/// explicit `@MainActor` on the class itself, since `run(onReveal:)` used to be a plain nonisolated
+/// async method: calling it via `await` from `ChatManager` did not actually guarantee its loop ran
+/// on the main actor, so `onReveal` (which mutates `ChatManager.currentConversation`) could fire
+/// from a background thread and race with the rest of ChatManager, corrupting Swift's refcounting
+/// and crashing with EXC_BAD_ACCESS/SIGSEGV during a Conversation's deinit — confirmed via a
+/// captured CI crash report, not a hypothetical.
+@MainActor
 private final class ReplyRevealTicker {
     private let tick: Duration
     private let minCharsPerTick: Int
