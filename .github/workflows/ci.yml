@@ -60,6 +60,11 @@ jobs:
           echo "SIM_UDID=$SIM_UDID" >> $GITHUB_ENV
           echo "Using simulator: $(xcrun simctl list devices available | grep $SIM_UDID)"
           xcrun simctl boot $SIM_UDID 2>/dev/null || true
+          # Nested virtualization on GitHub-hosted runners makes simulator boot slower and less
+          # predictable than on bare-metal Macs. Starting tests before springboard/daemons are
+          # fully up is a documented cause of "Restarting after unexpected exit, crash, or test
+          # timeout" mid-suite — wait for a real ready signal instead of firing boot and moving on.
+          xcrun simctl bootstatus $SIM_UDID -b
 
       - name: Build & Test
         run: |
