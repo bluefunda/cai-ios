@@ -79,6 +79,7 @@ jobs:
           # test timeout") with no crash report or assertion behind it — a known class of CI-only
           # flakiness this flag exists specifically to paper over by re-running just the affected
           # test(s) in the same invocation, rather than failing the whole suite.
+          rm -rf /tmp/TestResults.xcresult
           xcodebuild \
             -project CAI.xcodeproj \
             -scheme CAI \
@@ -86,6 +87,7 @@ jobs:
             -configuration Debug \
             -parallel-testing-enabled NO \
             -retry-tests-on-failure \
+            -resultBundlePath /tmp/TestResults.xcresult \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             test 2>&1 | tee /tmp/xcode.log
@@ -94,6 +96,26 @@ jobs:
           echo "--- Test summary ---"
           grep -E "^(Test Suite|Test Case|error:|Executed|FAILED|PASSED)" /tmp/xcode.log || true
           exit $XCODE_EXIT
+
+      # Only on failure — the "Restarting after unexpected exit, crash, or test timeout" pattern
+      # seen intermittently here has no stack trace in the plain text log above. The .xcresult
+      # bundle and the host's DiagnosticReports both carry the actual crash report Apple's tools
+      # generate for a simulator app termination, which is what's needed to root-cause it for real
+      # instead of guessing from log timestamps.
+      - name: Collect crash diagnostics
+        if: failure()
+        run: |
+          mkdir -p /tmp/crash-diagnostics
+          cp -R /tmp/TestResults.xcresult /tmp/crash-diagnostics/ 2>/dev/null || true
+          cp -R ~/Library/Logs/DiagnosticReports /tmp/crash-diagnostics/DiagnosticReports 2>/dev/null || true
+
+      - name: Upload crash diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-crash-diagnostics
+          path: /tmp/crash-diagnostics
+          retention-days: 5
 
   build-macos:
     name: Build (macOS / Mac Catalyst)
