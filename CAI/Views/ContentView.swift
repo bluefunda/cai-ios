@@ -98,24 +98,31 @@ struct AppShell: View {
             // gets the rest, which is where the 800-pt chat column lives.
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
-            VStack(spacing: 0) {
-                iPadTopBar
-                content
-            }
+            // Real toolbar items (not a custom row), all trailing/right side —
+            // an empty title suppresses the CFBundleDisplayName ("BlueFunda AI")
+            // window title Mac Catalyst shows by default, which duplicated the
+            // sidebar's own "BlueFunda AI" header for no reason (cai-ios#253).
+            content
+                .navigationTitle(mode == .code ? "Code" : "")
+                .toolbar {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        switch mode {
+                        case .chat:
+                            AttachmentButton(conversationId: chatManager.currentConversation?.id)
+                            NewChatButton(action: { chatManager.newConversation() })
+                            ModeModelPicker()
+                        case .code:
+                            Button(action: { showSystems = true }) {
+                                Image(systemName: "server.rack")
+                                    .font(.system(size: BFFont.toolbarIconPt))
+                            }
+                        }
+                    }
+                }
         }
         // prominentDetail keeps the sidebar visible but gives the chat area
         // the dominant portion of the window — matches ChatGPT / Claude layout.
         .navigationSplitViewStyle(.prominentDetail)
-    }
-
-    @ViewBuilder
-    private var iPadTopBar: some View {
-        switch mode {
-        case .chat:
-            ChatTopBar(sidebarOpen: .constant(false), onNewChat: { chatManager.newConversation() }, showHamburger: false, showNewChat: false)
-        case .code:
-            CodeTopBar(sidebarOpen: .constant(false), onSystems: { showSystems = true }, showHamburger: false)
-        }
     }
 
     // MARK: - iPhone: ZStack drawer
@@ -434,62 +441,19 @@ struct HamburgerButton: View {
     }
 }
 
-// MARK: - Top Bar
+// MARK: - Top Bar (iPhone only — iPad/Mac use real .toolbar items, see AppShell.iPadLayout)
 
 struct ChatTopBar: View {
     @EnvironmentObject var chatManager: ChatManager
     @Binding var sidebarOpen: Bool
     let onNewChat: () -> Void
-    var showHamburger: Bool = true
-    var showNewChat: Bool = true
-
-    @State private var showFiles = false
-
-    private var chatTitle: String {
-        chatManager.currentConversation?.title ?? "New Chat"
-    }
 
     var body: some View {
         HStack(spacing: 14) {
-            if showHamburger {
-                HamburgerButton(sidebarOpen: $sidebarOpen)
-            }
-
-            // New chat button — always visible
-            Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: BFFont.toolbarIconPt))
-            }
-            .foregroundStyle(BFColor.primary)
-
-            if !showNewChat {
-                // iPad/Mac: show current conversation title next to pencil
-                Text(chatTitle)
-                    .font(BFFont.sidebarItemMed)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
+            HamburgerButton(sidebarOpen: $sidebarOpen)
+            NewChatButton(action: onNewChat)
             Spacer()
-
-            if let conversationId = chatManager.currentConversation?.id {
-                Button { showFiles = true } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: BFFont.toolbarIconPt - 2))
-                }
-                .foregroundStyle(.secondary)
-                .sheet(isPresented: $showFiles) {
-                    NavigationStack {
-                        ConversationFilesView(conversationId: conversationId)
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button("Done") { showFiles = false }
-                                }
-                            }
-                    }
-                }
-            }
-
+            AttachmentButton(conversationId: chatManager.currentConversation?.id)
             ModeModelPicker()
         }
         .padding(.horizontal, BFSpacing._4)
@@ -504,13 +468,10 @@ struct ChatTopBar: View {
 struct CodeTopBar: View {
     @Binding var sidebarOpen: Bool
     let onSystems: () -> Void
-    var showHamburger: Bool = true
 
     var body: some View {
         HStack(spacing: 14) {
-            if showHamburger {
-                HamburgerButton(sidebarOpen: $sidebarOpen)
-            }
+            HamburgerButton(sidebarOpen: $sidebarOpen)
 
             Text("Code")
                 .font(BFFont.h5)
@@ -526,6 +487,49 @@ struct CodeTopBar: View {
         .padding(.vertical, 12)
         .background(Color(.systemBackground))
         .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+// MARK: - New Chat / Attachment (shared by iPhone's inline bar and iPad/Mac's toolbar)
+
+struct NewChatButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: BFFont.toolbarIconPt))
+        }
+        .foregroundStyle(BFColor.primary)
+    }
+}
+
+struct AttachmentButton: View {
+    // Always visible (rather than only appearing once a conversation exists)
+    // for a consistent toolbar across screens — disabled until there's a
+    // conversation to attach files to.
+    let conversationId: String?
+    @State private var showFiles = false
+
+    var body: some View {
+        Button { showFiles = true } label: {
+            Image(systemName: "paperclip")
+                .font(.system(size: BFFont.toolbarIconPt - 2))
+        }
+        .foregroundStyle(.secondary)
+        .disabled(conversationId == nil)
+        .sheet(isPresented: $showFiles) {
+            if let conversationId {
+                NavigationStack {
+                    ConversationFilesView(conversationId: conversationId)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { showFiles = false }
+                            }
+                        }
+                }
+            }
+        }
     }
 }
 
