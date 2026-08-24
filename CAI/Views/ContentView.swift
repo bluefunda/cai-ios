@@ -46,7 +46,15 @@ struct AppShell: View {
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
     @State private var safariURL: URL?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    // .doubleColumn (not .automatic, and not .all — that's for 3-column
+    // split views and made the system sidebar-toggle button disappear
+    // entirely on our 2-column one). .automatic hands NavigationSplitView
+    // discretion to re-decide visibility on its own, which on iPad/Mac was
+    // silently collapsing the sidebar the moment the message field gained
+    // focus (a focus-driven layout pass reads as a size-class change to
+    // `.automatic`). .doubleColumn/.detailOnly are the two canonical states
+    // the toggle button switches between for a 2-column split (cai-ios#256).
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     // Code mode
     @StateObject private var systemStore = SAPSystemStore()
@@ -98,20 +106,26 @@ struct AppShell: View {
             // gets the rest, which is where the 800-pt chat column lives.
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
-            // Real toolbar items (not a custom row), all trailing/right side —
-            // an empty title suppresses the CFBundleDisplayName ("BlueFunda AI")
-            // window title Mac Catalyst shows by default, which duplicated the
-            // sidebar's own "BlueFunda AI" header for no reason (cai-ios#253).
+            // An empty title (Mac's actual window-title text is separately
+            // hidden in CAIApp.swift) removes the redundant "BlueFunda AI"
+            // that duplicated the sidebar's own header (cai-ios#253). The
+            // sidebar toggle lives in the trailing group (not the leading
+            // .navigation slot) — that slot's rendering turned out to depend
+            // on undocumented Mac Catalyst chrome behavior (duplicated or got
+            // buried under the sidebar depending on what else was declared
+            // there); the trailing group never had that problem (cai-ios#256).
             content
                 .navigationTitle(mode == .code ? "Code" : "")
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
                         switch mode {
                         case .chat:
+                            SidebarToggleButton(columnVisibility: $columnVisibility)
                             AttachmentButton(conversationId: chatManager.currentConversation?.id)
                             NewChatButton(action: { chatManager.newConversation() })
                             ModeModelPicker()
                         case .code:
+                            SidebarToggleButton(columnVisibility: $columnVisibility)
                             Button(action: { showSystems = true }) {
                                 Image(systemName: "server.rack")
                                     .font(.system(size: BFFont.toolbarIconPt))
@@ -119,10 +133,18 @@ struct AppShell: View {
                         }
                     }
                 }
+                #if targetEnvironment(macCatalyst)
+                .hidingNativeSplitViewToggle()
+                #endif
         }
-        // prominentDetail keeps the sidebar visible but gives the chat area
-        // the dominant portion of the window — matches ChatGPT / Claude layout.
-        .navigationSplitViewStyle(.prominentDetail)
+        // .balanced, not .prominentDetail: prominentDetail treats the sidebar
+        // as a dismissible overlay above the detail content — it auto-hides
+        // the moment you interact with the detail pane (tap New Chat, tap
+        // into the chat), which read as "the sidebar won't stay open."
+        // .balanced makes both genuine persistent columns; the sidebar's
+        // width stays constrained by navigationSplitViewColumnWidth above so
+        // the chat column still dominates the window (cai-ios#256).
+        .navigationSplitViewStyle(.balanced)
     }
 
     // MARK: - iPhone: ZStack drawer
@@ -224,21 +246,14 @@ struct SidebarContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Sidebar header: brand + new chat ────────
+            // ── Sidebar header: brand ────────
+            // New Chat lives in the top toolbar (NewChatButton) now, not
+            // duplicated here (cai-ios#256).
             HStack(spacing: 0) {
                 Text("BlueFunda AI")
                     .font(BFFont.sidebarHeader)
                     .foregroundStyle(.primary)
                 Spacer()
-                Button {
-                    currentMode = .chat
-                    chatManager.newConversation()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: BFFont.toolbarIconPt - 2))
-                        .foregroundStyle(BFColor.primary)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.top, 20)
@@ -491,6 +506,66 @@ struct CodeTopBar: View {
 }
 
 // MARK: - New Chat / Attachment (shared by iPhone's inline bar and iPad/Mac's toolbar)
+
+// iPad/Mac only — toggles the sidebar column (cai-ios#256). Lives in the
+// detail column's trailing toolbar group, next to Attachment.
+struct SidebarToggleButton: View {
+    @Binding var columnVisibility: NavigationSplitViewVisibility
+
+    var body: some View {
+        Button {
+            withAnimation {
+                columnVisibility = columnVisibility == .detailOnly ? .doubleColumn : .detailOnly
+            }
+        } label: {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: BFFont.toolbarIconPt))
+        }
+    }
+}
+
+#if targetEnvironment(macCatalyst)
+import UIKit
+
+// Mac Catalyst bridges NavigationSplitView to a real UISplitViewController,
+// which always draws its own native sidebar-toggle icon at the window's
+// top-left — that's native window chrome, not a SwiftUI toolbar item, so
+// none of SwiftUI's .toolbar APIs can remove it. This finds that ancestor
+// and sets displayModeButtonVisibility = .never on it, which IS applied
+// (confirmed via logging) but does NOT actually remove the button — Mac
+// Catalyst's top-left toggle isn't governed by this UIKit-level property
+// the way it is on iPadOS. Left in as a harmless no-op pending a real fix;
+// tabled for now (cai-ios#256) — see that issue before spending more time
+// here. Next step if revisited: this needs reasserting continuously (e.g.
+// viewDidLayoutSubviews on a UIViewController subclass) rather than once,
+// and/or the button may only be removable via NSToolbar-level APIs that
+// aren't reachable from pure UIKit code in a Catalyst target.
+private struct HideNativeSplitViewToggle: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            var responder: UIResponder? = uiViewController
+            while let current = responder {
+                if let split = current as? UISplitViewController {
+                    split.displayModeButtonVisibility = .never
+                    split.presentsWithGesture = false
+                    return
+                }
+                responder = (current as? UIViewController)?.parent ?? current.next
+            }
+        }
+    }
+}
+
+extension View {
+    func hidingNativeSplitViewToggle() -> some View {
+        background(HideNativeSplitViewToggle().frame(width: 0, height: 0))
+    }
+}
+#endif
 
 struct NewChatButton: View {
     let action: () -> Void
