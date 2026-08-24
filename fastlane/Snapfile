@@ -1,0 +1,22 @@
+# fastlane/Snapfile
+# Raw screenshot pool, seeded with demo content via ScreenshotFixtures — the
+# source material for both the main App Store listing (see `frame_screenshots`
+# lane) and, later if revisited, Custom Product Pages. Run via the
+# `screenshots` lane, which sets output_directory per content set.
+
+devices([
+  "iPhone 17 Pro Max",              # 6.9" — Apple's largest-required iPhone screenshot slot
+  "iPad Pro 12.9-inch (6th generation)"
+  # NOT "iPad Pro 13-inch (M5)": same 2048x2732-class point size as this
+  # 12.9" line, but frameit (fastlane/lib/screenshot_branding) doesn't
+  # recognize the newer model's exact pixel dimensions yet — this one
+  # renders identically and is a frame-compatible stand-in.
+])
+
+languages(["en-US"])   # matches fastlane/metadata's only locale
+
+scheme("CAI")
+only_testing(["CAIUITests"])
+
+clear_previous_screenshots(true)
+override_status_bar(true)

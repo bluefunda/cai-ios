@@ -37,8 +37,13 @@ fastlane/metadata_macos/review_information/phone_number.txt
 fastlane/README.md
 fastlane/report.xml
 fastlane/test_output/
+fastlane/screenshots_ios_raw/
 # fastlane/screenshots/ is intentionally NOT ignored — those are real App
 # Store assets that CI and other developers need, not ephemeral output.
+# fastlane/screenshots_ios_raw/ (above) is the raw per-campaign pool the
+# `screenshots` lane generates for Custom Product Pages — regenerate with
+# `bundle exec fastlane ios screenshots campaign:chat|code` rather than
+# committing it; see docs/CUSTOM_PRODUCT_PAGES.md.
 
 # Editor / network-mount temp files (e.g. .!12345!Foo.swift)
 .!*!*

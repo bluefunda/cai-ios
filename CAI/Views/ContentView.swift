@@ -282,6 +282,7 @@ struct SidebarContent: View {
                                     currentMode = .chat
                                     chatManager.selectConversation(convo)
                                 }
+                                .accessibilityIdentifier("conversationRow")
                                 .contextMenu {
                                     ShareLink(item: convo.markdownExport) {
                                         Label("Share", systemImage: "square.and.arrow.up")
@@ -331,6 +332,7 @@ struct SidebarContent: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
+                .accessibilityIdentifier("upgradeToProButton")
             }
 
             // Profile row — bottom left, menu contains Settings + Help
@@ -383,6 +385,7 @@ struct SidebarContent: View {
                 .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("profileMenuButton")
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -427,6 +430,7 @@ struct HamburgerButton: View {
             }
             .foregroundStyle(BFColor.primary)
         }
+        .accessibilityIdentifier("hamburgerButton")
     }
 }
 
@@ -620,6 +624,7 @@ struct SidebarDrawer: View {
                                     chatManager.selectConversation(convo)
                                     withAnimation { isOpen = false }
                                 }
+                                .accessibilityIdentifier("conversationRow")
                                 .contextMenu {
                                     ShareLink(item: convo.markdownExport) {
                                         Label("Share", systemImage: "square.and.arrow.up")
@@ -674,6 +679,7 @@ struct SidebarDrawer: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
+                .accessibilityIdentifier("upgradeToProButton")
             }
 
             // Profile row — bottom left, menu contains Settings + Help
@@ -735,6 +741,7 @@ struct SidebarDrawer: View {
                 .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("profileMenuButton")
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))

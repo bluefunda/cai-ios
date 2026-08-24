@@ -376,6 +376,21 @@ final class AuthManager: NSObject, ObservableObject {
         )
     }
 
+    #if DEBUG
+    // MARK: - Screenshot Fixtures
+
+    /// Bypasses the real Keycloak restore/refresh flow for App Store
+    /// screenshot automation (see ScreenshotFixtures.swift). Never compiled
+    /// into Release builds.
+    func seedForScreenshots(user: User, accessToken: String) {
+        self.currentUser = user
+        self.accessToken = accessToken
+        self.isAuthenticated = true
+        self.isRestoringSession = false
+        self.isLoading = false
+    }
+    #endif
+
     // MARK: - Session Restore
 
     func restoreSession() async {

@@ -1,0 +1,31 @@
+{
+  "default": {
+    "background": "../backgrounds/iphone_bg.png",
+    "title_below_image": false,
+    "stack_title": true,
+    "padding": "8%",
+    "title_min_height": "26%",
+    "keyword": {
+      "font": "../fonts/GeneralSans-Semibold.otf",
+      "color": "#1E64E7",
+      "font_size": 38
+    },
+    "title": {
+      "font": "../fonts/GeneralSans-Bold.otf",
+      "color": "#1A305F",
+      "font_size": 92
+    }
+  },
+  "data": [
+    {
+      "filter": "iPad",
+      "background": "../backgrounds/ipad_bg.png",
+      "keyword": {
+        "font_size": 50
+      },
+      "title": {
+        "font_size": 128
+      }
+    }
+  ]
+}
