@@ -376,6 +376,21 @@ final class AuthManager: NSObject, ObservableObject {
         )
     }
 
+    #if DEBUG
+    // MARK: - Screenshot Fixtures
+
+    /// Bypasses the real Keycloak restore/refresh flow for App Store
+    /// screenshot automation (see ScreenshotFixtures.swift). Never compiled
+    /// into Release builds.
+    func seedForScreenshots(user: User, accessToken: String) {
+        self.currentUser = user
+        self.accessToken = accessToken
+        self.isAuthenticated = true
+        self.isRestoringSession = false
+        self.isLoading = false
+    }
+    #endif
+
     // MARK: - Session Restore
 
     func restoreSession() async {
@@ -576,8 +591,14 @@ final class AuthManager: NSObject, ObservableObject {
         scheduleProactiveRefresh()
     }
 
-    // MARK: - Keychain
+}
 
+// MARK: - Keychain / Crypto / JWT Helpers
+// Split into an extension (rather than left in the primary declaration) to
+// keep AuthManager's class body under SwiftLint's type_body_length limit —
+// private members declared elsewhere in the class stay accessible here since
+// Swift scopes `private` to the file, not the individual declaration.
+extension AuthManager {
     private func saveTokensToKeychain() {
         guard let rt = refreshToken else { return }
         KeychainStore.saveAuthTokens(
@@ -604,8 +625,6 @@ final class AuthManager: NSObject, ObservableObject {
         currentUser = nil
         isAuthenticated = false
     }
-
-    // MARK: - Apple Credential State
 
     private func checkAppleCredentialState(userID: String) async -> ASAuthorizationAppleIDProvider.CredentialState {
         await withCheckedContinuation { continuation in
@@ -666,8 +685,6 @@ final class AuthManager: NSObject, ObservableObject {
         }
         return ""
     }
-
-    // MARK: - Crypto Helpers
 
     private func generatePKCE() -> (verifier: String, challenge: String)? {
         let verifier = generateRandomToken(byteCount: 32)

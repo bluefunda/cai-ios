@@ -54,6 +54,16 @@
                ReferencedContainer = "container:CAI.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "3D557E266FC14A9E7B8ECBED"
+               BuildableName = "CAIUITests.xctest"
+               BlueprintName = "CAIUITests"
+               ReferencedContainer = "container:CAI.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

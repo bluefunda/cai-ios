@@ -12,6 +12,8 @@
 #   submit_all    — submit the most recent processed iOS + macOS builds together
 #   bump_version  — bump MARKETING_VERSION locally (patch/minor/major)
 #   meta          — push metadata + screenshots only, no binary — platform: ios|osx (default ios)
+#   screenshots   — generate raw iOS screenshots for a CPP campaign — campaign: chat|code
+#   cpp_publish   — push a Custom Product Page's screenshots + promo text — does NOT submit for review
 #
 # IMPORTANT: nothing in this file submits for review automatically.
 # ios_submit / mac_submit exist so a human (or an explicit, separately-triggered
@@ -192,6 +194,37 @@ platform :ios do
       submit_for_review:    true,
       automatic_release:    ENV["AUTO_RELEASE"] == "true",
       force:                true
+    )
+  end
+
+  # ── Screenshots ──────────────────────────────────────────────────────────
+
+  desc "Generate raw iOS screenshots from seeded demo content — content: chat|code (default chat)"
+  lane :screenshots do |options|
+    campaign = options[:campaign] || "chat"
+    snapshot(
+      output_directory: "fastlane/screenshots_ios_raw/#{campaign}",
+      launch_arguments: ["-UITestScreenshots -UITestCampaign #{campaign}"]
+    )
+  end
+
+  # NOT named `frame_screenshots` — that collides with fastlane's own action
+  # of the same name, which then runs instead of this lane with its default
+  # (whole-project) path, ignoring the path: override below entirely.
+  desc "Add device frames + brand captions to the curated main-listing screenshots"
+  lane :brand_screenshots do
+    frameit(path: "fastlane/screenshot_branding/screenshots", silver: true)
+  end
+
+  # ── Custom Product Pages (not currently in use — kept for later) ────────
+
+  desc "Push a Custom Product Page's screenshots + promo text — does NOT submit for review"
+  lane :cpp_publish do |options|
+    upload_custom_product_page(
+      name:              options[:name],
+      locale:            options[:locale] || "en-US",
+      promotional_text:  options[:promotional_text],
+      screenshots_dir:   options[:screenshots_dir]
     )
   end
 

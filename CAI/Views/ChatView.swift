@@ -730,6 +730,13 @@ struct EmptyStateView: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            // A bottom Spacer with a larger minLength than the top one
+            // biases the greeting upward by a constant gap, away from the
+            // keyboard that's shown by default on this screen (cai-ios#255)
+            // — plain maxHeight:.infinity centering re-centers into whatever
+            // shrunk space remains once the keyboard appears, leaving no
+            // real clearance above it.
+            Spacer(minLength: 24)
             Image(systemName: "sparkles")
                 .font(.system(size: 52))
                 .foregroundStyle(BFColor.primary.gradient)
@@ -739,6 +746,7 @@ struct EmptyStateView: View {
             Text("How can I help you today?")
                 .font(BFFont.body)
                 .foregroundStyle(.secondary)
+            Spacer(minLength: 64)
         }
         .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

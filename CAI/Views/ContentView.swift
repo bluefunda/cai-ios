@@ -40,13 +40,22 @@ struct AuthenticatedRoot: View {
 struct AppShell: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var iapManager: IAPManager
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
     @State private var safariURL: URL?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    // .doubleColumn (not .automatic, and not .all — that's for 3-column
+    // split views and made the system sidebar-toggle button disappear
+    // entirely on our 2-column one). .automatic hands NavigationSplitView
+    // discretion to re-decide visibility on its own, which on iPad/Mac was
+    // silently collapsing the sidebar the moment the message field gained
+    // focus (a focus-driven layout pass reads as a size-class change to
+    // `.automatic`). .doubleColumn/.detailOnly are the two canonical states
+    // the toggle button switches between for a 2-column split (cai-ios#256).
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     // Code mode
     @StateObject private var systemStore = SAPSystemStore()
@@ -98,24 +107,45 @@ struct AppShell: View {
             // gets the rest, which is where the 800-pt chat column lives.
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
-            VStack(spacing: 0) {
-                iPadTopBar
-                content
-            }
+            // An empty title (Mac's actual window-title text is separately
+            // hidden in CAIApp.swift) removes the redundant "BlueFunda AI"
+            // that duplicated the sidebar's own header (cai-ios#253). The
+            // sidebar toggle lives in the trailing group (not the leading
+            // .navigation slot) — that slot's rendering turned out to depend
+            // on undocumented Mac Catalyst chrome behavior (duplicated or got
+            // buried under the sidebar depending on what else was declared
+            // there); the trailing group never had that problem (cai-ios#256).
+            content
+                .navigationTitle(mode == .code ? "Code" : "")
+                .toolbar {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        switch mode {
+                        case .chat:
+                            SidebarToggleButton(columnVisibility: $columnVisibility)
+                            AttachmentButton(conversationId: chatManager.currentConversation?.id)
+                            NewChatButton(action: { chatManager.newConversation() })
+                            ModeModelPicker()
+                        case .code:
+                            SidebarToggleButton(columnVisibility: $columnVisibility)
+                            Button(action: { showSystems = true }) {
+                                Image(systemName: "server.rack")
+                                    .font(.system(size: BFFont.toolbarIconPt))
+                            }
+                        }
+                    }
+                }
+                #if targetEnvironment(macCatalyst)
+                .hidingNativeSplitViewToggle()
+                #endif
         }
-        // prominentDetail keeps the sidebar visible but gives the chat area
-        // the dominant portion of the window — matches ChatGPT / Claude layout.
-        .navigationSplitViewStyle(.prominentDetail)
-    }
-
-    @ViewBuilder
-    private var iPadTopBar: some View {
-        switch mode {
-        case .chat:
-            ChatTopBar(sidebarOpen: .constant(false), onNewChat: { chatManager.newConversation() }, showHamburger: false, showNewChat: false)
-        case .code:
-            CodeTopBar(sidebarOpen: .constant(false), onSystems: { showSystems = true }, showHamburger: false)
-        }
+        // .balanced, not .prominentDetail: prominentDetail treats the sidebar
+        // as a dismissible overlay above the detail content — it auto-hides
+        // the moment you interact with the detail pane (tap New Chat, tap
+        // into the chat), which read as "the sidebar won't stay open."
+        // .balanced makes both genuine persistent columns; the sidebar's
+        // width stays constrained by navigationSplitViewColumnWidth above so
+        // the chat column still dominates the window (cai-ios#256).
+        .navigationSplitViewStyle(.balanced)
     }
 
     // MARK: - iPhone: ZStack drawer
@@ -186,7 +216,17 @@ struct AppShell: View {
     private func sheetView(_ sheet: AppSheet) -> some View {
         switch sheet {
         case .storage: StorageView()
-        case .settings: SettingsView()
+        case .settings:
+            // Explicit re-injection: SettingsView's NavigationSplitView is
+            // the root of this sheet, and on Mac Catalyst that split view's
+            // sidebar column doesn't reliably inherit @EnvironmentObjects
+            // only set at the WindowGroup level above the sheet presenter —
+            // caused a "No ObservableObject of type AuthManager found"
+            // crash on first open (cai-ios#254).
+            SettingsView()
+                .environmentObject(authManager)
+                .environmentObject(chatManager)
+                .environmentObject(iapManager)
         case .subscription: SubscriptionView()
         }
     }
@@ -217,21 +257,14 @@ struct SidebarContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Sidebar header: brand + new chat ────────
+            // ── Sidebar header: brand ────────
+            // New Chat lives in the top toolbar (NewChatButton) now, not
+            // duplicated here (cai-ios#256).
             HStack(spacing: 0) {
                 Text("BlueFunda AI")
                     .font(BFFont.sidebarHeader)
                     .foregroundStyle(.primary)
                 Spacer()
-                Button {
-                    currentMode = .chat
-                    chatManager.newConversation()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: BFFont.toolbarIconPt - 2))
-                        .foregroundStyle(BFColor.primary)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.top, 20)
@@ -282,6 +315,7 @@ struct SidebarContent: View {
                                     currentMode = .chat
                                     chatManager.selectConversation(convo)
                                 }
+                                .accessibilityIdentifier("conversationRow")
                                 .contextMenu {
                                     ShareLink(item: convo.markdownExport) {
                                         Label("Share", systemImage: "square.and.arrow.up")
@@ -331,6 +365,7 @@ struct SidebarContent: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
+                .accessibilityIdentifier("upgradeToProButton")
             }
 
             // Profile row — bottom left, menu contains Settings + Help
@@ -383,6 +418,7 @@ struct SidebarContent: View {
                 .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("profileMenuButton")
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -414,116 +450,6 @@ struct SidebarContent: View {
 }
 
 // MARK: - Hamburger
-
-struct HamburgerButton: View {
-    @Binding var sidebarOpen: Bool
-    var body: some View {
-        Button {
-            withAnimation(.spring(duration: 0.25)) { sidebarOpen.toggle() }
-        } label: {
-            VStack(spacing: 5) {
-                Capsule().frame(width: 22, height: 2)
-                Capsule().frame(width: 22, height: 2)
-            }
-            .foregroundStyle(BFColor.primary)
-        }
-    }
-}
-
-// MARK: - Top Bar
-
-struct ChatTopBar: View {
-    @EnvironmentObject var chatManager: ChatManager
-    @Binding var sidebarOpen: Bool
-    let onNewChat: () -> Void
-    var showHamburger: Bool = true
-    var showNewChat: Bool = true
-
-    @State private var showFiles = false
-
-    private var chatTitle: String {
-        chatManager.currentConversation?.title ?? "New Chat"
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            if showHamburger {
-                HamburgerButton(sidebarOpen: $sidebarOpen)
-            }
-
-            // New chat button — always visible
-            Button(action: onNewChat) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: BFFont.toolbarIconPt))
-            }
-            .foregroundStyle(BFColor.primary)
-
-            if !showNewChat {
-                // iPad/Mac: show current conversation title next to pencil
-                Text(chatTitle)
-                    .font(BFFont.sidebarItemMed)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            if let conversationId = chatManager.currentConversation?.id {
-                Button { showFiles = true } label: {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: BFFont.toolbarIconPt - 2))
-                }
-                .foregroundStyle(.secondary)
-                .sheet(isPresented: $showFiles) {
-                    NavigationStack {
-                        ConversationFilesView(conversationId: conversationId)
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button("Done") { showFiles = false }
-                                }
-                            }
-                    }
-                }
-            }
-
-            ModeModelPicker()
-        }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 12)
-        .background(Color(.systemBackground))
-        .overlay(alignment: .bottom) { Divider() }
-    }
-}
-
-// MARK: - Code Top Bar
-
-struct CodeTopBar: View {
-    @Binding var sidebarOpen: Bool
-    let onSystems: () -> Void
-    var showHamburger: Bool = true
-
-    var body: some View {
-        HStack(spacing: 14) {
-            if showHamburger {
-                HamburgerButton(sidebarOpen: $sidebarOpen)
-            }
-
-            Text("Code")
-                .font(BFFont.h5)
-
-            Spacer()
-
-            Button(action: onSystems) {
-                Image(systemName: "server.rack")
-                    .font(.system(size: BFFont.toolbarIconPt))
-            }
-        }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 12)
-        .background(Color(.systemBackground))
-        .overlay(alignment: .bottom) { Divider() }
-    }
-}
 
 // MARK: - Sidebar Drawer
 
@@ -620,6 +546,7 @@ struct SidebarDrawer: View {
                                     chatManager.selectConversation(convo)
                                     withAnimation { isOpen = false }
                                 }
+                                .accessibilityIdentifier("conversationRow")
                                 .contextMenu {
                                     ShareLink(item: convo.markdownExport) {
                                         Label("Share", systemImage: "square.and.arrow.up")
@@ -674,6 +601,7 @@ struct SidebarDrawer: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
+                .accessibilityIdentifier("upgradeToProButton")
             }
 
             // Profile row — bottom left, menu contains Settings + Help
@@ -735,6 +663,7 @@ struct SidebarDrawer: View {
                 .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("profileMenuButton")
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))

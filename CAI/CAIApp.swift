@@ -32,16 +32,38 @@ struct CAIApp: App {
                         // window open bigger by default without fighting the window
                         // manager / breaking fullscreen, per the note above.
                         scene.sizeRestrictions?.minimumSize = CGSize(width: 1100, height: 750)
+                        // The window title bar shows CFBundleDisplayName
+                        // ("BlueFunda AI") by default, duplicating the
+                        // sidebar's own "BlueFunda AI" header — .navigationTitle
+                        // doesn't reach this (it's the title BAR, not a nav
+                        // bar), so hide it directly (cai-ios#253).
+                        scene.titlebar?.titleVisibility = .hidden
                     }
                     #endif
                 }
                 .task {
-                    chatManager.configureStorage(container.mainContext)
                     chatManager.bind(authManager: authManager)
+                    #if DEBUG
+                    if ScreenshotFixtures.isEnabled {
+                        ScreenshotFixtures.bootstrap(
+                            authManager: authManager,
+                            chatManager: chatManager,
+                            iapManager: iapManager,
+                            context: container.mainContext
+                        )
+                        return
+                    }
+                    #endif
+                    chatManager.configureStorage(container.mainContext)
                     await authManager.restoreSession()
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
                     guard isAuthenticated else { return }
+                    #if DEBUG
+                    // ScreenshotFixtures.bootstrap already set up everything
+                    // this handler exists for — never hit the real network.
+                    if ScreenshotFixtures.isEnabled { return }
+                    #endif
                     guard let credentials = authManager.getCredentials() else { return }
                     Task {
                         await chatManager.connect(credentials: credentials)
