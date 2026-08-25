@@ -29,7 +29,6 @@ struct ChatTopBar: View {
             NewChatButton(action: onNewChat)
             Spacer()
             AttachmentButton(conversationId: chatManager.currentConversation?.id)
-            ModeModelPicker()
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)

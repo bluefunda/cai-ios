@@ -124,7 +124,6 @@ struct AppShell: View {
                             SidebarToggleButton(columnVisibility: $columnVisibility)
                             AttachmentButton(conversationId: chatManager.currentConversation?.id)
                             NewChatButton(action: { chatManager.newConversation() })
-                            ModeModelPicker()
                         case .code:
                             SidebarToggleButton(columnVisibility: $columnVisibility)
                             Button(action: { showSystems = true }) {
