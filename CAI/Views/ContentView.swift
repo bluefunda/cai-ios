@@ -40,6 +40,7 @@ struct AuthenticatedRoot: View {
 struct AppShell: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var iapManager: IAPManager
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
@@ -215,7 +216,17 @@ struct AppShell: View {
     private func sheetView(_ sheet: AppSheet) -> some View {
         switch sheet {
         case .storage: StorageView()
-        case .settings: SettingsView()
+        case .settings:
+            // Explicit re-injection: SettingsView's NavigationSplitView is
+            // the root of this sheet, and on Mac Catalyst that split view's
+            // sidebar column doesn't reliably inherit @EnvironmentObjects
+            // only set at the WindowGroup level above the sheet presenter —
+            // caused a "No ObservableObject of type AuthManager found"
+            // crash on first open (cai-ios#254).
+            SettingsView()
+                .environmentObject(authManager)
+                .environmentObject(chatManager)
+                .environmentObject(iapManager)
         case .subscription: SubscriptionView()
         }
     }
