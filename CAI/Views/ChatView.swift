@@ -62,6 +62,12 @@ struct ChatView: View {
     private var latestUserMessageID: String? {
         chatManager.currentConversation?.messages.last(where: { $0.role == .user })?.id
     }
+    /// Tracked separately from `latestUserMessageID` so the very first send can align the
+    /// scroll view's layout (see the `.onChange(of: hasMessages)` handler) before the animated
+    /// per-message scroll runs — matches cai-android's `LaunchedEffect(messages.isNotEmpty())`.
+    private var hasMessages: Bool {
+        !(chatManager.currentConversation?.messages.isEmpty ?? true)
+    }
     // Keyboard: focus only fires once per session on first launch
     @State private var hasTriggeredInitialFocus = false
 
@@ -174,7 +180,14 @@ struct ChatView: View {
                                     // here where the surrounding list is available, since
                                     // MessageView only sees a single message.
                                     let precedingQuestion = index > 0 ? conversation.messages[index - 1].content : nil
-                                    let isThisMessageStreaming = chatManager.isStreaming
+                                    // Includes isReconciling: reconcileAfterBackground() clears
+                                    // isStreaming immediately (before its retry loop even starts)
+                                    // to stop the dead local stream task from racing the re-fetch,
+                                    // so without this the still-empty assistant bubble would fall
+                                    // out of the streaming state and show an empty response box
+                                    // (and the composer's mic button instead of Stop) for the
+                                    // seconds reconciliation takes.
+                                    let isThisMessageStreaming = (chatManager.isStreaming || chatManager.isReconciling)
                                         && index == conversation.messages.count - 1
                                     MessageView(
                                         message: message,
@@ -188,9 +201,9 @@ struct ChatView: View {
                                 // has somewhere to go instead of snapping back — matches
                                 // cai-android's MessageList bottom spacer.
                                 if chatManager.isStreaming {
-                                    Color.clear.frame(height: outer.size.height * 0.85)
+                                    Color.clear.frame(height: outer.size.height * 0.65)
                                 }
-                            } else if chatManager.isLoadingChats {
+                            } else if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
                                 ProgressView()
                                     .padding(.top, 40)
                                     .frame(maxWidth: .infinity)
@@ -206,28 +219,46 @@ struct ChatView: View {
                     }
                     .coordinateSpace(name: "chatScroll")
                     .scrollDismissesKeyboard(.interactively)
-                    // Scrolls the newly-sent prompt to the *top* of the viewport (not the
-                    // bottom) — leaves room below for the response to fill in as it streams,
-                    // matching cai-android's `animateScrollToItem(latestUserMessageIndex)`.
-                    // The very first message in a conversation skips this entirely: at that
-                    // moment the scroll content just switched from EmptyStateView to the first
-                    // real row, and scrolling immediately — to `.top` or `.bottom`, animated or
-                    // not — races the layout pass that's still growing the list from zero
-                    // height, so the row lands under the header and then snaps back down once
-                    // layout settles a frame later. Deferring past that frame (same trick as
-                    // the conversation-switch/appear handlers below) and skipping the animation
-                    // — there's nothing to animate from on a conversation's very first row —
-                    // sidesteps the race entirely.
+                    // Mirrors cai-android's MessageList exactly, which pairs two effects:
+                    // 1) `LaunchedEffect(messages.isNotEmpty())` — the instant, unanimated
+                    //    `scrollToItem(lastIndex)` fired once when the list first goes from
+                    //    empty to non-empty (EmptyStateView -> real rows). This is the piece
+                    //    iOS was missing: without it, the very first send left the ScrollView
+                    //    at its just-created top-of-content position while the animated .top
+                    //    scroll below tried to align a row that didn't have settled geometry
+                    //    yet, so it visually landed under the header and snapped down once
+                    //    layout caught up.
+                    // 2) `LaunchedEffect(latestUserMessageId)` — the animated `.top` scroll to
+                    //    the newest user row, unconditionally, first message included. Once (1)
+                    //    has already forced a layout pass by aligning the last row (here, the
+                    //    empty assistant placeholder) to the top, this animated step is just a
+                    //    one-row correction up to the user's own message, not a fresh scroll
+                    //    into unmeasured content.
+                    .onChange(of: hasMessages) { _, isNonEmpty in
+                        guard isNonEmpty, let lastID = chatManager.currentConversation?.messages.last?.id else { return }
+                        proxy.scrollTo(lastID, anchor: .bottom)
+                    }
+                    // reconcileAfterBackground() re-fetches the conversation from the server and
+                    // replaces the whole messages array with server-assigned message ids —
+                    // different from the client-side ids used while the message was actively
+                    // streaming. ForEach(id: \.element.id) treats that as an entirely new list
+                    // (not "one row appended" like the steady-state case below), so it needs the
+                    // same instant bottom-align settle as the very-first-message transition above —
+                    // without it, the animated per-message scroll targets a row whose layout
+                    // hasn't been established under the new identities yet, leaving the user's
+                    // own prompt scrolled off above the header until something else nudges it.
+                    .onChange(of: chatManager.isReconciling) { wasReconciling, isReconciling in
+                        guard wasReconciling, !isReconciling,
+                               let lastID = chatManager.currentConversation?.messages.last?.id else { return }
+                        proxy.scrollTo(lastID, anchor: .bottom)
+                    }
                     .onChange(of: latestUserMessageID) { _, newID in
                         guard let newID else { return }
-                        let isFirstUserMessage = chatManager.currentConversation?.messages
-                            .filter { $0.role == .user }.count == 1
-                        if isFirstUserMessage {
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(50))
-                                proxy.scrollTo("bottom", anchor: .bottom)
-                            }
-                        } else {
+                        // Only scroll the user prompt to the top for subsequent messages.
+                        // For the very first message, leaving it at its natural top offset is correct.
+                        guard (chatManager.currentConversation?.messages.count ?? 0) > 2 else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(50))
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo(newID, anchor: .top)
                             }
@@ -269,7 +300,10 @@ struct ChatView: View {
             }
             ChatInputView(
                 text: $inputText,
-                isStreaming: chatManager.isStreaming,
+                // Keeps Stop showing (instead of falling back to mic) through the
+                // reconcileAfterBackground() retry window — see the matching comment on
+                // isThisMessageStreaming above.
+                isStreaming: chatManager.isStreaming || chatManager.isReconciling,
                 attachmentFilename: attachmentFilename,
                 isFocused: $isInputFocused,
                 rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
@@ -915,8 +949,11 @@ struct ChatInputView: View {
                 ModeModelPicker()
                     .disabled(isStreaming)
 
-                // Mic button — replaced by the send button once there's something to send
-                if let micTap = onMicTap, !canSend {
+                // Mic button — replaced by the send button once there's something to send, and
+                // by the stop button while streaming (canSend alone goes false once the
+                // composer clears post-send, which without the isStreaming check here would
+                // fall through to showing the mic button instead of Stop during the response).
+                if let micTap = onMicTap, !canSend, !isStreaming {
                     Button(action: micTap) {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 18))
@@ -929,9 +966,15 @@ struct ChatInputView: View {
                     Button {
                         isStreaming ? onStop() : onSend()
                     } label: {
-                        Image(systemName: isStreaming ? "stop.fill" : "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(canSend || isStreaming ? BFColor.primary : .secondary)
+                        let active = isStreaming || canSend
+                        Circle()
+                            .fill(active ? BFColor.primary : Color(.systemGray4))
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                Image(systemName: isStreaming ? "stop.fill" : "arrow.up")
+                                    .font(.system(size: isStreaming ? 12 : 14, weight: .bold))
+                                    .foregroundStyle(active ? .white : .secondary)
+                            }
                     }
                     .buttonStyle(.plain)
                     .disabled(!isStreaming && !canSend)

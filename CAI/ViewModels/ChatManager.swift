@@ -2,61 +2,6 @@ import Foundation
 import SwiftData
 import UIKit
 
-// MARK: - Reply Reveal Ticker
-
-/// Paces how much of a streamed reply is shown on screen, decoupled from network arrival — the
-/// backend delivers chunks in bursts (sometimes a whole sentence at once, sometimes the entire
-/// reply in one streamEnd) rather than a steady token-by-token trickle, which reads as the text
-/// "dumping" onto screen instead of a smooth type-in. `totalLength` is the true target as chunks
-/// arrive; `revealedLength` trails it, catching up a little every tick — mirrors cai-android's
-/// ChatViewModel.streamAssistantReply. Not thread-safe by design: like the streaming loop it feeds,
-/// it's driven from a single `Task` on the chat manager's `@MainActor` — enforced below via an
-/// explicit `@MainActor` on the class itself, since `run(onReveal:)` used to be a plain nonisolated
-/// async method: calling it via `await` from `ChatManager` did not actually guarantee its loop ran
-/// on the main actor, so `onReveal` (which mutates `ChatManager.currentConversation`) could fire
-/// from a background thread and race with the rest of ChatManager, corrupting Swift's refcounting
-/// and crashing with EXC_BAD_ACCESS/SIGSEGV during a Conversation's deinit — confirmed via a
-/// captured CI crash report, not a hypothetical.
-@MainActor
-private final class ReplyRevealTicker {
-    private let tick: Duration
-    private let minCharsPerTick: Int
-    private let catchUpDivisor: Int
-    private let drainDivisor: Int
-
-    private(set) var totalLength = 0
-    private(set) var revealedLength = 0
-    /// Once the network side is done, the full text is already known — catch up faster than the
-    /// mid-stream pace so a reply delivered as one big streamEnd doesn't trickle out afterward.
-    var draining = false
-
-    var isCaughtUp: Bool { revealedLength >= totalLength }
-
-    init(tick: Duration, minCharsPerTick: Int, catchUpDivisor: Int, drainDivisor: Int) {
-        self.tick = tick
-        self.minCharsPerTick = minCharsPerTick
-        self.catchUpDivisor = catchUpDivisor
-        self.drainDivisor = drainDivisor
-    }
-
-    func extend(by delta: Int) { totalLength += delta }
-    func setTotal(_ length: Int) { totalLength = length }
-
-    /// Runs until cancelled, invoking `onReveal` whenever `revealedLength` grows.
-    func run(onReveal: (Int) -> Void) async {
-        while !Task.isCancelled {
-            if revealedLength < totalLength {
-                let backlog = totalLength - revealedLength
-                let divisor = draining ? drainDivisor : catchUpDivisor
-                let step = max(backlog / divisor, minCharsPerTick)
-                revealedLength = min(revealedLength + step, totalLength)
-                onReveal(revealedLength)
-            }
-            try? await Task.sleep(for: tick)
-        }
-    }
-}
-
 // MARK: - Chat Manager
 // Coordinates between UI, streaming chat service (BFFChatService), and REST API service (BFFAPIService).
 
@@ -114,6 +59,12 @@ final class ChatManager: ObservableObject {
         }
     }
     @Published var isStreaming = false
+    /// True only during `reconcileAfterBackground()`'s server re-fetch retry loop — distinct
+    /// from `isStreaming` because that flag is deliberately cleared *before* the loop starts (to
+    /// stop the dead local stream task from racing the fetch), but the UI still needs to show
+    /// "still working" (StreamingIndicator, Stop button) rather than an empty response bubble and
+    /// a mic button for the several seconds reconciliation can take.
+    @Published var isReconciling = false
     @Published var isLoadingChats = false
     @Published var error: String? {
         didSet { if error != nil, oldValue == nil { Haptic.notify(.error) } }
@@ -274,10 +225,6 @@ final class ChatManager: ObservableObject {
     /// Not `private`: also cancelled from the `ChatManager+Background.swift`
     /// extension's `reconcileAfterBackground()`.
     var streamingTask: Task<Void, Never>?
-    private static let revealTick: Duration = .milliseconds(24)
-    private static let revealMinCharsPerTick = 2
-    private static let revealCatchUpDivisor = 20
-    private static let revealDrainDivisor = 4
     private var modelContext: ModelContext?
     /// iOS background-task assertion covering an in-flight stream, so a
     /// response already generating gets a short grace window (~30s, OS-
@@ -560,24 +507,7 @@ final class ChatManager: ObservableObject {
             let assistantTimestamp = assistantMessage.timestamp
             let assistantPersona = assistantMessage.persona
 
-            let ticker = ReplyRevealTicker(
-                tick: Self.revealTick,
-                minCharsPerTick: Self.revealMinCharsPerTick,
-                catchUpDivisor: Self.revealCatchUpDivisor,
-                drainDivisor: Self.revealDrainDivisor
-            )
-            let revealTask = Task {
-                await ticker.run { revealedLength in
-                    let revealedMessage = ChatMessage(
-                        id: assistantId,
-                        role: .assistant,
-                        content: String(finalContent.prefix(revealedLength)),
-                        timestamp: assistantTimestamp,
-                        persona: assistantPersona
-                    )
-                    updateLastMessage(revealedMessage, in: conversation.id)
-                }
-            }
+            var lastPublishAt = Date.distantPast
 
             do {
                 for try await event in service.sendMessage(request) {
@@ -587,13 +517,31 @@ final class ChatManager: ObservableObject {
 
                     case .chunk(let content, _, _):
                         finalContent += content
-                        ticker.extend(by: content.count)
+                        let now = Date()
+                        if now.timeIntervalSince(lastPublishAt) >= 0.03 {
+                            lastPublishAt = now
+                            let interimMessage = ChatMessage(
+                                id: assistantId,
+                                role: .assistant,
+                                content: finalContent,
+                                timestamp: assistantTimestamp,
+                                persona: assistantPersona
+                            )
+                            updateLastMessage(interimMessage, in: conversation.id)
+                        }
 
                     case .streamEnd(_, let full, _):
                         if !full.isEmpty {
                             finalContent = full
-                            ticker.setTotal(full.count)
                         }
+                        let interimMessage = ChatMessage(
+                            id: assistantId,
+                            role: .assistant,
+                            content: finalContent,
+                            timestamp: assistantTimestamp,
+                            persona: assistantPersona
+                        )
+                        updateLastMessage(interimMessage, in: conversation.id)
                         Haptic.impact(.light)   // response complete
 
                         // Persist AI message (best-effort)
@@ -618,10 +566,6 @@ final class ChatManager: ObservableObject {
                         self.error = message
 
                     case .rateLimited(let period, let resetLabel):
-                        // Stop the ticker before removing the placeholder below — otherwise a
-                        // pending tick could still fire and overwrite the (now-different) last
-                        // message in the conversation with stale assistant content.
-                        revealTask.cancel()
                         // Remove the empty assistant placeholder — keep the user message visible.
                         if var conv = currentConversation,
                            !conv.messages.isEmpty,
@@ -649,30 +593,15 @@ final class ChatManager: ObservableObject {
                 self.error = error.localizedDescription
             }
 
-            // Network side is done — let the ticker finish trickling out whatever's left, then
-            // show the exact final text (in case rounding left the reveal a character or two
-            // short). Skipped entirely on a user-initiated Stop: same as cai-android, a
-            // cancelled stream just freezes wherever the ticker last painted rather than
-            // jumping to the full received text. Also skipped when rate-limited: the ticker was
-            // already cancelled above (and the placeholder it was painting into was removed), so
-            // revealedLength would never catch up to totalLength and this would spin forever.
-            if !wasRateLimited {
-                ticker.draining = true
-                while !Task.isCancelled, !ticker.isCaughtUp {
-                    try? await Task.sleep(for: Self.revealTick)
-                }
-                revealTask.cancel()
-
-                if !Task.isCancelled, !finalContent.isEmpty {
-                    assistantMessage = ChatMessage(
-                        id: assistantId,
-                        role: .assistant,
-                        content: finalContent,
-                        timestamp: assistantTimestamp,
-                        persona: assistantPersona
-                    )
-                    updateLastMessage(assistantMessage, in: conversation.id)
-                }
+            if !wasRateLimited, !Task.isCancelled, !finalContent.isEmpty {
+                assistantMessage = ChatMessage(
+                    id: assistantId,
+                    role: .assistant,
+                    content: finalContent,
+                    timestamp: assistantTimestamp,
+                    persona: assistantPersona
+                )
+                updateLastMessage(assistantMessage, in: conversation.id)
             }
 
             // The stream ended without any text and without an explicit error

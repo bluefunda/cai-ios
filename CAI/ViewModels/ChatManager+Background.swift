@@ -67,12 +67,17 @@ extension ChatManager {
         // not that the response is done) — retry a few times before
         // concluding it's genuinely gone, matching the Android port's fix
         // for the same race (bluefunda/cai-ios#261).
+        isReconciling = true
         for attempt in 0..<Self.reconciliationRetryAttempts {
-            if await attemptReconciliation(for: id) { return }
+            if await attemptReconciliation(for: id) {
+                isReconciling = false
+                return
+            }
             if attempt < Self.reconciliationRetryAttempts - 1 {
                 try? await Task.sleep(for: .milliseconds(Self.reconciliationRetryDelayMS))
             }
         }
+        isReconciling = false
         error = "Connection lost while generating a response. Please try again."
     }
 

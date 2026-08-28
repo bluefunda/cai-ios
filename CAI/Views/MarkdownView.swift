@@ -467,13 +467,43 @@ private struct InlineMarkdownText: View {
 
     private var baseText: Text {
         let sanitized = LaTeXMath.sanitize(text)
-        if let attr = try? AttributedString(
+        guard var attr = try? AttributedString(
             markdown: sanitized,
             options: .init(interpretedSyntax: .inlineOnly)
-        ) {
-            return Text(attr)
+        ) else {
+            return Text(sanitized)
         }
-        return Text(sanitized)
+        if showCursor {
+            applyTrailingFade(to: &attr)
+        }
+        return Text(attr)
+    }
+
+    /// Fades in the tail of actively-streaming text — the newest character sits at 40% opacity,
+    /// ramping up to fully opaque `fadeWindow` characters back — instead of every revealed
+    /// character snapping straight to full opacity. Mirrors cai-android's `inlineAnnotated`
+    /// (Markdown.kt), which is the actual source of its "smoother than iOS" look: the reveal
+    /// ticker's word-boundary snapping is already identical between the two, so what reads as
+    /// "line by line" vs "word by word" is this fade, not the pacing itself.
+    private func applyTrailingFade(to attr: inout AttributedString) {
+        let totalLength = attr.characters.count
+        guard totalLength > 0 else { return }
+        let fadeWindow = totalLength < 90 ? 0 : min(60, totalLength / 3)
+        guard fadeWindow > 0 else { return }
+        let startCheck = max(0, totalLength - fadeWindow)
+
+        var position = 0
+        var index = attr.startIndex
+        while index < attr.endIndex {
+            let next = attr.characters.index(after: index)
+            if position >= startCheck {
+                let distanceFromEnd = totalLength - 1 - position
+                let alpha = 0.4 + (Double(distanceFromEnd) / Double(fadeWindow)) * 0.6
+                attr[index..<next].foregroundColor = Color.primary.opacity(alpha)
+            }
+            index = next
+            position += 1
+        }
     }
 
     var body: some View {
