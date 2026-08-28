@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/bluefunda/cai-ios/compare/v2.4.0...v2.4.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **settings:** don't default straight into Account on open ([46464ae](https://github.com/bluefunda/cai-ios/commit/46464ae4defed576f50a4ddfa3300b3d8cff4950))
+
 ## [2.4.0](https://github.com/bluefunda/cai-ios/compare/v2.3.1...v2.4.0) (2026-08-28)
 
 
