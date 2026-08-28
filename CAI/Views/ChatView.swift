@@ -216,10 +216,23 @@ struct ChatView: View {
                     // Scrolls the newly-sent prompt to the *top* of the viewport (not the
                     // bottom) — leaves room below for the response to fill in as it streams,
                     // matching cai-android's `animateScrollToItem(latestUserMessageIndex)`.
+                    // The very first message in a conversation skips the animation: at that
+                    // moment the scroll content just switched from EmptyStateView to the first
+                    // real row, and animating a scrollTo across that discontinuous a layout
+                    // change is what caused the prompt to overshoot up past the top bar and
+                    // bounce back into place. cai-android sidesteps this the same way — its
+                    // first-population effect (`scrollToItem`) is a plain jump; only later
+                    // messages get the animated `animateScrollToItem`.
                     .onChange(of: latestUserMessageID) { _, newID in
                         guard let newID else { return }
-                        withAnimation(.easeOut(duration: 0.2)) {
+                        let isFirstUserMessage = chatManager.currentConversation?.messages
+                            .filter { $0.role == .user }.count == 1
+                        if isFirstUserMessage {
                             proxy.scrollTo(newID, anchor: .top)
+                        } else {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(newID, anchor: .top)
+                            }
                         }
                     }
                     .onChange(of: chatManager.currentConversation?.id) { _, _ in
@@ -644,7 +657,8 @@ struct MessageView: View {
         .padding(.vertical, 6)
     }
 
-    // Left-aligned response — full width, no background
+    // Left-aligned response, in a rounded background that grows with the content —
+    // matches cai-android's MessageBubble (assistantBg + animateContentSize()).
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             // PacedMarkdownView reveals streamed text at a readable pace instead of repainting the
@@ -657,6 +671,11 @@ struct MessageView: View {
                 isStreaming: isThisMessageStreaming && !message.content.isEmpty
             )
             .font(BFFont.body)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .animation(.easeOut(duration: 0.15), value: message.content)
             .contextMenu { if !message.content.isEmpty { messageActions } }
 
             if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
