@@ -216,19 +216,20 @@ struct ChatView: View {
                     // Scrolls the newly-sent prompt to the *top* of the viewport (not the
                     // bottom) — leaves room below for the response to fill in as it streams,
                     // matching cai-android's `animateScrollToItem(latestUserMessageIndex)`.
-                    // The very first message in a conversation skips the animation: at that
+                    // The very first message in a conversation skips this entirely: at that
                     // moment the scroll content just switched from EmptyStateView to the first
-                    // real row, and animating a scrollTo across that discontinuous a layout
-                    // change is what caused the prompt to overshoot up past the top bar and
-                    // bounce back into place. cai-android sidesteps this the same way — its
-                    // first-population effect (`scrollToItem`) is a plain jump; only later
-                    // messages get the animated `animateScrollToItem`.
+                    // real row, and scrolling that row to `.top` — animated or not — races the
+                    // layout pass that's still growing the list from zero height, so the row
+                    // lands under the header and then snaps back down once layout settles.
+                    // Falling back to the plain bottom-anchored scroll (the same one used on
+                    // conversation switch/appear below) sidesteps the race entirely, since the
+                    // first row's top already coincides with the scroll area's top there.
                     .onChange(of: latestUserMessageID) { _, newID in
                         guard let newID else { return }
                         let isFirstUserMessage = chatManager.currentConversation?.messages
                             .filter { $0.role == .user }.count == 1
                         if isFirstUserMessage {
-                            proxy.scrollTo(newID, anchor: .top)
+                            scrollToBottom(proxy: proxy)
                         } else {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo(newID, anchor: .top)
@@ -661,22 +662,27 @@ struct MessageView: View {
     // matches cai-android's MessageBubble (assistantBg + animateContentSize()).
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // PacedMarkdownView reveals streamed text at a readable pace instead of repainting the
-            // full markdown tree on every token (only once text has actually started — before
-            // that, StreamingIndicator's spinner+caption above covers the "waiting for the first
-            // token" state instead).
-            PacedMarkdownView(
-                messageId: message.id,
-                targetContent: message.content,
-                isStreaming: isThisMessageStreaming && !message.content.isEmpty
-            )
-            .font(BFFont.body)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .animation(.easeOut(duration: 0.15), value: message.content)
-            .contextMenu { if !message.content.isEmpty { messageActions } }
+            // Mutually exclusive with the boxed content below — matches cai-android's
+            // MessageBubble (`if (content.isEmpty && isStreaming) StreamingIndicator() else
+            // Column(background) { ... }`). Showing both at once put an empty rounded box on
+            // screen before any real text existed.
+            if isThisMessageStreaming, message.content.isEmpty {
+                StreamingIndicator()
+            } else {
+                // PacedMarkdownView reveals streamed text at a readable pace instead of
+                // repainting the full markdown tree on every token.
+                PacedMarkdownView(
+                    messageId: message.id,
+                    targetContent: message.content,
+                    isStreaming: isThisMessageStreaming && !message.content.isEmpty
+                )
+                .font(BFFont.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .contextMenu { if !message.content.isEmpty { messageActions } }
+            }
 
             if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
                 HStack(spacing: 8) {
