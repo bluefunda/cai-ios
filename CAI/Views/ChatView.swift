@@ -640,12 +640,17 @@ struct MessageView: View {
     // Left-aligned response — full width, no background
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // MarkdownView embeds the streaming cursor inline at the end of the last block itself
-            // (only once text has actually started — before that, StreamingIndicator's
-            // spinner+caption above covers the "waiting for the first token" state instead).
-            MarkdownView(content: message.content, isStreaming: isThisMessageStreaming && !message.content.isEmpty)
-                .font(BFFont.body)
-                .contextMenu { if !message.content.isEmpty { messageActions } }
+            // PacedMarkdownView reveals streamed text at a readable pace instead of repainting the
+            // full markdown tree on every token (only once text has actually started — before
+            // that, StreamingIndicator's spinner+caption above covers the "waiting for the first
+            // token" state instead).
+            PacedMarkdownView(
+                messageId: message.id,
+                targetContent: message.content,
+                isStreaming: isThisMessageStreaming && !message.content.isEmpty
+            )
+            .font(BFFont.body)
+            .contextMenu { if !message.content.isEmpty { messageActions } }
 
             if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
                 HStack(spacing: 8) {
