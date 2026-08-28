@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.4.0](https://github.com/bluefunda/cai-ios/compare/v2.3.1...v2.4.0) (2026-08-28)
+
+
+### Features
+
+* **chat:** add paced markdown rendering for smoother streaming output ([5e5a5ca](https://github.com/bluefunda/cai-ios/commit/5e5a5ca284b7ec554e7c5bbfb873eecd539fa911))
+* **chat:** frame-synced reveal ticker + Android streaming/scroll parity ([9913a66](https://github.com/bluefunda/cai-ios/commit/9913a66cb3e3f6e6abd5434fe788ca476a410b62))
+* Mac/iPad top bar cleanup, Settings restructure, sidebar toggle, iOS keyboard spacing ([294906c](https://github.com/bluefunda/cai-ios/commit/294906cca3e58db59402297f0f81f3b0bc6d209d))
+
+
+### Bug Fixes
+
+* **chat:** background reconciliation, cold-launch, and Android streaming/scroll parity ([#261](https://github.com/bluefunda/cai-ios/issues/261)) ([326b861](https://github.com/bluefunda/cai-ios/commit/326b861ac7f30c28908b842ba3802ff4a35759f1))
+* **chat:** reconcile interrupted stream after app backgrounds ([#261](https://github.com/bluefunda/cai-ios/issues/261)) ([d691014](https://github.com/bluefunda/cai-ios/commit/d6910147856f4f9691a7adac9a5ea00d963e3578))
+* **chat:** render LaTeX/tables/nested lists, add syntax highlighting and reveal-ticker pacing ([#250](https://github.com/bluefunda/cai-ios/issues/250)) ([9f0ae28](https://github.com/bluefunda/cai-ios/commit/9f0ae28619d9aa06c8d2f2b61bd72233a4642e25))
+* **chat:** reopen into the last active conversation instead of the greeting screen ([8f04c86](https://github.com/bluefunda/cai-ios/commit/8f04c861249c5ec03b25b9b4956e1c54e0d70110))
+* don't restore the last conversation on a fresh app launch ([2f8a199](https://github.com/bluefunda/cai-ios/commit/2f8a199739554488e4a777641f1381932dd5c1ea))
+* reconcile chat stream after app backgrounds ([#261](https://github.com/bluefunda/cai-ios/issues/261)) ([e1375d2](https://github.com/bluefunda/cai-ios/commit/e1375d2f20b7febc0fcdda06bfd8168f17edbde1))
+* retry stream reconciliation instead of giving up after one attempt ([34b0406](https://github.com/bluefunda/cai-ios/commit/34b040614007d7a7c319de2266e125dc1d0d109a))
+* split ChatManager to clear SwiftLint's file_length CI check ([3660814](https://github.com/bluefunda/cai-ios/commit/36608145ded84db5cf62be57212441d500af52d8))
+
 ## [2.3.1](https://github.com/bluefunda/cai-ios/compare/v2.3.0...v2.3.1) (2026-08-20)
 
 
