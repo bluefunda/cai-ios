@@ -79,6 +79,29 @@ extension ChatManager {
             endStreamBackgroundTask()
         }
 
-        await loadMessages(for: id, force: true)
+        // A single immediate fetch can race the backend actually finishing
+        // generation (foregrounding means the *connection* should be back,
+        // not that the response is done) — retry a few times before
+        // concluding it's genuinely gone, matching the Android port's fix
+        // for the same race (bluefunda/cai-ios#261).
+        for attempt in 0..<Self.reconciliationRetryAttempts {
+            if await attemptReconciliation(for: id) { return }
+            if attempt < Self.reconciliationRetryAttempts - 1 {
+                try? await Task.sleep(for: .milliseconds(Self.reconciliationRetryDelayMS))
+            }
+        }
+        error = "Connection lost while generating a response. Please try again."
     }
+
+    /// Re-fetches `conversationId` from the server and reports whether a
+    /// real assistant reply was recovered.
+    private func attemptReconciliation(for conversationId: String) async -> Bool {
+        await loadMessages(for: conversationId, force: true)
+        guard let conversation = conversations.first(where: { $0.id == conversationId }),
+              let last = conversation.messages.last else { return false }
+        return last.role == .assistant && !last.content.isEmpty
+    }
+
+    private static let reconciliationRetryAttempts = 5
+    private static let reconciliationRetryDelayMS = 1500
 }
