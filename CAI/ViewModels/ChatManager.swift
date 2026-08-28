@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 
 // MARK: - Reply Reveal Ticker
 
@@ -275,6 +276,18 @@ final class ChatManager: ObservableObject {
     private static let revealCatchUpDivisor = 20
     private static let revealDrainDivisor = 4
     private var modelContext: ModelContext?
+    /// iOS background-task assertion covering an in-flight stream, so a
+    /// response already generating gets a short grace window (~30s, OS-
+    /// controlled) to finish after the app backgrounds rather than being
+    /// suspended mid-stream (bluefunda/cai-ios#261).
+    private var streamBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    /// Set when the app backgrounds while a response is still streaming —
+    /// the connection almost never survives full backgrounding, but
+    /// generation continues server-side regardless, so
+    /// `reconcileAfterBackground()` re-fetches this conversation's messages
+    /// once the app returns to the foreground instead of leaving whatever
+    /// the ticker last painted (bluefunda/cai-ios#261).
+    private var interruptedStreamConversationID: String?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
     private var currentBFFToken: String = ""
     /// Source of truth for auth. Used to refresh the access token before each
@@ -371,10 +384,13 @@ final class ChatManager: ObservableObject {
     // MARK: - Message History
 
     /// Loads full message history for a conversation from the API (lazy on selection).
-    func loadMessages(for conversationId: String) async {
+    /// - Parameter force: Bypasses the "only fetch if empty" guard — used by
+    ///   `reconcileAfterBackground()` to pull the authoritative server copy
+    ///   over locally-cached messages after a stream was interrupted.
+    func loadMessages(for conversationId: String, force: Bool = false) async {
         guard let api = apiService,
               let idx = conversations.firstIndex(where: { $0.id == conversationId }),
-              conversations[idx].messages.isEmpty else { return }
+              force || conversations[idx].messages.isEmpty else { return }
 
         do {
             let dtos = try await api.fetchChatMessages(chatId: conversationId)
@@ -528,6 +544,7 @@ final class ChatManager: ObservableObject {
 
         isStreaming = true
         error = nil
+        beginStreamBackgroundTask()
 
         streamingTask = Task {
             var finalContent = ""
@@ -672,6 +689,7 @@ final class ChatManager: ObservableObject {
             }
 
             isStreaming = false
+            endStreamBackgroundTask()
 
             // Now that the chat exists on the server (stream_start has fired),
             // call the title API. This avoids a 404 when the POST /title fires
@@ -711,6 +729,46 @@ final class ChatManager: ObservableObject {
         }
 
         isStreaming = false
+        endStreamBackgroundTask()
+    }
+
+    // MARK: - Background / Foreground Reconciliation
+
+    /// Requests OS run time so a response already generating can finish even
+    /// if the app is backgrounded moments later. This is a short, best-effort
+    /// grace window (typically ~30s, entirely OS-controlled) — long
+    /// responses will still outlive it, which is what
+    /// `reconcileAfterBackground()` below is for.
+    private func beginStreamBackgroundTask() {
+        guard streamBackgroundTask == .invalid else { return }
+        streamBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "ChatStreamCompletion") { [weak self] in
+            self?.endStreamBackgroundTask()
+        }
+    }
+
+    private func endStreamBackgroundTask() {
+        guard streamBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(streamBackgroundTask)
+        streamBackgroundTask = .invalid
+    }
+
+    /// Called by CAIApp when the scene backgrounds — if a response is still
+    /// streaming, remember its conversation so it can be reconciled with the
+    /// server's copy on return to foreground (bluefunda/cai-ios#261).
+    func noteBackgrounding() {
+        guard isStreaming, let id = currentConversation?.id else { return }
+        interruptedStreamConversationID = id
+    }
+
+    /// Called by CAIApp when the scene becomes active. Generation continues
+    /// server-side regardless of whether the client's stream connection
+    /// survived backgrounding, so if one was interrupted, re-fetch that
+    /// conversation's messages from the server rather than leaving whatever
+    /// content the reveal ticker last painted (bluefunda/cai-ios#261).
+    func reconcileAfterBackground() async {
+        guard let id = interruptedStreamConversationID else { return }
+        interruptedStreamConversationID = nil
+        await loadMessages(for: id, force: true)
     }
 
     // MARK: - Private Helpers

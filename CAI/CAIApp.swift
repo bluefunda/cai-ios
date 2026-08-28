@@ -79,11 +79,23 @@ struct CAIApp: App {
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    // Returning to the foreground can happen after the background
-                    // refresh timer was suspended — top up the token so the first
-                    // action after resuming never hits an expired session.
-                    guard phase == .active else { return }
-                    Task { await authManager.refreshOnForeground() }
+                    switch phase {
+                    case .active:
+                        // Returning to the foreground can happen after the background
+                        // refresh timer was suspended — top up the token so the first
+                        // action after resuming never hits an expired session. Also
+                        // reconcile any chat stream that was interrupted by
+                        // backgrounding (bluefunda/cai-ios#261) — generation continues
+                        // server-side regardless, so pull down what was missed.
+                        Task {
+                            await authManager.refreshOnForeground()
+                            await chatManager.reconcileAfterBackground()
+                        }
+                    case .background:
+                        chatManager.noteBackgrounding()
+                    default:
+                        break
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(
                     for: ASAuthorizationAppleIDProvider.credentialRevokedNotification
