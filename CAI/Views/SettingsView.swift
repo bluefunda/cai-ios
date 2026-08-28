@@ -40,7 +40,11 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var deleteError: String?
-    @State private var selectedCategory: SettingsCategory? = .account
+    // nil (not .account) so opening Settings on a compact/iPhone layout shows the category
+    // list first instead of auto-navigating straight into Account — detailContent below still
+    // falls back to .account for the regular/split-view detail pane, which always needs
+    // something to show even with no explicit selection.
+    @State private var selectedCategory: SettingsCategory?
 
     // Internal infra details (Connection, Build) are only shown to the
     // internal/employee realm; end users on `individual` don't see them.
