@@ -819,7 +819,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 121;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -851,7 +851,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.1;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -871,7 +871,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 121;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -903,7 +903,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.1;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -921,10 +921,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 121;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.3.1;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -939,10 +939,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 116;
+				CURRENT_PROJECT_VERSION = 121;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.3.1;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
