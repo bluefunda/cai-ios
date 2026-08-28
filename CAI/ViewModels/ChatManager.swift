@@ -85,6 +85,11 @@ final class ChatManager: ObservableObject {
 
     @Published var currentConversation: Conversation? {
         didSet {
+            // Persisted so the app can reopen into the same conversation
+            // instead of always landing on the greeting screen (bluefunda/cai-ios#261)
+            // — restored by `restoreLastConversation()` below.
+            UserDefaults.standard.set(currentConversation?.id, forKey: Self.lastConversationIDKey)
+
             // Guard against in-place refreshes of the *same* conversation
             // (e.g. loadMessages replacing it with an updated copy) — only
             // save/restore the tool selection on an actual conversation switch.
@@ -247,6 +252,9 @@ final class ChatManager: ObservableObject {
     /// use this instead of `availableMCPServers` in every picker/list view.
     private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
 
+    /// UserDefaults key backing `restoreLastConversation()` below.
+    private static let lastConversationIDKey = "cai_last_conversation_id"
+
     var visibleMCPServers: [MCPServer] {
         availableMCPServers.filter { server in
             let name = server.displayName.lowercased()
@@ -361,6 +369,12 @@ final class ChatManager: ObservableObject {
             // Load initial data in parallel
             await loadInitialData()
 
+            // Reopen into the same conversation that was active last time,
+            // rather than always landing on the greeting screen — most
+            // noticeable after the app is backgrounded and later relaunched
+            // fresh, e.g. because the OS reclaimed it (bluefunda/cai-ios#261).
+            restoreLastConversation()
+
         } catch {
             self.error = error.localizedDescription
             connectionStatus = .error(error.localizedDescription)
@@ -452,6 +466,20 @@ final class ChatManager: ObservableObject {
         shouldAutoFocusInput = false
         currentConversation = conversation
         Task { await loadMessages(for: conversation.id) }
+    }
+
+    /// Reselects whichever conversation was active last time, so the app
+    /// reopens where the user left off instead of always showing the
+    /// greeting screen (bluefunda/cai-ios#261). No-ops if nothing was saved,
+    /// a conversation is already active (e.g. a warm resume that never lost
+    /// `currentConversation` in the first place), or the saved id no longer
+    /// matches anything in the freshly-loaded chat list (deleted, or was
+    /// never more than an unsent draft).
+    private func restoreLastConversation() {
+        guard currentConversation == nil,
+              let lastID = UserDefaults.standard.string(forKey: Self.lastConversationIDKey),
+              let match = conversations.first(where: { $0.id == lastID }) else { return }
+        selectConversation(match)
     }
 
     func deleteConversation(_ conversation: Conversation) {
@@ -768,6 +796,24 @@ final class ChatManager: ObservableObject {
     func reconcileAfterBackground() async {
         guard let id = interruptedStreamConversationID else { return }
         interruptedStreamConversationID = nil
+
+        // The interrupted stream's Task is suspended, not finished, if it's
+        // still "streaming" here — freezing with the process rather than
+        // completing or erroring out. Left alone, it resumes the instant the
+        // process does, and its now-dead connection throws moments later;
+        // that resumed task would then overwrite (sometimes with nothing —
+        // an empty ChatMessage(content:) — flipping the whole screen back to
+        // the empty/new-chat state) the authoritative content the fetch
+        // below is about to load. Cancelling first makes it a clean no-op:
+        // every content-writing branch downstream of the network loop is
+        // already guarded on `!Task.isCancelled`.
+        if isStreaming {
+            streamingTask?.cancel()
+            streamingTask = nil
+            isStreaming = false
+            endStreamBackgroundTask()
+        }
+
         await loadMessages(for: id, force: true)
     }
 
