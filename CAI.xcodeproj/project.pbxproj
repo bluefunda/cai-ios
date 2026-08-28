@@ -28,6 +28,7 @@
 		B1000015201BCDEF /* RateLimitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000005201BCDEF /* RateLimitView.swift */; };
 		B1000016201BCDEF /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006201BCDEF /* StorageView.swift */; };
 		C1000017201BCDEF /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDEF /* MarkdownView.swift */; };
+		C1000017201BCDF0 /* PacedMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDF0 /* PacedMarkdownView.swift */; };
 		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
 		G1000020201BCDEF /* CodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000010201BCDEF /* CodeView.swift */; };
 		G1000021201BCDEF /* CodeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000011201BCDEF /* CodeManager.swift */; };
@@ -81,6 +82,7 @@
 		B1000005201BCDEF /* RateLimitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitView.swift; sourceTree = "<group>"; };
 		B1000006201BCDEF /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		C1000007201BCDEF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
+		C1000007201BCDF0 /* PacedMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacedMarkdownView.swift; sourceTree = "<group>"; };
 		F1000009201BCDEF /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		G1000010201BCDEF /* CodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/CodeView.swift; sourceTree = "<group>"; };
 		G1000011201BCDEF /* CodeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeManager.swift; sourceTree = "<group>"; };
@@ -176,6 +178,7 @@
 				B1000005201BCDEF /* RateLimitView.swift */,
 				B1000006201BCDEF /* StorageView.swift */,
 				C1000007201BCDEF /* MarkdownView.swift */,
+				C1000007201BCDF0 /* PacedMarkdownView.swift */,
 				F1000009201BCDEF /* SafariView.swift */,
 				G1000010201BCDEF /* CodeView.swift */,
 				H1000005201BCDEF /* SystemManagerView.swift */,
@@ -378,6 +381,7 @@
 				B1000015201BCDEF /* RateLimitView.swift in Sources */,
 				B1000016201BCDEF /* StorageView.swift in Sources */,
 				C1000017201BCDEF /* MarkdownView.swift in Sources */,
+				C1000017201BCDF0 /* PacedMarkdownView.swift in Sources */,
 				F1000019201BCDEF /* SafariView.swift in Sources */,
 				G1000020201BCDEF /* CodeView.swift in Sources */,
 				G1000021201BCDEF /* CodeManager.swift in Sources */,

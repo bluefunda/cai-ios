@@ -344,6 +344,7 @@ struct ConnectionBanner: View {
 
 struct MessageView: View {
     let message: ChatMessage
+    @EnvironmentObject var chatManager: ChatManager
     @State private var didCopy = false
 
     var body: some View {
@@ -381,8 +382,12 @@ struct MessageView: View {
     // Left-aligned response — full width, no background
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MarkdownView(content: message.content)
-                .font(BFFont.body)
+            PacedMarkdownView(
+                messageId: message.id,
+                targetContent: message.content,
+                isStreaming: chatManager.isStreaming && message.id == chatManager.currentConversation?.messages.last?.id
+            )
+            .font(BFFont.body)
 
             if !message.content.isEmpty {
                 HStack(spacing: 20) {
