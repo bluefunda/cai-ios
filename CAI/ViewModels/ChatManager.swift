@@ -252,9 +252,6 @@ final class ChatManager: ObservableObject {
     /// use this instead of `availableMCPServers` in every picker/list view.
     private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
 
-    /// UserDefaults key backing `restoreLastConversation()` below.
-    private static let lastConversationIDKey = "cai_last_conversation_id"
-
     var visibleMCPServers: [MCPServer] {
         availableMCPServers.filter { server in
             let name = server.displayName.lowercased()
@@ -276,9 +273,12 @@ final class ChatManager: ObservableObject {
     private let service: ChatServiceProtocol
     let fileStore: FileStore
     /// Used only to fetch LLM-output files detected in markdown responses; injectable for tests.
-    private let urlSession: URLSession
+    /// Not `private`: also used by `downloadAndPersist` in `ChatManager+FileHistory.swift`.
+    let urlSession: URLSession
     var apiService: BFFAPIService?
-    private var streamingTask: Task<Void, Never>?
+    /// Not `private`: also cancelled from the `ChatManager+Background.swift`
+    /// extension's `reconcileAfterBackground()`.
+    var streamingTask: Task<Void, Never>?
     private static let revealTick: Duration = .milliseconds(24)
     private static let revealMinCharsPerTick = 2
     private static let revealCatchUpDivisor = 20
@@ -288,19 +288,22 @@ final class ChatManager: ObservableObject {
     /// response already generating gets a short grace window (~30s, OS-
     /// controlled) to finish after the app backgrounds rather than being
     /// suspended mid-stream (bluefunda/cai-ios#261).
-    private var streamBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    /// Not `private`: managed from the `ChatManager+Background.swift` extension.
+    var streamBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     /// Set when the app backgrounds while a response is still streaming —
     /// the connection almost never survives full backgrounding, but
     /// generation continues server-side regardless, so
-    /// `reconcileAfterBackground()` re-fetches this conversation's messages
-    /// once the app returns to the foreground instead of leaving whatever
-    /// the ticker last painted (bluefunda/cai-ios#261).
-    private var interruptedStreamConversationID: String?
+    /// `reconcileAfterBackground()` (in `ChatManager+Background.swift`)
+    /// re-fetches this conversation's messages once the app returns to the
+    /// foreground instead of leaving whatever the ticker last painted
+    /// (bluefunda/cai-ios#261). Not `private` for the same reason as above.
+    var interruptedStreamConversationID: String?
     /// Latest access token — updated by CAIApp whenever AuthManager refreshes.
     private var currentBFFToken: String = ""
     /// Source of truth for auth. Used to refresh the access token before each
     /// request and to expire the session when it can no longer be refreshed.
-    private weak var authManager: AuthManager?
+    /// Not `private`: also used by `uploadAttachment` in `ChatManager+FileHistory.swift`.
+    weak var authManager: AuthManager?
 
     // MARK: - Init
 
@@ -468,19 +471,7 @@ final class ChatManager: ObservableObject {
         Task { await loadMessages(for: conversation.id) }
     }
 
-    /// Reselects whichever conversation was active last time, so the app
-    /// reopens where the user left off instead of always showing the
-    /// greeting screen (bluefunda/cai-ios#261). No-ops if nothing was saved,
-    /// a conversation is already active (e.g. a warm resume that never lost
-    /// `currentConversation` in the first place), or the saved id no longer
-    /// matches anything in the freshly-loaded chat list (deleted, or was
-    /// never more than an unsent draft).
-    private func restoreLastConversation() {
-        guard currentConversation == nil,
-              let lastID = UserDefaults.standard.string(forKey: Self.lastConversationIDKey),
-              let match = conversations.first(where: { $0.id == lastID }) else { return }
-        selectConversation(match)
-    }
+    // restoreLastConversation() lives in ChatManager+Background.swift.
 
     func deleteConversation(_ conversation: Conversation) {
         Haptic.impact(.rigid)
@@ -760,62 +751,10 @@ final class ChatManager: ObservableObject {
         endStreamBackgroundTask()
     }
 
-    // MARK: - Background / Foreground Reconciliation
-
-    /// Requests OS run time so a response already generating can finish even
-    /// if the app is backgrounded moments later. This is a short, best-effort
-    /// grace window (typically ~30s, entirely OS-controlled) — long
-    /// responses will still outlive it, which is what
-    /// `reconcileAfterBackground()` below is for.
-    private func beginStreamBackgroundTask() {
-        guard streamBackgroundTask == .invalid else { return }
-        streamBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "ChatStreamCompletion") { [weak self] in
-            self?.endStreamBackgroundTask()
-        }
-    }
-
-    private func endStreamBackgroundTask() {
-        guard streamBackgroundTask != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(streamBackgroundTask)
-        streamBackgroundTask = .invalid
-    }
-
-    /// Called by CAIApp when the scene backgrounds — if a response is still
-    /// streaming, remember its conversation so it can be reconciled with the
-    /// server's copy on return to foreground (bluefunda/cai-ios#261).
-    func noteBackgrounding() {
-        guard isStreaming, let id = currentConversation?.id else { return }
-        interruptedStreamConversationID = id
-    }
-
-    /// Called by CAIApp when the scene becomes active. Generation continues
-    /// server-side regardless of whether the client's stream connection
-    /// survived backgrounding, so if one was interrupted, re-fetch that
-    /// conversation's messages from the server rather than leaving whatever
-    /// content the reveal ticker last painted (bluefunda/cai-ios#261).
-    func reconcileAfterBackground() async {
-        guard let id = interruptedStreamConversationID else { return }
-        interruptedStreamConversationID = nil
-
-        // The interrupted stream's Task is suspended, not finished, if it's
-        // still "streaming" here — freezing with the process rather than
-        // completing or erroring out. Left alone, it resumes the instant the
-        // process does, and its now-dead connection throws moments later;
-        // that resumed task would then overwrite (sometimes with nothing —
-        // an empty ChatMessage(content:) — flipping the whole screen back to
-        // the empty/new-chat state) the authoritative content the fetch
-        // below is about to load. Cancelling first makes it a clean no-op:
-        // every content-writing branch downstream of the network loop is
-        // already guarded on `!Task.isCancelled`.
-        if isStreaming {
-            streamingTask?.cancel()
-            streamingTask = nil
-            isStreaming = false
-            endStreamBackgroundTask()
-        }
-
-        await loadMessages(for: id, force: true)
-    }
+    // Background/foreground reconciliation (beginStreamBackgroundTask,
+    // endStreamBackgroundTask, noteBackgrounding, reconcileAfterBackground)
+    // lives in ChatManager+Background.swift — split out to stay under
+    // SwiftLint's file_length limit (bluefunda/cai-ios#261).
 
     // MARK: - Private Helpers
 
@@ -926,7 +865,8 @@ extension ChatManager {
         try? ctx.save()
     }
 
-    private func cacheUpdateTitle(_ title: String, for conversationId: String) {
+    /// Not `private`: also called from `retryStuckTitles` in `ChatManager+FileHistory.swift`.
+    func cacheUpdateTitle(_ title: String, for conversationId: String) {
         guard let ctx = modelContext else { return }
         let id = conversationId
         let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
@@ -1105,142 +1045,9 @@ extension ChatManager {
     }
 }
 
-// MARK: - File Attachment Persistence
-// Split from the main ChatManager body to stay under SwiftLint's
-// type_body_length limit — extensions are measured independently even
-// within the same file.
-extension ChatManager {
-    func uploadAttachment(data: Data, filename: String, mimeType: String) async throws -> String? {
-        guard let api = apiService else { throw ChatServiceError.notConnected }
-        guard let userId = authManager?.currentUser?.id, !userId.isEmpty else {
-            throw ChatServiceError.unauthorized
-        }
-        return try await api.uploadFileForPrompt(data: data, filename: filename, mimeType: mimeType, userId: userId)
-    }
-
-    /// The conversation a locally-picked attachment (or voice recording)
-    /// should be scoped to — creates a draft conversation if none is active
-    /// yet, mirroring sendMessage's own draft-creation fallback.
-    func conversationIdForAttachment() -> String {
-        if let id = currentConversation?.id { return id }
-        newConversation(focus: false)
-        return currentConversation!.id
-    }
-
-    /// Persists a user-picked file (attachment or voice recording) to
-    /// `fileStore` so it survives independent of whether/when it's uploaded.
-    @discardableResult
-    func saveLocalAttachment(data: Data, filename: String, mimeType: String, conversationId: String) async -> StoredFileMetadata? {
-        try? await fileStore.save(
-            data: data, filename: filename, mimeType: mimeType,
-            conversationId: conversationId, source: .userUpload, remoteURL: nil
-        )
-    }
-
-    /// Records the backend URL once a previously-saved local attachment finishes uploading.
-    func markAttachmentUploaded(_ metadata: StoredFileMetadata, remoteURL: String) {
-        Task { try? await fileStore.updateRemoteURL(remoteURL, for: metadata) }
-    }
-
-    /// Files (attachments + LLM output) stored locally for a conversation.
-    func attachments(for conversationId: String) async -> [StoredFileMetadata] {
-        (try? await fileStore.list(conversationId: conversationId)) ?? []
-    }
-
-    func deleteAttachment(_ metadata: StoredFileMetadata) async {
-        try? await fileStore.delete(metadata)
-    }
-
-    /// Scans a finalized assistant response for embedded generated-file links
-    /// (matching the web app's markdown-image detection, since the live chat
-    /// SSE stream has no structured "output file" field) and downloads/persists
-    /// high-confidence matches (markdown images) locally.
-    private func persistOutputFiles(from content: String, conversationId: String) {
-        let links = MessageFileLinks.detect(in: content).filter(\.isImage)
-        guard !links.isEmpty else { return }
-        Task {
-            for link in links {
-                await downloadAndPersist(
-                    urlString: link.urlString, filename: link.filename,
-                    conversationId: conversationId, source: .llmOutput
-                )
-            }
-        }
-    }
-
-    /// Persists any structured file references cai-bff now relays on chat
-    /// history (`fileUrl`/`fileMetadata`, added by cai-mcp-go) so they're
-    /// browsable via LocalFileStore without depending on markdown-embedded
-    /// URLs. Skips files already persisted for this conversation.
-    private func persistHistoryFileReferences(_ messages: [ChatMessage], conversationId: String) {
-        Task {
-            var seenRemoteURLs = Set((try? await fileStore.list(conversationId: conversationId))?.compactMap(\.remoteURL) ?? [])
-
-            for message in messages {
-                if let fileUrl = message.fileUrl, !fileUrl.isEmpty, !seenRemoteURLs.contains(fileUrl) {
-                    seenRemoteURLs.insert(fileUrl)
-                    let filename = message.fileMetadata?.first?.fileName ?? URL(string: fileUrl)?.lastPathComponent ?? "attachment"
-                    await downloadAndPersist(urlString: fileUrl, filename: filename, conversationId: conversationId, source: .userUpload)
-                }
-                for meta in message.fileMetadata ?? [] {
-                    guard let remote = meta.downloadURL ?? meta.originalURL, !remote.isEmpty, !seenRemoteURLs.contains(remote) else { continue }
-                    seenRemoteURLs.insert(remote)
-                    let filename = meta.fileName ?? URL(string: remote)?.lastPathComponent ?? "file"
-                    await downloadAndPersist(urlString: remote, filename: filename, conversationId: conversationId, source: .llmOutput)
-                }
-            }
-        }
-    }
-
-    private func downloadAndPersist(urlString: String, filename: String, conversationId: String, source: FileSource) async {
-        guard let url = URL(string: urlString) else { return }
-        do {
-            let (data, response) = try await urlSession.data(from: url)
-            let mime = (response as? HTTPURLResponse)?.mimeType ?? "application/octet-stream"
-            try await fileStore.save(
-                data: data, filename: filename, mimeType: mime,
-                conversationId: conversationId, source: source, remoteURL: urlString
-            )
-        } catch {
-            print("[ChatManager] failed to persist file \(urlString): \(error)")
-        }
-    }
-}
-
-// MARK: - Stuck Chat Title Retry
-// Split from the main ChatManager body for the same type_body_length reason
-// as the file-attachment extension above.
-extension ChatManager {
-    /// Matches cai-mcp-go's DefaultChatTitle constant — the placeholder a chat
-    /// is created with, before title generation ever runs.
-    private static let defaultServerTitle = "New Chat"
-
-    /// Backend title generation is a one-shot, fire-and-forget call made once
-    /// when a chat is first created; if that single attempt fails (network
-    /// blip, LLM timeout, an expired token at that exact moment), the chat is
-    /// left stuck on the server's own default placeholder forever — nothing
-    /// else ever retries it. Re-attempts generation in the background for any
-    /// loaded chat still on that default, so it self-heals the next time the
-    /// chat list loads instead of staying wrong permanently.
-    private func retryStuckTitles(_ dtos: [ChatSummaryDTO]) {
-        guard let api = apiService else { return }
-        let stuck = dtos.filter { $0.title == Self.defaultServerTitle && !($0.firstMessage ?? "").isBlank }
-
-        for dto in stuck {
-            guard let prompt = dto.firstMessage else { continue }
-            Task {
-                guard let title = try? await api.generateTitle(chatId: dto.id, message: prompt) else { return }
-                if let idx = conversations.firstIndex(where: { $0.id == dto.id }) {
-                    conversations[idx].title = title
-                }
-                if currentConversation?.id == dto.id {
-                    currentConversation?.title = title
-                }
-                cacheUpdateTitle(title, for: dto.id)
-            }
-        }
-    }
-}
+// File Attachment Persistence and Stuck Chat Title Retry extensions live in
+// ChatManager+FileHistory.swift (split out to stay under SwiftLint's
+// file_length limit, bluefunda/cai-ios#261).
 
 // MARK: - Supporting Models
 
