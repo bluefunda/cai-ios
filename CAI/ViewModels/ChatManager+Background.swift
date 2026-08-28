@@ -8,23 +8,6 @@ import UIKit
 
 extension ChatManager {
 
-    /// UserDefaults key backing `restoreLastConversation()` below.
-    static let lastConversationIDKey = "cai_last_conversation_id"
-
-    /// Reselects whichever conversation was active last time, so the app
-    /// reopens where the user left off instead of always showing the
-    /// greeting screen (bluefunda/cai-ios#261). No-ops if nothing was saved,
-    /// a conversation is already active (e.g. a warm resume that never lost
-    /// `currentConversation` in the first place), or the saved id no longer
-    /// matches anything in the freshly-loaded chat list (deleted, or was
-    /// never more than an unsent draft).
-    func restoreLastConversation() {
-        guard currentConversation == nil,
-              let lastID = UserDefaults.standard.string(forKey: Self.lastConversationIDKey),
-              let match = conversations.first(where: { $0.id == lastID }) else { return }
-        selectConversation(match)
-    }
-
     /// Requests OS run time so a response already generating can finish even
     /// if the app is backgrounded moments later. This is a short, best-effort
     /// grace window (typically ~30s, entirely OS-controlled) — long

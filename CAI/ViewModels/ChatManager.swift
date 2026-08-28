@@ -85,11 +85,6 @@ final class ChatManager: ObservableObject {
 
     @Published var currentConversation: Conversation? {
         didSet {
-            // Persisted so the app can reopen into the same conversation
-            // instead of always landing on the greeting screen (bluefunda/cai-ios#261)
-            // — restored by `restoreLastConversation()` below.
-            UserDefaults.standard.set(currentConversation?.id, forKey: Self.lastConversationIDKey)
-
             // Guard against in-place refreshes of the *same* conversation
             // (e.g. loadMessages replacing it with an updated copy) — only
             // save/restore the tool selection on an actual conversation switch.
@@ -372,12 +367,6 @@ final class ChatManager: ObservableObject {
             // Load initial data in parallel
             await loadInitialData()
 
-            // Reopen into the same conversation that was active last time,
-            // rather than always landing on the greeting screen — most
-            // noticeable after the app is backgrounded and later relaunched
-            // fresh, e.g. because the OS reclaimed it (bluefunda/cai-ios#261).
-            restoreLastConversation()
-
         } catch {
             self.error = error.localizedDescription
             connectionStatus = .error(error.localizedDescription)
@@ -470,8 +459,6 @@ final class ChatManager: ObservableObject {
         currentConversation = conversation
         Task { await loadMessages(for: conversation.id) }
     }
-
-    // restoreLastConversation() lives in ChatManager+Background.swift.
 
     func deleteConversation(_ conversation: Conversation) {
         Haptic.impact(.rigid)
