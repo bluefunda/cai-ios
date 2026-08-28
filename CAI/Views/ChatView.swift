@@ -183,13 +183,6 @@ struct ChatView: View {
                                     )
                                     .id(message.id)
                                 }
-                                // Reads "Elevating your answer…" etc., which only makes sense
-                                // before any text has appeared — once the reveal ticker starts
-                                // painting real content, the inline cursor in MessageView takes
-                                // over instead of also showing this alongside it.
-                                if chatManager.isStreaming, conversation.messages.last?.content.isEmpty != false {
-                                    StreamingIndicator()
-                                }
                                 // Reserves room below the last message while streaming, so
                                 // scrolling the user's prompt to the top of the viewport (below)
                                 // has somewhere to go instead of snapping back — matches
@@ -218,18 +211,22 @@ struct ChatView: View {
                     // matching cai-android's `animateScrollToItem(latestUserMessageIndex)`.
                     // The very first message in a conversation skips this entirely: at that
                     // moment the scroll content just switched from EmptyStateView to the first
-                    // real row, and scrolling that row to `.top` — animated or not — races the
-                    // layout pass that's still growing the list from zero height, so the row
-                    // lands under the header and then snaps back down once layout settles.
-                    // Falling back to the plain bottom-anchored scroll (the same one used on
-                    // conversation switch/appear below) sidesteps the race entirely, since the
-                    // first row's top already coincides with the scroll area's top there.
+                    // real row, and scrolling immediately — to `.top` or `.bottom`, animated or
+                    // not — races the layout pass that's still growing the list from zero
+                    // height, so the row lands under the header and then snaps back down once
+                    // layout settles a frame later. Deferring past that frame (same trick as
+                    // the conversation-switch/appear handlers below) and skipping the animation
+                    // — there's nothing to animate from on a conversation's very first row —
+                    // sidesteps the race entirely.
                     .onChange(of: latestUserMessageID) { _, newID in
                         guard let newID else { return }
                         let isFirstUserMessage = chatManager.currentConversation?.messages
                             .filter { $0.role == .user }.count == 1
                         if isFirstUserMessage {
-                            scrollToBottom(proxy: proxy)
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(50))
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
                         } else {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo(newID, anchor: .top)
