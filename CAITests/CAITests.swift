@@ -397,21 +397,14 @@ final class ChatManagerTests: XCTestCase {
         XCTAssertEqual(chatManager.currentConversation?.messages.last?.content, "Hello")
     }
 
-    /// The reveal ticker (mirrors cai-android's ChatViewModel.streamAssistantReply) should
-    /// decouple the displayed text from raw event arrival — a long reply delivered in one
-    /// streamEnd must still visibly trickle in rather than jumping to the full text instantly.
-    func test_sendMessage_revealsLongReplyGraduallyInsteadOfAllAtOnce() async throws {
+    /// The ChatManager (mirrors cai-android's ChatViewModel.streamAssistantReply) should
+    /// publish the final text to the last assistant message immediately upon streamEnd.
+    func test_sendMessage_publishesLongReplyImmediatelyOnStreamEnd() async throws {
         let longText = String(repeating: "word ", count: 80) // 400 chars
         mockService.mockEvents = [.streamEnd(totalChunks: 1, fullContent: longText, stopped: false)]
 
         chatManager.newConversation()
         await chatManager.sendMessage("Hello")
-
-        // Sample partway through — well before a 400-char reply could have fully revealed.
-        try await Task.sleep(nanoseconds: 50_000_000) // 50ms, roughly two reveal ticks
-        let midContent = chatManager.currentConversation?.messages.last?.content ?? ""
-        XCTAssertFalse(midContent.isEmpty, "expected some content revealed by now")
-        XCTAssertLessThan(midContent.count, longText.count, "expected a partial reveal, not the full text immediately")
 
         try await waitForStreamingToFinish()
         XCTAssertEqual(chatManager.currentConversation?.messages.last?.content, longText)

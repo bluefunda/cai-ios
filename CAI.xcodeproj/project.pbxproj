@@ -50,6 +50,7 @@
 		BF95579D7944DAE0D3235F2C /* ShareableAnswerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5478A24929F4E5D406E63882 /* ShareableAnswerCard.swift */; };
 		C05E6C031E922452DCABED2B /* ChatManagerMCPTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9191641D3337C326FC9E06B /* ChatManagerMCPTests.swift */; };
 		C1000017201BCDEF /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDEF /* MarkdownView.swift */; };
+		C1000017201BCDF0 /* PacedMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000007201BCDF0 /* PacedMarkdownView.swift */; };
 		D1000018201BCDEF /* StorageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000008201BCDEF /* StorageViewModel.swift */; };
 		D474F392E6033487FEA57F04 /* SyntaxHighlighting.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8B661515D5D03652EC63D67 /* SyntaxHighlighting.swift */; };
 		D7472CE669A8093900775A5D /* ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C4C03127B03E74AFFADA5E /* ScreenshotTests.swift */; };
@@ -161,6 +162,7 @@
 		B1000006201BCDEF /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareCardFormatterTests.swift; sourceTree = "<group>"; };
 		C1000007201BCDEF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
+		C1000007201BCDF0 /* PacedMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacedMarkdownView.swift; sourceTree = "<group>"; };
 		C100E3C73AB54B4E17FBFBF2 /* PersonaCatalogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PersonaCatalogTests.swift; sourceTree = "<group>"; };
 		C8B661515D5D03652EC63D67 /* SyntaxHighlighting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SyntaxHighlighting.swift; sourceTree = "<group>"; };
 		D1000008201BCDEF /* StorageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageViewModel.swift; sourceTree = "<group>"; };
@@ -289,6 +291,7 @@
 				B1000005201BCDEF /* RateLimitView.swift */,
 				B1000006201BCDEF /* StorageView.swift */,
 				C1000007201BCDEF /* MarkdownView.swift */,
+				C1000007201BCDF0 /* PacedMarkdownView.swift */,
 				F1000009201BCDEF /* SafariView.swift */,
 				G1000010201BCDEF /* CodeView.swift */,
 				H1000005201BCDEF /* SystemManagerView.swift */,
@@ -569,6 +572,7 @@
 				B1000015201BCDEF /* RateLimitView.swift in Sources */,
 				B1000016201BCDEF /* StorageView.swift in Sources */,
 				C1000017201BCDEF /* MarkdownView.swift in Sources */,
+				C1000017201BCDF0 /* PacedMarkdownView.swift in Sources */,
 				F1000019201BCDEF /* SafariView.swift in Sources */,
 				G1000020201BCDEF /* CodeView.swift in Sources */,
 				G1000021201BCDEF /* CodeManager.swift in Sources */,
