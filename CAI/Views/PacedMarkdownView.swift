@@ -52,6 +52,16 @@ struct PacedMarkdownView: View {
     // Drives MarkdownView's trailing opacity fade — matches cai-android's `isPacingActive`
     // (network streaming OR the local reveal hasn't caught up yet), not raw network isStreaming.
     @State private var isActivelyRevealing = false
+    // Sticky, independent of the `wasStopped` prop: ChatView.swift only sets that true for
+    // whichever message is currently *last* in the conversation, so it flips back to false for
+    // this same, still-mounted message the instant the user sends another prompt (a new message
+    // becomes last). Relying on the prop alone meant a message that was ever stopped could later
+    // un-freeze — if any further update reached it after that prop flipped back (e.g. content
+    // that trickled in during a stop that needed several taps to actually register server-side,
+    // updating `latestTarget` past `pacedContent` while still nominally "frozen"), the guard
+    // below would no longer block it, and it would resume/replay the tail that arrived during
+    // that window. Once true this never resets for the lifetime of this view instance.
+    @State private var hasFrozen = false
 
     // A word-stepped reveal (fixed pause between whole words, matching the Gemini app's look)
     // was tried here and explicitly rejected: any discrete step with a real pause between
@@ -70,16 +80,38 @@ struct PacedMarkdownView: View {
         MarkdownView(content: pacedContent, isStreaming: isActivelyRevealing, cacheKey: messageId)
             .onChange(of: targetContent, initial: true) { _, newTarget in
                 latestTarget = newTarget
-                // Once the user has stopped this message, it must stay frozen no matter what
-                // — a cancelled network task is cooperative, not immediate, so a chunk or two
-                // already in flight when Stop was tapped can still land here afterward. Without
-                // this guard, that late arrival would unconditionally restart the reveal task
-                // below, silently resuming a printing effect the user explicitly stopped —
-                // sometimes surviving several taps of Stop in a row.
-                guard !wasStopped else { return }
+
                 if pacedContent.isEmpty {
-                    pacedContent = PacedTextCache.shared.get(messageId) ?? ""
+                    if isStreaming {
+                        pacedContent = PacedTextCache.shared.get(messageId) ?? ""
+                    } else {
+                        // A fresh (re)appearance of a message that isn't currently streaming —
+                        // e.g. scrolled far enough off-screen that SwiftUI tore down and
+                        // recreated this view, resetting pacedContent to "". Whether this
+                        // message finished naturally or was stopped, there's nothing to
+                        // animate: snap straight to the final text. This must happen before the
+                        // divergence check below and regardless of wasStopped/cache state —
+                        // "" is trivially a prefix of any string, so falling through with
+                        // pacedContent still empty would pass that check and kick off a full
+                        // from-scratch typewriter replay of an already-completed response. This
+                        // was most visible after tapping Stop early enough that no reveal tick
+                        // (and so no PacedTextCache entry) had happened yet for this message.
+                        pacedContent = newTarget
+                        PacedTextCache.shared.set(messageId, newTarget)
+                        return
+                    }
                 }
+
+                // Once the user has stopped this still-mounted message, it must stay frozen no
+                // matter what — a cancelled network task is cooperative, not immediate, so a
+                // chunk or two already in flight when Stop was tapped can still land here
+                // afterward. Without this guard, that late arrival would unconditionally
+                // restart the reveal task below, silently resuming a printing effect the user
+                // explicitly stopped — sometimes surviving several taps of Stop in a row.
+                // Checks the sticky hasFrozen flag too, not just the wasStopped prop — see its
+                // declaration for why the prop alone isn't enough.
+                guard !wasStopped, !hasFrozen else { return }
+
                 // Only a genuine divergence (the target no longer starts with what's already
                 // paced out — e.g. a retried/corrected message) should jump straight to the new
                 // text. Comparing *trimmed* strings for this was fragile: trailing whitespace
@@ -100,13 +132,16 @@ struct PacedMarkdownView: View {
                 // Freeze exactly where the reveal currently is — matches cai-android's "a
                 // cancelled stream just freezes wherever the ticker last painted" — rather than
                 // jumping to every character that had already arrived over the wire, which
-                // showed as several lines landing at once right when Stop was tapped.
+                // showed as several lines landing at once right when Stop was tapped. Sticky:
+                // never cleared again for the lifetime of this view instance, so this message
+                // stays frozen even after `wasStopped` itself later flips back to false.
+                hasFrozen = true
                 revealTask?.cancel()
                 revealTask = nil
                 setRevealing(false)
             }
             .onChange(of: scenePhase) { _, phase in
-                guard phase == .active, !wasStopped else { return }
+                guard phase == .active, !wasStopped, !hasFrozen else { return }
                 snapToEnd()
             }
             .onDisappear {
