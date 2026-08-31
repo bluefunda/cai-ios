@@ -38,136 +38,152 @@ struct PacedMarkdownView: View {
     let messageId: String
     let targetContent: String
     let isStreaming: Bool
+    /// True when the user explicitly stopped this response.
+    var wasStopped: Bool = false
+    /// Reports whether this view is still actively revealing text, independent of isStreaming —
+    /// which reflects the network finishing, not the local pace catching up to it. Lets the
+    /// composer keep showing Stop for as long as text is still visibly printing.
+    var onRevealingChanged: (Bool) -> Void = { _ in }
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var pacedContent: String = ""
-    // Mirrors `targetContent` into @State so the ticker callback
-    // always reads the current value. `targetContent` is a `let` on a
-    // value-type View struct — SwiftUI creates a fresh struct instance as
-    // content streams in, but the ticker closed over whichever instance
-    // was live when it started.
     @State private var latestTarget: String = ""
+    @State private var revealTask: Task<Void, Never>?
+    // Drives MarkdownView's trailing opacity fade — matches cai-android's `isPacingActive`
+    // (network streaming OR the local reveal hasn't caught up yet), not raw network isStreaming.
+    @State private var isActivelyRevealing = false
 
-    @StateObject private var ticker = FrameTicker()
+    // A word-stepped reveal (fixed pause between whole words, matching the Gemini app's look)
+    // was tried here and explicitly rejected: any discrete step with a real pause between
+    // updates reads as a stutter, no matter how nicely each step fades in. Back to continuous:
+    // ported from cai-android's MarkdownReveal.kt — characters are revealed at a continuous rate
+    // computed from *actual measured elapsed time* since the last tick, rather than a fixed chunk
+    // every fixed interval. What actually determines whether this reads as "smooth" vs "word by
+    // word" is keeping the *tick interval* small (paceDelay) so each individual update is only a
+    // couple of characters — well under one word — regardless of the overall chars/sec rate.
+    private static let paceDelay: Duration = .milliseconds(8)
+    private static let charsPerSecond: Double = 300
+    private static let maxCharsPerTick = 60
+    private static let boundarySnapSlack = 8
 
     var body: some View {
-        MarkdownView(content: pacedContent)
+        MarkdownView(content: pacedContent, isStreaming: isActivelyRevealing, cacheKey: messageId)
             .onChange(of: targetContent, initial: true) { _, newTarget in
                 latestTarget = newTarget
+                // Once the user has stopped this message, it must stay frozen no matter what
+                // — a cancelled network task is cooperative, not immediate, so a chunk or two
+                // already in flight when Stop was tapped can still land here afterward. Without
+                // this guard, that late arrival would unconditionally restart the reveal task
+                // below, silently resuming a printing effect the user explicitly stopped —
+                // sometimes surviving several taps of Stop in a row.
+                guard !wasStopped else { return }
                 if pacedContent.isEmpty {
-                    pacedContent = PacedTextCache.shared.get(messageId) ?? (isStreaming ? "" : newTarget)
+                    pacedContent = PacedTextCache.shared.get(messageId) ?? ""
                 }
-                let trimmedTarget = newTarget.trimmingCharacters(in: .whitespacesAndNewlines)
-                let trimmedPaced = pacedContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmedTarget.count < trimmedPaced.count || !trimmedTarget.hasPrefix(trimmedPaced) {
+                // Only a genuine divergence (the target no longer starts with what's already
+                // paced out — e.g. a retried/corrected message) should jump straight to the new
+                // text. Comparing *trimmed* strings for this was fragile: trailing whitespace
+                // shifts constantly as more tokens arrive, so trimmedTarget could stop having
+                // trimmedPaced as a prefix on an ordinary append, snapping pacedContent all the
+                // way to the current target and reading as "several lines landing at once."
+                // Comparing the untrimmed strings directly has no such false positives — a
+                // shorter newTarget already fails hasPrefix on its own, no separate length check
+                // needed.
+                if !newTarget.hasPrefix(pacedContent) {
                     pacedContent = newTarget
                     PacedTextCache.shared.set(messageId, newTarget)
                 }
-
-                if pacedContent.count < newTarget.count {
-                    ticker.start { elapsed in
-                        advancePacing(elapsed: elapsed)
-                    }
-                }
+                startRevealIfNeeded()
+            }
+            .onChange(of: wasStopped) { _, stopped in
+                guard stopped else { return }
+                // Freeze exactly where the reveal currently is — matches cai-android's "a
+                // cancelled stream just freezes wherever the ticker last painted" — rather than
+                // jumping to every character that had already arrived over the wire, which
+                // showed as several lines landing at once right when Stop was tapped.
+                revealTask?.cancel()
+                revealTask = nil
+                setRevealing(false)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active, !wasStopped else { return }
+                snapToEnd()
             }
             .onDisappear {
-                ticker.stop()
+                revealTask?.cancel()
+                revealTask = nil
+                setRevealing(false)
             }
     }
 
-    private func advancePacing(elapsed: Double) {
-        let currentTarget = latestTarget
-        guard pacedContent.count < currentTarget.count else {
-            ticker.stop()
-            return
-        }
-
-        // Guard against pacedContent not being a prefix of currentTarget
-        guard currentTarget.hasPrefix(pacedContent) else {
-            pacedContent = currentTarget
-            PacedTextCache.shared.set(messageId, currentTarget)
-            ticker.stop()
-            return
-        }
-
-        // Speed set to 400 chars/second for smoother vertical flow.
-        let charsPerSecond = 400.0
-        let charsToReveal = max(1, min(60, Int(round(elapsed * charsPerSecond))))
-        let rawLength = min(currentTarget.count, pacedContent.count + charsToReveal)
-        
-        var targetLength = rawLength
-        if rawLength < currentTarget.count {
-            // Find next space or newline starting from rawLength
-            let startIndex = currentTarget.index(currentTarget.startIndex, offsetBy: rawLength)
-            let searchRange = startIndex..<currentTarget.endIndex
-            
-            var nextSpaceIdx: Int? = nil
-            var nextNewlineIdx: Int? = nil
-            
-            if let spaceRange = currentTarget.range(of: " ", range: searchRange) {
-                nextSpaceIdx = currentTarget.distance(from: currentTarget.startIndex, to: spaceRange.lowerBound)
-            }
-            if let newlineRange = currentTarget.range(of: "\n", range: searchRange) {
-                nextNewlineIdx = currentTarget.distance(from: currentTarget.startIndex, to: newlineRange.lowerBound)
-            }
-            
-            let boundary: Int?
-            switch (nextSpaceIdx, nextNewlineIdx) {
-            case (.some(let s), .some(let n)): boundary = min(s, n)
-            case (.some(let s), .none):        boundary = s
-            case (.none, .some(let n)):        boundary = n
-            case (.none, .none):               boundary = nil
-            }
-            
-            // Snap to the next word or line boundary if it is within a short distance (up to 8 extra characters)
-            if let b = boundary, (b - pacedContent.count) <= (charsToReveal + 8) {
-                targetLength = min(currentTarget.count, b + 1)
-            }
-        }
-        
-        let nextIndex = currentTarget.index(currentTarget.startIndex, offsetBy: targetLength)
-        let nextPacedText = String(currentTarget[..<nextIndex])
-        pacedContent = nextPacedText
-        PacedTextCache.shared.set(messageId, nextPacedText)
-
-        if nextPacedText.count >= currentTarget.count {
-            ticker.stop()
-        }
-    }
-}
-
-// MARK: - FrameTicker
-
-/// A frame-synced timer using CADisplayLink to trigger updates aligned with the native screen refresh rate (60/120Hz).
-/// Eliminates scheduling latency and thread-hopping stutters associated with Task.sleep or DispatchQueue.
-@MainActor
-final class FrameTicker: NSObject, ObservableObject {
-    private var displayLink: CADisplayLink?
-    private var onFrameCallback: ((Double) -> Void)?
-    private var lastTimestamp: CFTimeInterval = 0
-
-    func start(onFrame: @escaping (Double) -> Void) {
-        guard displayLink == nil else {
-            self.onFrameCallback = onFrame
-            return
-        }
-        self.onFrameCallback = onFrame
-        self.lastTimestamp = 0
-        
-        let link = CADisplayLink(target: self, selector: #selector(handleFrame))
-        link.add(to: .main, forMode: .common)
-        self.displayLink = link
+    private func setRevealing(_ value: Bool) {
+        isActivelyRevealing = value
+        onRevealingChanged(value)
     }
 
-    func stop() {
-        displayLink?.invalidate()
-        displayLink = nil
-        onFrameCallback = nil
+    private func startRevealIfNeeded() {
+        guard revealTask == nil, pacedContent.count < latestTarget.count else { return }
+        setRevealing(true)
+        revealTask = Task { @MainActor in
+            var lastTick = ContinuousClock.now
+            while !Task.isCancelled {
+                let target = latestTarget
+                guard pacedContent.count < target.count else { break }
+                guard target.hasPrefix(pacedContent) else {
+                    pacedContent = target
+                    PacedTextCache.shared.set(messageId, target)
+                    break
+                }
+
+                try? await Task.sleep(for: Self.paceDelay)
+                let now = ContinuousClock.now
+                let elapsed = now - lastTick
+                lastTick = now
+                let components = elapsed.components
+                let elapsedSeconds = Double(components.seconds) + Double(components.attoseconds) * 1e-18
+
+                // Characters to reveal this tick are derived from *actually measured* elapsed
+                // time, not assumed from paceDelay — if a tick lands late (scheduler jitter,
+                // markdown re-parse cost, scroll contention), the next one reveals proportionally
+                // more so the average rate holds steady instead of visibly stalling.
+                let rawChars = Int((elapsedSeconds * Self.charsPerSecond).rounded())
+                let charsToReveal = min(max(rawChars, 1), Self.maxCharsPerTick)
+
+                let rawLength = min(target.count, pacedContent.count + charsToReveal)
+                var targetLength = rawLength
+                if rawLength < target.count {
+                    let searchStart = target.index(target.startIndex, offsetBy: rawLength)
+                    let spaceRange = target.range(of: " ", range: searchStart..<target.endIndex)
+                    let newlineRange = target.range(of: "\n", range: searchStart..<target.endIndex)
+                    let boundary: String.Index?
+                    switch (spaceRange, newlineRange) {
+                    case (nil, nil): boundary = nil
+                    case (let space?, nil): boundary = space.lowerBound
+                    case (nil, let newline?): boundary = newline.lowerBound
+                    case (let space?, let newline?): boundary = min(space.lowerBound, newline.lowerBound)
+                    }
+                    if let boundary,
+                       target.distance(from: searchStart, to: boundary) <= charsToReveal + Self.boundarySnapSlack {
+                        targetLength = min(target.count, target.distance(from: target.startIndex, to: boundary) + 1)
+                    }
+                }
+
+                let nextIndex = target.index(target.startIndex, offsetBy: targetLength)
+                let nextPaced = String(target[..<nextIndex])
+                pacedContent = nextPaced
+                PacedTextCache.shared.set(messageId, nextPaced)
+            }
+            revealTask = nil
+            setRevealing(false)
+        }
     }
 
-    @objc private func handleFrame(link: CADisplayLink) {
-        let current = link.timestamp
-        let elapsed = lastTimestamp == 0 ? link.duration : (current - lastTimestamp)
-        lastTimestamp = current
-        onFrameCallback?(elapsed)
+    private func snapToEnd() {
+        let wasRevealing = revealTask != nil
+        revealTask?.cancel()
+        revealTask = nil
+        pacedContent = latestTarget
+        PacedTextCache.shared.set(messageId, latestTarget)
+        if wasRevealing { setRevealing(false) }
     }
 }

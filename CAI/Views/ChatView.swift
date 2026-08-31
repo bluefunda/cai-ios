@@ -189,10 +189,17 @@ struct ChatView: View {
                                     // seconds reconciliation takes.
                                     let isThisMessageStreaming = (chatManager.isStreaming || chatManager.isReconciling)
                                         && index == conversation.messages.count - 1
+                                    let wasThisMessageStopped = chatManager.didStopCurrentMessage
+                                        && index == conversation.messages.count - 1
+                                    let isLastMessage = index == conversation.messages.count - 1
                                     MessageView(
                                         message: message,
                                         precedingQuestion: precedingQuestion,
-                                        isThisMessageStreaming: isThisMessageStreaming
+                                        isThisMessageStreaming: isThisMessageStreaming,
+                                        wasStopped: wasThisMessageStopped,
+                                        onRevealingChanged: isLastMessage
+                                            ? { chatManager.isRevealingLastMessage = $0 }
+                                            : { _ in }
                                     )
                                     .id(message.id)
                                 }
@@ -219,6 +226,16 @@ struct ChatView: View {
                     }
                     .coordinateSpace(name: "chatScroll")
                     .scrollDismissesKeyboard(.interactively)
+                    // `.defaultScrollAnchor(.bottom)` was tried here instead of the explicit,
+                    // event-driven scrolling below, but it re-anchors continuously — every time
+                    // the actively-streaming bubble grows even one line taller, it re-pins the
+                    // whole scroll content to the bottom, shoving everything already visible
+                    // upward on every reveal tick. That reads as text "printing from bottom to
+                    // top" instead of a normal top-down reveal with the view following it down.
+                    // Explicit onChange-driven scrolling (fired on real events — new message,
+                    // conversation switch — not on every content-size change) doesn't have that
+                    // problem, which is why it's back instead of the anchor.
+                    //
                     // Mirrors cai-android's MessageList exactly, which pairs two effects:
                     // 1) `LaunchedEffect(messages.isNotEmpty())` — the instant, unanimated
                     //    `scrollToItem(lastIndex)` fired once when the list first goes from
@@ -301,9 +318,10 @@ struct ChatView: View {
             ChatInputView(
                 text: $inputText,
                 // Keeps Stop showing (instead of falling back to mic) through the
-                // reconcileAfterBackground() retry window — see the matching comment on
-                // isThisMessageStreaming above.
-                isStreaming: chatManager.isStreaming || chatManager.isReconciling,
+                // reconcileAfterBackground() retry window (see the matching comment on
+                // isThisMessageStreaming above) and through PacedMarkdownView's local reveal
+                // outlasting a fast/short response that already finished on the wire.
+                isStreaming: chatManager.isStreaming || chatManager.isReconciling || chatManager.isRevealingLastMessage,
                 attachmentFilename: attachmentFilename,
                 isFocused: $isInputFocused,
                 rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
@@ -610,6 +628,14 @@ struct MessageView: View {
     var precedingQuestion: String?
     /// True only for the single assistant message currently being streamed into.
     var isThisMessageStreaming: Bool = false
+    /// True when the user explicitly tapped Stop for this message — tells
+    /// PacedMarkdownView to snap its reveal to whatever content arrived rather than
+    /// keep trickling out an already-received backlog at typing speed.
+    var wasStopped: Bool = false
+    /// Reports whether PacedMarkdownView is still visibly revealing this message, so the
+    /// composer can keep showing Stop for as long as text is still visibly printing — even
+    /// after the network side (isThisMessageStreaming) has already finished.
+    var onRevealingChanged: (Bool) -> Void = { _ in }
     @State private var didCopy = false
 
     /// Rendered on demand (not cached) since it's only needed when the user
@@ -705,7 +731,9 @@ struct MessageView: View {
                 PacedMarkdownView(
                     messageId: message.id,
                     targetContent: message.content,
-                    isStreaming: isThisMessageStreaming && !message.content.isEmpty
+                    isStreaming: isThisMessageStreaming && !message.content.isEmpty,
+                    wasStopped: wasStopped,
+                    onRevealingChanged: onRevealingChanged
                 )
                 .font(BFFont.body)
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -29,9 +29,18 @@ enum MarkdownBlock: Equatable {
 
 enum MarkdownParser {
     static func parse(_ input: String) -> [MarkdownBlock] {
+        parseWithBoundaries(input).blocks
+    }
+
+    /// Same parse, plus the input-line index each block finishes consuming — lets
+    /// `MarkdownParseCache` identify which leading blocks are already "closed" (unaffected by
+    /// any further text appended after them) so a streaming reveal only has to re-parse its
+    /// still-growing tail instead of the whole accumulated message on every update.
+    static func parseWithBoundaries(_ input: String) -> (blocks: [MarkdownBlock], blockEndLines: [Int]) {
         let normalized = input.replacingOccurrences(of: "\r\n", with: "\n")
         let lines = normalized.components(separatedBy: "\n")
         var blocks: [MarkdownBlock] = []
+        var blockEndLines: [Int] = []
         var i = 0
 
         while i < lines.count {
@@ -60,6 +69,7 @@ enum MarkdownParser {
                     language: lang.isEmpty ? nil : lang,
                     code: codeLines.joined(separator: "\n")
                 ))
+                blockEndLines.append(i)
                 continue
             }
 
@@ -73,6 +83,7 @@ enum MarkdownParser {
                         : ""
                     blocks.append(.heading(level: level, text: text))
                     i += 1
+                    blockEndLines.append(i)
                     continue
                 }
             }
@@ -82,6 +93,7 @@ enum MarkdownParser {
             if trimmed.count >= 3 && (noSpaces == "---" || noSpaces == "***" || noSpaces == "___") {
                 blocks.append(.horizontalRule)
                 i += 1
+                blockEndLines.append(i)
                 continue
             }
 
@@ -100,6 +112,7 @@ enum MarkdownParser {
                     i += 1
                 }
                 blocks.append(.blockquote(text: quoteLines.joined(separator: "\n")))
+                blockEndLines.append(i)
                 continue
             }
 
@@ -124,11 +137,15 @@ enum MarkdownParser {
                     }
                     if !headers.isEmpty {
                         blocks.append(.table(headers: headers, rows: rows))
+                        blockEndLines.append(i)
                         continue
                     }
                 }
                 // Not a real table — treat as paragraphs
-                for l in tableLines { blocks.append(.paragraph(l)) }
+                for l in tableLines {
+                    blocks.append(.paragraph(l))
+                    blockEndLines.append(i)
+                }
                 continue
             }
 
@@ -167,7 +184,10 @@ enum MarkdownParser {
                         break
                     }
                 }
-                if !items.isEmpty { blocks.append(.list(items: items)) }
+                if !items.isEmpty {
+                    blocks.append(.list(items: items))
+                    blockEndLines.append(i)
+                }
                 continue
             }
 
@@ -197,10 +217,11 @@ enum MarkdownParser {
                 // Join with \n; AttributedString(inlineOnly) collapses \n → space,
                 // matching standard Markdown paragraph behaviour.
                 blocks.append(.paragraph(paraLines.joined(separator: "\n")))
+                blockEndLines.append(i)
             }
         }
 
-        return blocks
+        return (blocks, blockEndLines)
     }
 
     private static func isUnorderedMarker(_ trimmedLine: String) -> Bool {
@@ -297,19 +318,83 @@ private enum DisplaySegment {
     case summaryCard(title: String, block: MarkdownBlock)
 }
 
+/// Memoizes `MarkdownParser` output per streaming message so a growing message only re-parses
+/// its still-open tail block, not the whole accumulated text, on every reveal tick. Re-parsing
+/// the full markdown from scratch at a high tick frequency is exactly what caused visible
+/// chunking (and, by saturating the main thread, sluggish Stop-button response) once a streamed
+/// reply ran more than a few lines — cost was scaling with total message length instead of
+/// staying bounded to whatever's still being typed. Safe because the parser is a single
+/// left-to-right pass: once a block's own loop exits via a real boundary (blank line, closing
+/// fence, a differing marker) rather than by running out of input, nothing appended afterward can
+/// ever change it — only the last (possibly still-open) block needs to be redone.
+private final class MarkdownParseCache {
+    struct Entry {
+        let content: String
+        let blocks: [MarkdownBlock]
+        let blockEndLines: [Int]
+    }
+
+    static let shared = MarkdownParseCache()
+    private var entries: [String: Entry] = [:]
+    private var keys: [String] = []
+    private let maxLimit = 50
+    private let lock = NSLock()
+
+    func parse(_ content: String, cacheKey: String) -> [MarkdownBlock] {
+        lock.lock(); defer { lock.unlock() }
+        if let entry = entries[cacheKey], entry.blocks.count > 1, content.hasPrefix(entry.content) {
+            let stableBlocks = Array(entry.blocks.dropLast())
+            let stableEndLine = entry.blockEndLines[entry.blockEndLines.count - 2]
+            let allLines = content.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+            if stableEndLine <= allLines.count {
+                let tailContent = allLines[stableEndLine...].joined(separator: "\n")
+                let tail = MarkdownParser.parseWithBoundaries(tailContent)
+                let combinedBlocks = stableBlocks + tail.blocks
+                let shiftedTailEndLines = tail.blockEndLines.map { $0 + stableEndLine }
+                let combinedEndLines = Array(entry.blockEndLines.dropLast()) + shiftedTailEndLines
+                store(cacheKey: cacheKey, content: content, blocks: combinedBlocks, blockEndLines: combinedEndLines)
+                return combinedBlocks
+            }
+        }
+        let result = MarkdownParser.parseWithBoundaries(content)
+        store(cacheKey: cacheKey, content: content, blocks: result.blocks, blockEndLines: result.blockEndLines)
+        return result.blocks
+    }
+
+    private func store(cacheKey: String, content: String, blocks: [MarkdownBlock], blockEndLines: [Int]) {
+        entries[cacheKey] = Entry(content: content, blocks: blocks, blockEndLines: blockEndLines)
+        if let idx = keys.firstIndex(of: cacheKey) { keys.remove(at: idx) }
+        keys.append(cacheKey)
+        if keys.count > maxLimit {
+            let oldest = keys.removeFirst()
+            entries.removeValue(forKey: oldest)
+        }
+    }
+}
+
 // MARK: - MarkdownView
 
 struct MarkdownView: View {
     let content: String
     /// True only while this is the single assistant message currently being streamed into —
-    /// shows a blinking cursor embedded right after the last character of the last block.
+    /// gates InlineMarkdownText's trailing opacity fade on the *last* block only, matching
+    /// cai-android's Markdown.kt (`blockIsStreaming = isPacingActive && index == blocks.lastIndex`).
+    /// That fade — the newest ~60 characters ramping from 40% to full opacity — is the actual
+    /// mechanism behind Android's smooth flowing look; it's not a cosmetic extra.
     var isStreaming: Bool = false
     private let blocks: [MarkdownBlock]
 
-    init(content: String, isStreaming: Bool = false) {
+    /// `cacheKey` (typically the message id) opts into `MarkdownParseCache`'s incremental
+    /// re-parse — pass it for actively-streaming content; omit it for static/one-shot content
+    /// (share cards, previews) where there's nothing to amortize across repeated calls.
+    init(content: String, isStreaming: Bool = false, cacheKey: String? = nil) {
         self.content = content
         self.isStreaming = isStreaming
-        self.blocks = MarkdownParser.parse(content)
+        if let cacheKey {
+            self.blocks = MarkdownParseCache.shared.parse(content, cacheKey: cacheKey)
+        } else {
+            self.blocks = MarkdownParser.parse(content)
+        }
     }
 
     private var segments: [DisplaySegment] {
@@ -331,10 +416,9 @@ struct MarkdownView: View {
         let lastIndex = segments.count - 1
         VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
-                let showCursor = isStreaming && index == lastIndex
                 switch segment {
                 case .single(let block):
-                    MarkdownBlockView(block: block, showCursor: showCursor)
+                    MarkdownBlockView(block: block, isRevealing: isStreaming && index == lastIndex)
                 case .summaryCard(let title, let block):
                     SummaryCardView(title: title, block: block)
                 }
@@ -356,20 +440,20 @@ struct MarkdownView: View {
 
 private struct MarkdownBlockView: View {
     let block: MarkdownBlock
-    var showCursor: Bool = false
+    var isRevealing: Bool = false
 
     var body: some View {
         switch block {
         case .paragraph(let text):
-            InlineMarkdownText(text: text, showCursor: showCursor)
+            InlineMarkdownText(text: text, isRevealing: isRevealing)
         case .heading(let level, let text):
-            HeadingView(level: level, text: text, showCursor: showCursor)
+            HeadingView(level: level, text: text)
         case .codeBlock(let language, let code):
-            CodeBlockView(language: language, code: code, showCursor: showCursor)
+            CodeBlockView(language: language, code: code)
         case .list(let items):
-            ListItemsView(items: items, showCursor: showCursor)
+            ListItemsView(items: items, isRevealing: isRevealing)
         case .blockquote(let text):
-            BlockquoteView(text: text, showCursor: showCursor)
+            BlockquoteView(text: text, isRevealing: isRevealing)
         case .horizontalRule:
             Divider()
         case .table(let headers, let rows):
@@ -445,25 +529,13 @@ private enum LaTeXMath {
     }
 }
 
-// MARK: - Streaming cursor
-
-/// Blinking caret embedded inline via `Text` concatenation, so it sits right after the last
-/// character of the actively-streaming block and wraps with the surrounding text like any other
-/// character — mirrors cai-android's InlineTextContent-based cursor in Markdown.kt.
-private func cursorText(at date: Date) -> Text {
-    let elapsed = date.timeIntervalSinceReferenceDate
-    let phase = elapsed.truncatingRemainder(dividingBy: 1.0)
-    let opacity = phase < 0.5 ? 1.0 : 0.0
-    return Text("▏").foregroundColor(Color.primary.opacity(opacity))
-}
-
 // MARK: - Inline Markdown Text
 
 private struct InlineMarkdownText: View {
     let text: String
     var font: Font = BFFont.responseBody
     var fillWidth: Bool = true
-    var showCursor: Bool = false
+    var isRevealing: Bool = false
 
     private var baseText: Text {
         let sanitized = LaTeXMath.sanitize(text)
@@ -473,7 +545,7 @@ private struct InlineMarkdownText: View {
         ) else {
             return Text(sanitized)
         }
-        if showCursor {
+        if isRevealing {
             applyTrailingFade(to: &attr)
         }
         return Text(attr)
@@ -481,16 +553,24 @@ private struct InlineMarkdownText: View {
 
     /// Fades in the tail of actively-streaming text — the newest character sits at 40% opacity,
     /// ramping up to fully opaque `fadeWindow` characters back — instead of every revealed
-    /// character snapping straight to full opacity. Mirrors cai-android's `inlineAnnotated`
-    /// (Markdown.kt), which is the actual source of its "smoother than iOS" look: the reveal
-    /// ticker's word-boundary snapping is already identical between the two, so what reads as
-    /// "line by line" vs "word by word" is this fade, not the pacing itself.
+    /// character snapping straight to full opacity. Ported directly from cai-android's
+    /// `inlineAnnotated` (Markdown.kt): this gradient, not the pacing/boundary-snapping (already
+    /// equivalent on both platforms), is the actual mechanism behind Android's smooth flowing
+    /// look — it was previously removed here by mistake alongside the streaming cursor, which is
+    /// a separate, unrelated thing that genuinely did need removing.
     private func applyTrailingFade(to attr: inout AttributedString) {
         let totalLength = attr.characters.count
-        guard totalLength > 0 else { return }
-        let fadeWindow = totalLength < 90 ? 0 : min(60, totalLength / 3)
+        guard totalLength >= 90 else { return }
+        // Kept as a genuine Double, not `min(60, totalLength / 3)` truncated to an Int: as
+        // totalLength grows by one character per tick, integer division only changes every
+        // ~3 characters, so the alpha ratio below (which divides by this) would hold flat for a
+        // couple of ticks and then jump when it finally increments — a small but visible
+        // stairstep in what should be a continuous fade, reading as a flicker/blink at the
+        // 8ms-tick update rate this runs at. A continuous denominator makes every character's
+        // alpha change smoothly and monotonically tick over tick instead.
+        let fadeWindow = min(60.0, Double(totalLength) / 3.0)
         guard fadeWindow > 0 else { return }
-        let startCheck = max(0, totalLength - fadeWindow)
+        let startCheck = totalLength - Int(fadeWindow.rounded(.up))
 
         var position = 0
         var index = attr.startIndex
@@ -498,8 +578,8 @@ private struct InlineMarkdownText: View {
             let next = attr.characters.index(after: index)
             if position >= startCheck {
                 let distanceFromEnd = totalLength - 1 - position
-                let alpha = 0.4 + (Double(distanceFromEnd) / Double(fadeWindow)) * 0.6
-                attr[index..<next].foregroundColor = Color.primary.opacity(alpha)
+                let alpha = 0.4 + (Double(distanceFromEnd) / fadeWindow) * 0.6
+                attr[index..<next].foregroundColor = Color.primary.opacity(min(alpha, 1.0))
             }
             index = next
             position += 1
@@ -507,13 +587,7 @@ private struct InlineMarkdownText: View {
     }
 
     var body: some View {
-        if showCursor {
-            TimelineView(.animation) { context in
-                styled(baseText + cursorText(at: context.date))
-            }
-        } else {
-            styled(baseText)
-        }
+        styled(baseText)
     }
 
     @ViewBuilder
@@ -540,18 +614,9 @@ private struct InlineMarkdownText: View {
 private struct HeadingView: View {
     let level: Int
     let text: String
-    var showCursor: Bool = false
 
     var body: some View {
-        Group {
-            if showCursor {
-                TimelineView(.animation) { context in
-                    styled(Text(LaTeXMath.sanitize(text)) + cursorText(at: context.date))
-                }
-            } else {
-                styled(Text(LaTeXMath.sanitize(text)))
-            }
-        }
+        styled(Text(LaTeXMath.sanitize(text)))
     }
 
     private func styled(_ text: Text) -> some View {
@@ -577,7 +642,6 @@ private struct HeadingView: View {
 private struct CodeBlockView: View {
     let language: String?
     let code: String
-    var showCursor: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var isCopied = false
@@ -614,17 +678,8 @@ private struct CodeBlockView: View {
 
             // Code content — horizontal scroll for long lines
             ScrollView(.horizontal, showsIndicators: false) {
-                Group {
-                    let base = Text(code.isEmpty ? AttributedString(" ") : highlightedCode(code, language: language))
-                    if showCursor {
-                        TimelineView(.animation) { context in
-                            (base + cursorText(at: context.date))
-                        }
-                    } else {
-                        base
-                    }
-                }
-                .font(.system(.caption, design: .monospaced))
+                Text(code.isEmpty ? AttributedString(" ") : highlightedCode(code, language: language))
+                    .font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -668,7 +723,7 @@ private func bulletGlyph(forDepth depth: Int) -> String {
 
 private struct ListItemsView: View {
     let items: [MarkdownListEntry]
-    var showCursor: Bool = false
+    var isRevealing: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -684,7 +739,7 @@ private struct ListItemsView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 14, alignment: .center)
                     }
-                    InlineMarkdownText(text: item.text, showCursor: showCursor && index == items.count - 1)
+                    InlineMarkdownText(text: item.text, isRevealing: isRevealing && index == items.count - 1)
                 }
                 .padding(.leading, CGFloat(item.depth) * 20)
             }
@@ -696,14 +751,14 @@ private struct ListItemsView: View {
 
 private struct BlockquoteView: View {
     let text: String
-    var showCursor: Bool = false
+    var isRevealing: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color.secondary.opacity(0.4))
                 .frame(width: 3)
-            InlineMarkdownText(text: text, showCursor: showCursor)
+            InlineMarkdownText(text: text, isRevealing: isRevealing)
                 .foregroundStyle(.secondary)
         }
     }

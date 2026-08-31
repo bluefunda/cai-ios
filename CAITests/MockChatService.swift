@@ -18,6 +18,10 @@ final class MockChatService: ChatServiceProtocol {
 
     var mockEvents: [ChatEvent] = []
     var mockError: Error?
+    /// Injected failure for stopStreaming, independent of mockError (which drives
+    /// sendMessage) — lets tests simulate the server never acknowledging a stop
+    /// request without also breaking the send path.
+    var stopStreamingError: Error?
     var mockContext: [ChatMessage] = []
     var mockTitle = "Mock Title"
 
@@ -65,6 +69,7 @@ final class MockChatService: ChatServiceProtocol {
 
     func stopStreaming(chatId: String) async throws {
         stopStreamingCalled = true
+        if let stopStreamingError { throw stopStreamingError }
     }
 
     func getChatContext(chatId: String) async throws -> [ChatMessage] {
