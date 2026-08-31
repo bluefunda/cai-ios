@@ -115,17 +115,39 @@ struct AppShell: View {
             // on undocumented Mac Catalyst chrome behavior (duplicated or got
             // buried under the sidebar depending on what else was declared
             // there); the trailing group never had that problem (cai-ios#256).
+            //
+            // Screenshot-confirmed behavior on Mac Catalyst (cai-ios#256):
+            // Catalyst's native leading toggle only renders next to the
+            // traffic lights while the sidebar column is COLLAPSED — it
+            // disappears once the column is showing (its only job is
+            // reopening a collapsed column). Our own SidebarToggleButton
+            // sits in the trailing group and is always present, so while
+            // collapsed both a native AND our own toggle show at once. Hide
+            // ours specifically while collapsed so exactly one toggle is
+            // ever visible: native for closed→open, ours for open→closed.
             content
                 .navigationTitle(mode == .code ? "Code" : "")
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
                         switch mode {
                         case .chat:
+                            #if targetEnvironment(macCatalyst)
+                            if columnVisibility != .detailOnly {
+                                SidebarToggleButton(columnVisibility: $columnVisibility)
+                            }
+                            #else
                             SidebarToggleButton(columnVisibility: $columnVisibility)
+                            #endif
                             AttachmentButton(conversationId: chatManager.currentConversation?.id)
                             NewChatButton(action: { chatManager.newConversation() })
                         case .code:
+                            #if targetEnvironment(macCatalyst)
+                            if columnVisibility != .detailOnly {
+                                SidebarToggleButton(columnVisibility: $columnVisibility)
+                            }
+                            #else
                             SidebarToggleButton(columnVisibility: $columnVisibility)
+                            #endif
                             Button(action: { showSystems = true }) {
                                 Image(systemName: "server.rack")
                                     .font(.system(size: BFFont.toolbarIconPt))
