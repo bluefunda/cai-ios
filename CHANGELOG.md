@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.2](https://github.com/bluefunda/cai-ios/compare/v2.4.1...v2.4.2) (2026-08-31)
+
+
+### Bug Fixes
+
+* **chat:** stop-button reliability, streaming content corruption, and reveal performance ([9be39f4](https://github.com/bluefunda/cai-ios/commit/9be39f42f68e6a523d0cba30aaeb265d9348193f))
+* **chat:** stop-button reliability, streaming content corruption, and reveal performance ([6a71a74](https://github.com/bluefunda/cai-ios/commit/6a71a743bca17dedce970518fe87747f81ba85f4))
+
 ## [2.4.1](https://github.com/bluefunda/cai-ios/compare/v2.4.0...v2.4.1) (2026-08-28)
 
 
