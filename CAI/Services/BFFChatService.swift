@@ -123,7 +123,16 @@ final class BFFChatService: ChatServiceProtocol {
                 } catch is CancellationError {
                     continuation.finish()
                 } catch {
-                    continuation.finish(throwing: error)
+                    // URLError(.cancelled) — a *different* type than Swift's native
+                    // CancellationError above — is what URLSession actually throws when
+                    // stopStreaming()'s currentTask?.cancel() interrupts this in-flight read.
+                    // Treating it the same way (finish cleanly, no thrown error) stops "cancelled"
+                    // from surfacing as a raw, confusing error alert on every user-initiated Stop.
+                    if (error as? URLError)?.code == .cancelled {
+                        continuation.finish()
+                    } else {
+                        continuation.finish(throwing: error)
+                    }
                 }
             }
             self.currentTask = task
@@ -151,10 +160,14 @@ final class BFFChatService: ChatServiceProtocol {
 
         let (_, response) = try await URLSession.shared.data(for: request)
 
+        // cai-bff now waits for cai-llm-router's ack before responding (previously a bare
+        // fire-and-forget NATS publish, so this endpoint returned 200 unconditionally regardless
+        // of whether anything server-side actually got stopped). A non-2xx here means the
+        // stop genuinely didn't land — surface it so the caller can tell the difference from a
+        // real success, instead of silently treating every stop attempt as having worked.
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
-            // Ignore stop errors - the stream might have already ended
-            return
+            throw ChatServiceError.serverError("Stop request failed")
         }
     }
 
@@ -249,7 +262,11 @@ final class BFFChatService: ChatServiceProtocol {
 
     // MARK: - SSE Parsing
 
-    private static func parseSSEEvent(_ eventText: String) -> ChatEvent? {
+    // Internal (not private) so CAITests can exercise it directly via @testable import —
+    // this is exactly the function that silently mis-rendered "live_usage_pct" telemetry as
+    // chat text (bluefunda/cai-ios stop-fix branch), and that class of bug is much cheaper to
+    // catch with a unit test per event type than by a user spotting corrupted text mid-response.
+    static func parseSSEEvent(_ eventText: String) -> ChatEvent? {
         var eventData: String?
 
         let lines = eventText.components(separatedBy: "\n")
@@ -285,10 +302,10 @@ final class BFFChatService: ChatServiceProtocol {
             let totalLength = json["total_content_length"] as? Int ?? json["totalContentLength"] as? Int ?? 0
             return .chunk(content: content, chunkId: chunkId, totalLength: totalLength)
 
-        case "stream_end":
+        case "stream_end", "stream_stopped":
             let totalChunks = json["total_chunks"] as? Int ?? json["totalChunks"] as? Int ?? 0
             let fullContent = json["full_content"] as? String ?? json["fullContent"] as? String ?? ""
-            let stopped = json["stopped"] as? Bool ?? false
+            let stopped = json["stopped"] as? Bool ?? (type == "stream_stopped")
             return .streamEnd(totalChunks: totalChunks, fullContent: fullContent, stopped: stopped)
 
         case "stream_heartbeat":
@@ -307,11 +324,20 @@ final class BFFChatService: ChatServiceProtocol {
             let resetLabel = json["reset_label"] as? String ?? ""
             return .rateLimited(period: period, resetLabel: resetLabel)
 
+        // Sidebar/telemetry events that happen to carry a non-empty "content" field in a
+        // different encoding (e.g. live_usage_pct's content is "pct|period", not chat text).
+        // These must be explicitly ignored rather than falling through to `default` — the old
+        // fallback there ("any unrecognized event with non-empty content is a chat chunk") was
+        // silently splicing things like "25.01|daily" directly into the middle of the visible
+        // AI response with no separator, whenever one of these landed between two real
+        // stream_chunk frames. Named here (not just excluded from the fallback) so a newly added
+        // server-side event type fails loudly via the `default: return nil` below instead of
+        // being misrendered the same way again.
+        case "live_usage_pct", "usage_warning", "budget_exceeded", "stream_progress",
+             "tool_call", "stream_tool_execution", "stream_artifact":
+            return nil
+
         default:
-            // Try to parse as chunk if content exists
-            if let content = json["content"] as? String, !content.isEmpty {
-                return .chunk(content: content, chunkId: 0, totalLength: 0)
-            }
             return nil
         }
     }

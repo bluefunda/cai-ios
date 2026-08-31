@@ -426,6 +426,26 @@ final class ChatManagerTests: XCTestCase {
         XCTAssertTrue(mockService.stopStreamingCalled)
     }
 
+    /// When cai-bff can't confirm the stop actually landed server-side (its StopChat
+    /// now waits for cai-llm-router's ack instead of a fire-and-forget publish),
+    /// ChatManager should surface that instead of silently discarding it — otherwise
+    /// the user has no way to tell "stopped" from "might still be generating".
+    func test_stopStreaming_surfacesErrorWhenNotAcknowledged() async throws {
+        mockService.mockEvents = []
+        mockService.stopStreamingError = ChatServiceError.serverError("Stop request failed")
+
+        chatManager.newConversation()
+
+        let sendTask = Task { await self.chatManager.sendMessage("Hello") }
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        await chatManager.stopStreaming()
+        sendTask.cancel()
+
+        XCTAssertFalse(chatManager.isStreaming)
+        XCTAssertNotNil(chatManager.error)
+    }
+
     func test_rateLimited_removesEmptyAssistantBubble() async throws {
         mockService.mockEvents = [
             .rateLimited(period: "daily", resetLabel: "1h")
@@ -438,6 +458,24 @@ final class ChatManagerTests: XCTestCase {
         // Only the user message should remain — empty assistant placeholder removed
         XCTAssertEqual(chatManager.currentConversation?.messages.count, 1)
         XCTAssertEqual(chatManager.currentConversation?.messages.first?.role, .user)
+    }
+
+    /// Mirrors test_rateLimited_removesEmptyAssistantBubble — a server error (e.g. a 4xx/5xx
+    /// before any content streams) should also drop the empty assistant placeholder, not just
+    /// set chatManager.error. Left behind, it rendered as a permanently empty response bubble:
+    /// no spinner (isStreaming already false) and no text (none ever arrived).
+    func test_error_removesEmptyAssistantBubble() async throws {
+        mockService.mockEvents = [
+            .error(message: "missing realm", details: nil)
+        ]
+
+        chatManager.newConversation()
+        await chatManager.sendMessage("Hello")
+        try await waitForStreamingToFinish()
+
+        XCTAssertEqual(chatManager.currentConversation?.messages.count, 1)
+        XCTAssertEqual(chatManager.currentConversation?.messages.first?.role, .user)
+        XCTAssertNotNil(chatManager.error)
     }
 
     func test_rateLimited_setsShowRateLimitModal() async throws {

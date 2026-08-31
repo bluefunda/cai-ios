@@ -65,6 +65,19 @@ final class ChatManager: ObservableObject {
     /// "still working" (StreamingIndicator, Stop button) rather than an empty response bubble and
     /// a mic button for the several seconds reconciliation can take.
     @Published var isReconciling = false
+    /// Set at the moment the user taps Stop, cleared when the next message starts sending.
+    /// Lets PacedMarkdownView tell "the user explicitly stopped this response" (snap the reveal
+    /// to whatever has arrived so far) apart from "the network side finished naturally" (keep
+    /// trickling out the last bit smoothly — the deliberate, pre-existing behavior) — both look
+    /// identical from isStreaming alone, since it flips to false in both cases.
+    @Published var didStopCurrentMessage = false
+    /// True while PacedMarkdownView is still visibly revealing the last assistant message,
+    /// independent of isStreaming — which reflects the *network* side finishing, not the local
+    /// reveal catching up to it. Without this, a fast/short response could finish on the wire
+    /// (isStreaming already false) while the paced reveal was still visibly printing it, and the
+    /// composer would show the mic button instead of Stop for text the user could see was still
+    /// "streaming" on screen.
+    @Published var isRevealingLastMessage = false
     @Published var isLoadingChats = false
     @Published var error: String? {
         didSet { if error != nil, oldValue == nil { Haptic.notify(.error) } }
@@ -436,6 +449,8 @@ final class ChatManager: ObservableObject {
     ) async {
         guard !text.isBlank, !isStreaming else { return }
         Haptic.impact(.medium)   // message sent
+        didStopCurrentMessage = false
+        isRevealingLastMessage = false
 
         // Refresh the session *before* touching the conversation. If it has
         // expired, AuthManager routes the app back to sign-in — so we bail out
@@ -563,18 +578,15 @@ final class ChatManager: ObservableObject {
                         break
 
                     case .error(let message, _):
+                        // Remove the empty assistant placeholder — the alert already
+                        // communicates the failure, and leaving it behind produced a
+                        // permanently empty response bubble (no spinner, since isStreaming
+                        // is about to end; no text, since none ever arrived).
+                        removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
                         self.error = message
 
                     case .rateLimited(let period, let resetLabel):
-                        // Remove the empty assistant placeholder — keep the user message visible.
-                        if var conv = currentConversation,
-                           !conv.messages.isEmpty,
-                           conv.messages.last?.role == .assistant,
-                           conv.messages.last?.content.isEmpty == true {
-                            conv.messages.removeLast()
-                            currentConversation = conv
-                            updateConversation(conv)
-                        }
+                        removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
                         wasRateLimited = true
                         rateLimitEventPeriod = period
                         rateLimitEventResetLabel = resetLabel
@@ -590,7 +602,14 @@ final class ChatManager: ObservableObject {
                 // sign-in rather than showing a generic error popup.
                 authManager?.expireSession()
             } catch {
-                self.error = error.localizedDescription
+                // URLError(.cancelled) is a *different* type than Swift's native
+                // CancellationError above — it's what URLSession actually throws when
+                // stopStreaming()'s currentTask?.cancel() interrupts the in-flight read, so it
+                // was slipping past the check above and surfacing "cancelled" as a raw, confusing
+                // error alert on every user-initiated Stop instead of being treated the same way.
+                if (error as? URLError)?.code != .cancelled {
+                    self.error = error.localizedDescription
+                }
             }
 
             if !wasRateLimited, !Task.isCancelled, !finalContent.isEmpty {
@@ -652,16 +671,38 @@ final class ChatManager: ObservableObject {
     }
 
     func stopStreaming() async {
-        guard isStreaming, let conversation = currentConversation else { return }
+        guard let conversation = currentConversation else { return }
+        guard isStreaming else {
+            // The network side already finished — isRevealingLastMessage is the only reason
+            // Stop is even visible right now (see its doc comment). Nothing to tell the server;
+            // just snap the local reveal straight to the end instead of no-op'ing on a stream
+            // that's already over.
+            guard isRevealingLastMessage else { return }
+            didStopCurrentMessage = true
+            return
+        }
 
+        isStreaming = false
+        didStopCurrentMessage = true
         streamingTask?.cancel()
         streamingTask = nil
 
+        // The local stream reader is already cancelled above regardless — the UI always looks
+        // stopped from here. But service.stopStreaming now actually surfaces a failure (cai-bff
+        // waits for cai-llm-router's ack instead of a fire-and-forget publish — bluefunda/cai-ios
+        // stop-fix), so a failure here means the *server* likely never got the signal and
+        // generation may still be running. Surfacing it, rather than silently discarding it like
+        // before, is the whole point of the fix: the user can at least tell something didn't land
+        // instead of assuming Stop always works.
         do {
             try await service.stopStreaming(chatId: conversation.id)
         } catch {
-            // Ignore
+            self.error = "Stop may not have reached the server — the response might keep going."
         }
+
+        // Stopping before any content arrived at all otherwise left a permanently empty
+        // response bubble behind — same fix as the .error/.rateLimited stream-end cases.
+        removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
 
         isStreaming = false
         endStreamBackgroundTask()
@@ -687,6 +728,23 @@ final class ChatManager: ObservableObject {
             conversations[idx] = conversation
         } else {
             conversations.insert(conversation, at: 0)
+        }
+    }
+
+    /// Drops the trailing assistant placeholder if it's still empty — used when a stream ends
+    /// in a way that will never fill it in (a server error, or a rate limit hit before any text
+    /// arrived). Left in place, an empty placeholder renders as a permanently blank response
+    /// bubble: no spinner, since isStreaming is about to end, and no text, since none ever came.
+    private func removeTrailingEmptyAssistantPlaceholder(in conversationId: String) {
+        guard var conversation = conversations.first(where: { $0.id == conversationId }),
+              conversation.messages.last?.role == .assistant,
+              conversation.messages.last?.content.isEmpty == true else { return }
+
+        conversation.messages.removeLast()
+        updateConversation(conversation)
+
+        if currentConversation?.id == conversationId {
+            currentConversation = conversation
         }
     }
 
