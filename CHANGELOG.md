@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.3](https://github.com/bluefunda/cai-ios/compare/v2.4.2...v2.4.3) (2026-08-31)
+
+
+### Bug Fixes
+
+* **chat:** stopped messages can un-freeze and replay after a later prompt ([c359326](https://github.com/bluefunda/cai-ios/commit/c359326730be508c83ad6a593813cda13be7f415))
+* **chat:** stopped messages can un-freeze and replay after a later prompt ([dc62ce7](https://github.com/bluefunda/cai-ios/commit/dc62ce7eecd8a8d0ccbc0dd912ac36e1aeda08bf))
+
 ## [2.4.2](https://github.com/bluefunda/cai-ios/compare/v2.4.1...v2.4.2) (2026-08-31)
 
 
