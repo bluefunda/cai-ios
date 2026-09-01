@@ -80,23 +80,37 @@ private let lineCommentPrefix: [String: String] = [
 /// Renders `code` as plain text when `language` is missing or unrecognized, otherwise applies
 /// keyword/string/comment/number coloring for that language.
 func highlightedCode(_ code: String, language: String?) -> AttributedString {
-    guard let lang = language?.lowercased(), let keywords = languageKeywords[lang] else {
+    guard languageKeywords[language?.lowercased() ?? ""] != nil else {
         return AttributedString(code)
     }
-    let commentPrefix = lineCommentPrefix[lang]
     let lines = code.components(separatedBy: "\n")
     var result = AttributedString()
     for (index, line) in lines.enumerated() {
-        for (text, kind) in tokenizeLine(line, keywords: keywords, lineCommentPrefix: commentPrefix) {
-            var piece = AttributedString(text)
-            if let color = color(for: kind) {
-                piece.foregroundColor = color
-            }
-            result += piece
-        }
+        result += highlightedLine(line, language: language)
         if index != lines.count - 1 {
             result += AttributedString("\n")
         }
+    }
+    return result
+}
+
+/// Highlights a single line — the unit `CodeBlockView` caches per-line while a code block is
+/// actively streaming, so only the block's still-growing last line needs re-tokenizing on each
+/// reveal tick instead of the whole accumulated block from scratch every time (that used to cost
+/// O(current block length) per tick, and since that length grows across the whole reveal, made
+/// highlighting a long code block O(length²) overall — a code block genuinely gets slower to
+/// print the longer it streams).
+func highlightedLine(_ line: String, language: String?) -> AttributedString {
+    guard let lang = language?.lowercased(), let keywords = languageKeywords[lang] else {
+        return AttributedString(line)
+    }
+    var result = AttributedString()
+    for (text, kind) in tokenizeLine(line, keywords: keywords, lineCommentPrefix: lineCommentPrefix[lang]) {
+        var piece = AttributedString(text)
+        if let color = color(for: kind) {
+            piece.foregroundColor = color
+        }
+        result += piece
     }
     return result
 }

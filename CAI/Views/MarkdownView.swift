@@ -445,7 +445,7 @@ private struct MarkdownBlockView: View {
     var body: some View {
         switch block {
         case .paragraph(let text):
-            InlineMarkdownText(text: text, isRevealing: isRevealing)
+            InlineMarkdownText(text: text, isRevealing: isRevealing).equatable()
         case .heading(let level, let text):
             HeadingView(level: level, text: text)
         case .codeBlock(let language, let code):
@@ -531,7 +531,16 @@ private enum LaTeXMath {
 
 // MARK: - Inline Markdown Text
 
-private struct InlineMarkdownText: View {
+// Equatable (synthesized — text/font/fillWidth/isRevealing are all Equatable) so `.equatable()`
+// at each call site can tell SwiftUI to skip re-invoking body when nothing actually changed.
+// Without this, every already-finished block's baseText (a real AttributedString(markdown:)
+// parse, plus applyTrailingFade's per-character loop when isRevealing) got re-run on every
+// single reveal tick regardless of whether its own text had changed — MarkdownParseCache already
+// keeps earlier blocks' *values* stable tick over tick, but nothing told SwiftUI that stability
+// meant it could skip re-rendering them, since a plain (non-equatable) struct View gives it no
+// way to know. That extra cost grows with the number of already-finished blocks, which is why
+// this got worse "after a few lines": more static blocks getting needlessly re-parsed every 8ms.
+private struct InlineMarkdownText: View, Equatable {
     let text: String
     var font: Font = BFFont.responseBody
     var fillWidth: Bool = true
@@ -560,7 +569,7 @@ private struct InlineMarkdownText: View {
     /// a separate, unrelated thing that genuinely did need removing.
     private func applyTrailingFade(to attr: inout AttributedString) {
         let totalLength = attr.characters.count
-        guard totalLength >= 90 else { return }
+        guard totalLength >= 16 else { return }
         // Kept as a genuine Double, not `min(60, totalLength / 3)` truncated to an Int: as
         // totalLength grows by one character per tick, integer division only changes every
         // ~3 characters, so the alpha ratio below (which divides by this) would hold flat for a
@@ -568,7 +577,7 @@ private struct InlineMarkdownText: View {
         // stairstep in what should be a continuous fade, reading as a flicker/blink at the
         // 8ms-tick update rate this runs at. A continuous denominator makes every character's
         // alpha change smoothly and monotonically tick over tick instead.
-        let fadeWindow = min(60.0, Double(totalLength) / 3.0)
+        let fadeWindow = min(60.0, Double(totalLength) / 2.0)
         guard fadeWindow > 0 else { return }
         let startCheck = totalLength - Int(fadeWindow.rounded(.up))
 
@@ -645,6 +654,19 @@ private struct CodeBlockView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var isCopied = false
+    // Incremental highlight cache: while a code block is actively streaming, `code` grows by a
+    // handful of characters every reveal tick. Naively calling highlightedCode(code, ...) fresh
+    // each time re-tokenizes the *entire* accumulated block from scratch every tick — cost grows
+    // with current block length, so the total cost of highlighting a long code block end to end
+    // was O(length²), which read as the code block visibly getting slower to print the longer it
+    // streamed. All lines except the last are complete (a "\n" already terminated them) and will
+    // never change again, so they're tokenized once and cached; only the still-growing last line
+    // gets re-tokenized each tick, bounding per-tick cost to one line's length instead of the
+    // whole block's.
+    @State private var highlighted: AttributedString = AttributedString(" ")
+    @State private var stableCode = ""
+    @State private var stableLineCount = 0
+    @State private var stablePrefix = AttributedString()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -678,13 +700,16 @@ private struct CodeBlockView: View {
 
             // Code content — horizontal scroll for long lines
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code.isEmpty ? AttributedString(" ") : highlightedCode(code, language: language))
+                Text(highlighted)
                     .font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(codeBackground)
+        }
+        .onChange(of: code, initial: true) { _, newCode in
+            updateHighlight(for: newCode)
         }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
@@ -708,6 +733,41 @@ private struct CodeBlockView: View {
             try? await Task.sleep(for: .seconds(2))
             isCopied = false
         }
+    }
+
+    private func updateHighlight(for newCode: String) {
+        guard !newCode.isEmpty else {
+            highlighted = AttributedString(" ")
+            stableCode = ""
+            stableLineCount = 0
+            stablePrefix = AttributedString()
+            return
+        }
+
+        // Only a genuine divergence (edited/regenerated code, not a plain append) invalidates the
+        // cache — same pattern as PacedMarkdownView's own divergence check.
+        if !newCode.hasPrefix(stableCode) {
+            stableLineCount = 0
+            stablePrefix = AttributedString()
+        }
+        stableCode = newCode
+
+        let lines = newCode.components(separatedBy: "\n")
+        // Lines before the last are complete (a following line exists, meaning a "\n" already
+        // terminated them) and are tokenized once, then never touched again.
+        if stableLineCount < lines.count - 1 {
+            for index in stableLineCount..<(lines.count - 1) {
+                stablePrefix += highlightedLine(lines[index], language: language)
+                stablePrefix += AttributedString("\n")
+            }
+            stableLineCount = lines.count - 1
+        }
+
+        var result = stablePrefix
+        if let lastLine = lines.last {
+            result += highlightedLine(lastLine, language: language)
+        }
+        highlighted = result
     }
 }
 
@@ -740,6 +800,7 @@ private struct ListItemsView: View {
                             .frame(width: 14, alignment: .center)
                     }
                     InlineMarkdownText(text: item.text, isRevealing: isRevealing && index == items.count - 1)
+                        .equatable()
                 }
                 .padding(.leading, CGFloat(item.depth) * 20)
             }
@@ -759,6 +820,7 @@ private struct BlockquoteView: View {
                 .fill(Color.secondary.opacity(0.4))
                 .frame(width: 3)
             InlineMarkdownText(text: text, isRevealing: isRevealing)
+                .equatable()
                 .foregroundStyle(.secondary)
         }
     }
@@ -816,8 +878,10 @@ private struct DefinitionListView: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { rowIdx, row in
                 VStack(alignment: .leading, spacing: 3) {
                     InlineMarkdownText(text: row.first ?? "", font: BFFont.responseTableHeader, fillWidth: false)
+                        .equatable()
                     if row.count > 1 {
                         InlineMarkdownText(text: row[1], font: BFFont.responseTable, fillWidth: false)
+                            .equatable()
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -850,6 +914,7 @@ private struct StackedRowCardView: View {
                         font: BFFont.responseTableHeader,
                         fillWidth: true
                     )
+                    .equatable()
 
                     // Remaining columns render as "Header: value" lines that wrap in place.
                     ForEach(1..<headers.count, id: \.self) { colIdx in
@@ -862,6 +927,7 @@ private struct StackedRowCardView: View {
                                 font: BFFont.responseTable,
                                 fillWidth: true
                             )
+                            .equatable()
                         }
                     }
                 }
