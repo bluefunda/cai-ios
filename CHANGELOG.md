@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.4](https://github.com/bluefunda/cai-ios/compare/v2.4.3...v2.4.4) (2026-09-01)
+
+
+### Bug Fixes
+
+* **chat:** fix streaming render performance, trailing fade, and empty-state scroll ([a341216](https://github.com/bluefunda/cai-ios/commit/a3412166b7ee11c67ad87f1607da6bdf3e467f91))
+* **chat:** streaming render performance, trailing fade, and empty-state scroll ([553580f](https://github.com/bluefunda/cai-ios/commit/553580f17807b1506f75bd9a094847178cb9392e))
+
 ## [2.4.3](https://github.com/bluefunda/cai-ios/compare/v2.4.2...v2.4.3) (2026-08-31)
 
 
