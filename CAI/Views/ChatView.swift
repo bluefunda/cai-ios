@@ -282,6 +282,12 @@ struct ChatView: View {
                         }
                     }
                     .onChange(of: chatManager.currentConversation?.id) { _, _ in
+                        // Guarded on hasMessages: for a brand-new empty conversation (New Chat),
+                        // there's nothing below the EmptyStateView but its "bottom" spacer —
+                        // scrolling to it anchors that spacer at the viewport's bottom edge and
+                        // pushes the ~300pt-tall greeting entirely above the visible area, reading
+                        // as a blank screen until the user manually scrolls up to find it.
+                        guard hasMessages else { return }
                         Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
                             scrollToBottom(proxy: proxy)
@@ -289,15 +295,13 @@ struct ChatView: View {
                     }
                     .onAppear {
                         scrollProxy = proxy
+                        guard hasMessages else { return }
                         Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
                             scrollToBottom(proxy: proxy)
                         }
                     }
                 }
-            }
-            if chatManager.isStreaming {
-                streamingBottomShade
             }
         }
     }
@@ -556,23 +560,6 @@ struct ChatView: View {
         withAnimation(.easeOut(duration: 0.2)) {
             proxy.scrollTo("bottom", anchor: .bottom)
         }
-    }
-
-    /// Fades the last bit of streamed text into the background at the bottom
-    /// edge of the scroll area, echoing cai-android's `StreamingBottomShade`.
-    private var streamingBottomShade: some View {
-        let background = Color(.systemBackground)
-        return LinearGradient(
-            stops: [
-                .init(color: background.opacity(0), location: 0),
-                .init(color: background.opacity(0.6), location: 0.45),
-                .init(color: background.opacity(0.96), location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(height: 72)
-        .allowsHitTesting(false)
     }
 
     private func triggerFocus(delay milliseconds: Int) {

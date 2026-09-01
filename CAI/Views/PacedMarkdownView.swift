@@ -47,6 +47,20 @@ struct PacedMarkdownView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var pacedContent: String = ""
+    // What's actually handed to MarkdownView — deliberately updated at a throttled rate, not
+    // every reveal tick. MarkdownView's rendering (MarkdownParseCache's block parsing, and while
+    // a code block is open, CodeBlockView's per-tick highlight materialization) costs O(current
+    // content length) each time it runs — for a code block specifically, that's on top of the
+    // parser itself re-scanning every accumulated line from the opening fence each tick, since an
+    // unclosed code block is *always* the one open trailing block MarkdownParseCache can't avoid
+    // re-parsing. That's cheap once, but paying it on every single 8ms tick doesn't scale — a
+    // growing code block visibly printed slower than plain text as a result. Decoupling "advance
+    // the text a little" (pacedContent, cheap, stays at full 8ms rate) from "re-render the
+    // markdown" (renderedContent, throttled) fixes that without touching how characters are
+    // indexed into anything — pure time-based gating on plain value types, so it doesn't share
+    // any risk with the String.Index-across-ticks bug that caused the earlier crash here.
+    @State private var renderedContent: String = ""
+    @State private var lastRenderPublish = ContinuousClock.now
     @State private var latestTarget: String = ""
     @State private var revealTask: Task<Void, Never>?
     // Drives MarkdownView's trailing opacity fade — matches cai-android's `isPacingActive`
@@ -72,18 +86,23 @@ struct PacedMarkdownView: View {
     // word" is keeping the *tick interval* small (paceDelay) so each individual update is only a
     // couple of characters — well under one word — regardless of the overall chars/sec rate.
     private static let paceDelay: Duration = .milliseconds(8)
-    private static let charsPerSecond: Double = 300
+    private static let charsPerSecond: Double = 460
     private static let maxCharsPerTick = 60
     private static let boundarySnapSlack = 8
+    // How often the (expensive) markdown re-render is allowed to run while actively revealing —
+    // independent of paceDelay, which stays fast so the underlying text keeps advancing smoothly.
+    private static let renderInterval: Duration = .milliseconds(60)
 
     var body: some View {
-        MarkdownView(content: pacedContent, isStreaming: isActivelyRevealing, cacheKey: messageId)
+        MarkdownView(content: renderedContent, isStreaming: isActivelyRevealing, cacheKey: messageId)
             .onChange(of: targetContent, initial: true) { _, newTarget in
                 latestTarget = newTarget
 
                 if pacedContent.isEmpty {
                     if isStreaming {
-                        pacedContent = PacedTextCache.shared.get(messageId) ?? ""
+                        let cached = PacedTextCache.shared.get(messageId) ?? ""
+                        pacedContent = cached
+                        renderedContent = cached
                     } else {
                         // A fresh (re)appearance of a message that isn't currently streaming —
                         // e.g. scrolled far enough off-screen that SwiftUI tore down and
@@ -96,8 +115,7 @@ struct PacedMarkdownView: View {
                         // from-scratch typewriter replay of an already-completed response. This
                         // was most visible after tapping Stop early enough that no reveal tick
                         // (and so no PacedTextCache entry) had happened yet for this message.
-                        pacedContent = newTarget
-                        PacedTextCache.shared.set(messageId, newTarget)
+                        publish(newTarget)
                         return
                     }
                 }
@@ -122,8 +140,7 @@ struct PacedMarkdownView: View {
                 // shorter newTarget already fails hasPrefix on its own, no separate length check
                 // needed.
                 if !newTarget.hasPrefix(pacedContent) {
-                    pacedContent = newTarget
-                    PacedTextCache.shared.set(messageId, newTarget)
+                    publish(newTarget)
                 }
                 startRevealIfNeeded()
             }
@@ -156,6 +173,16 @@ struct PacedMarkdownView: View {
         onRevealingChanged(value)
     }
 
+    /// Immediately syncs pacedContent, renderedContent, and the cache to the same value — for
+    /// every "snap straight to this text" path (fresh mount, divergence, stop, resume). The
+    /// throttled render path inside the tick loop below is the only place these two are
+    /// deliberately allowed to drift apart.
+    private func publish(_ value: String) {
+        pacedContent = value
+        renderedContent = value
+        PacedTextCache.shared.set(messageId, value)
+    }
+
     private func startRevealIfNeeded() {
         guard revealTask == nil, pacedContent.count < latestTarget.count else { return }
         setRevealing(true)
@@ -165,8 +192,7 @@ struct PacedMarkdownView: View {
                 let target = latestTarget
                 guard pacedContent.count < target.count else { break }
                 guard target.hasPrefix(pacedContent) else {
-                    pacedContent = target
-                    PacedTextCache.shared.set(messageId, target)
+                    publish(target)
                     break
                 }
 
@@ -184,12 +210,23 @@ struct PacedMarkdownView: View {
                 let rawChars = Int((elapsedSeconds * Self.charsPerSecond).rounded())
                 let charsToReveal = min(max(rawChars, 1), Self.maxCharsPerTick)
 
+                // Recomputed fresh against *this* tick's `target` every time — a String.Index
+                // cached from a previous tick is not safe to reuse here. `target` is re-read from
+                // latestTarget every iteration, and once new content has arrived it's a genuinely
+                // different String instance — even though target.hasPrefix(pacedContent) confirms
+                // the prefix *bytes* are identical, Swift's small-string vs. large-string internal
+                // representations encode String.Index differently, so an index computed against
+                // one instance is not guaranteed valid for another. An earlier version of this
+                // code cached the index across ticks to avoid this O(position) walk every time —
+                // confirmed unsafe by an actual crash (EXC_BAD_INSTRUCTION in this subscript, from
+                // exactly that pattern), not just a theoretical risk, so it's gone.
+                let startIndex = target.index(target.startIndex, offsetBy: pacedContent.count)
+
                 let rawLength = min(target.count, pacedContent.count + charsToReveal)
-                var targetLength = rawLength
+                var endIndex = target.index(startIndex, offsetBy: rawLength - pacedContent.count)
                 if rawLength < target.count {
-                    let searchStart = target.index(target.startIndex, offsetBy: rawLength)
-                    let spaceRange = target.range(of: " ", range: searchStart..<target.endIndex)
-                    let newlineRange = target.range(of: "\n", range: searchStart..<target.endIndex)
+                    let spaceRange = target.range(of: " ", range: endIndex..<target.endIndex)
+                    let newlineRange = target.range(of: "\n", range: endIndex..<target.endIndex)
                     let boundary: String.Index?
                     switch (spaceRange, newlineRange) {
                     case (nil, nil): boundary = nil
@@ -198,16 +235,30 @@ struct PacedMarkdownView: View {
                     case (let space?, let newline?): boundary = min(space.lowerBound, newline.lowerBound)
                     }
                     if let boundary,
-                       target.distance(from: searchStart, to: boundary) <= charsToReveal + Self.boundarySnapSlack {
-                        targetLength = min(target.count, target.distance(from: target.startIndex, to: boundary) + 1)
+                       target.distance(from: endIndex, to: boundary) <= charsToReveal + Self.boundarySnapSlack {
+                        endIndex = target.index(after: boundary)
                     }
                 }
 
-                let nextIndex = target.index(target.startIndex, offsetBy: targetLength)
-                let nextPaced = String(target[..<nextIndex])
-                pacedContent = nextPaced
-                PacedTextCache.shared.set(messageId, nextPaced)
+                // Append just the new delta onto the existing buffer (amortized O(delta), like a
+                // growable array) instead of materializing the whole revealed-so-far prefix as a
+                // brand-new String every tick (O(current length) per tick, however it's indexed).
+                pacedContent.append(contentsOf: target[startIndex..<endIndex])
+                PacedTextCache.shared.set(messageId, pacedContent)
+
+                // renderedContent (what MarkdownView actually draws) only updates at
+                // renderInterval, not every paceDelay tick — see its declaration for why. Always
+                // publish on the tick that catches pacedContent up to the target, though, so the
+                // response doesn't sit briefly stale right when it finishes.
+                let sinceLastRender = now - lastRenderPublish
+                if sinceLastRender >= Self.renderInterval || pacedContent.count >= target.count {
+                    renderedContent = pacedContent
+                    lastRenderPublish = now
+                }
             }
+            // Guarantees renderedContent is fully caught up even if the loop broke (cancellation,
+            // divergence-publish above) before its own throttled-publish check could run.
+            renderedContent = pacedContent
             revealTask = nil
             setRevealing(false)
         }
@@ -217,8 +268,7 @@ struct PacedMarkdownView: View {
         let wasRevealing = revealTask != nil
         revealTask?.cancel()
         revealTask = nil
-        pacedContent = latestTarget
-        PacedTextCache.shared.set(messageId, latestTarget)
+        publish(latestTarget)
         if wasRevealing { setRevealing(false) }
     }
 }
