@@ -59,6 +59,22 @@ final class ChatManager: ObservableObject {
         }
     }
     @Published var isStreaming = false
+
+    /// The specific assistant message currently streaming — mirrors cai-android's
+    /// `ChatViewModel.streamingMessageId`. ChatView keys its spinner off this id, not off "is this
+    /// the last message in the array" (`index == messages.count - 1`), which broke once an early
+    /// Stop could remove trailing messages: the new "last" message would then be an older, already-
+    /// completed response that briefly inherited `isStreaming`'s true value and looked like it had
+    /// resumed streaming.
+    @Published var streamingMessageId: String?
+
+    /// The message a user-initiated Stop actually landed on — captured at stop time since
+    /// `streamingMessageId` itself clears to nil right after. Same identity-vs-position reasoning
+    /// as `streamingMessageId`: `didStopCurrentMessage` alone, matched by array position in
+    /// ChatView, would apply "stopped" styling to whatever is now last after an early Stop removes
+    /// trailing messages — an older, unrelated response.
+    @Published var stoppedMessageId: String?
+
     /// True only during `reconcileAfterBackground()`'s server re-fetch retry loop — distinct
     /// from `isStreaming` because that flag is deliberately cleared *before* the loop starts (to
     /// stop the dead local stream task from racing the fetch), but the UI still needs to show
@@ -441,24 +457,44 @@ final class ChatManager: ObservableObject {
     ///   instead of the global default (bluefunda/cai-ios#205) — a one-off
     ///   override for this send only, resolved once here and never persisted;
     ///   the composer's own override state resets independently (#206).
-    func sendMessage(
+    /// Local-only half of sending a message: resolves persona and appends the
+    /// user + placeholder assistant messages to the conversation so they're
+    /// visible immediately, without building or firing the network request.
+    /// Split out from `sendMessage` so a pending attachment upload only delays
+    /// the network call, not the user's own message appearing on screen — it
+    /// previously waited on the upload to resolve first, which for a slow or
+    /// stalled upload left even the just-typed prompt invisible for several
+    /// seconds after tapping send.
+    struct PendingUserTurn {
+        var conversation: Conversation
+        let isFirstMessage: Bool
+        let effectivePersona: Persona?
+        let userMessage: ChatMessage
+        let assistantMessage: ChatMessage
+    }
+
+    func beginUserTurn(
         _ text: String,
         fileUrl: String? = nil,
-        requestPromptOverride: String? = nil,
-        personaOverride: Persona? = nil
-    ) async {
-        guard !text.isBlank, !isStreaming else { return }
+        personaOverride: Persona? = nil,
+        // An attachment-only send displays an empty bubble (the real prompt, e.g. "Analyze the
+        // attached file.", goes to continueSendingMessage's own `text` param instead) — see
+        // ChatView.sendMessage.
+        allowBlankText: Bool = false
+    ) async -> PendingUserTurn? {
+        guard allowBlankText || !text.isBlank, !isStreaming else { return nil }
         Haptic.impact(.medium)   // message sent
         didStopCurrentMessage = false
+        stoppedMessageId = nil
         isRevealingLastMessage = false
 
         // Refresh the session *before* touching the conversation. If it has
         // expired, AuthManager routes the app back to sign-in — so we bail out
         // instead of appending a doomed message and then surfacing an "LLM error".
-        guard await ensureFreshSession() else { return }
+        guard await ensureFreshSession() else { return nil }
 
         if currentConversation == nil { newConversation(focus: false) }
-        guard var conversation = currentConversation else { return }
+        guard var conversation = currentConversation else { return nil }
 
         let isFirstMessage = conversation.messages.isEmpty
 
@@ -474,7 +510,7 @@ final class ChatManager: ObservableObject {
 
         // Append empty assistant placeholder — same persona as the user
         // message it's answering, so the turn's lens stays paired (#207).
-        var assistantMessage = ChatMessage(role: .assistant, content: "", persona: effectivePersona?.rawValue)
+        let assistantMessage = ChatMessage(role: .assistant, content: "", persona: effectivePersona?.rawValue)
         conversation.messages.append(assistantMessage)
 
         // Show truncated prompt immediately so sidebar isn't blank while API generates a real title.
@@ -483,12 +519,60 @@ final class ChatManager: ObservableObject {
         // Insert the draft into history now that it has its first message.
         upsertConversation(conversation)
 
+        // Flip streaming state on here rather than in continueSendingMessage — an attachment's
+        // upload runs between the two, and the placeholder bubble above would otherwise sit with
+        // no spinner (isStreaming still false, so isThisMessageStreaming in ChatView is false)
+        // for however long that upload takes, showing an empty invisible bubble instead.
+        isStreaming = true
+        streamingMessageId = assistantMessage.id
+        error = nil
+
         // Persist user message server-side (best-effort, non-blocking)
         if let api = apiService {
             Task {
                 try? await api.persistMessage(chatId: conversation.id, role: "user", content: text)
             }
         }
+
+        return PendingUserTurn(
+            conversation: conversation,
+            isFirstMessage: isFirstMessage,
+            effectivePersona: effectivePersona,
+            userMessage: userMessage,
+            assistantMessage: assistantMessage
+        )
+    }
+
+    /// Patches a user message's fileUrl once an attachment upload resolves — beginUserTurn shows
+    /// the message immediately with the local filename (so the chip renders right away, above the
+    /// prompt, without waiting on the network), and this swaps in the real remote URL once known.
+    func updateUserMessageFileUrl(_ fileUrl: String, messageId: String, in conversationId: String) {
+        guard var conversation = conversations.first(where: { $0.id == conversationId }),
+              let index = conversation.messages.firstIndex(where: { $0.id == messageId }) else { return }
+
+        conversation.messages[index].fileUrl = fileUrl
+        updateConversation(conversation)
+
+        if currentConversation?.id == conversationId {
+            currentConversation = conversation
+        }
+    }
+
+    /// Builds and fires the actual network request for a turn already begun
+    /// via `beginUserTurn` — `fileUrl` is passed again here (rather than read
+    /// back off `pending`) since it may have only just resolved from an
+    /// attachment upload that started after the user's message was already
+    /// shown on screen.
+    func continueSendingMessage(
+        _ pending: PendingUserTurn,
+        text: String,
+        fileUrl: String? = nil,
+        requestPromptOverride: String? = nil
+    ) async {
+        let conversation = pending.conversation
+        let isFirstMessage = pending.isFirstMessage
+        let effectivePersona = pending.effectivePersona
+        var assistantMessage = pending.assistantMessage
 
         let request = ChatRequest(
             chatId: conversation.id,
@@ -510,8 +594,6 @@ final class ChatManager: ObservableObject {
             persona: BFFeatureFlags.personaWireEnabled ? effectivePersona?.wireValue : nil
         )
 
-        isStreaming = true
-        error = nil
         beginStreamBackgroundTask()
 
         streamingTask = Task {
@@ -526,6 +608,12 @@ final class ChatManager: ObservableObject {
 
             do {
                 for try await event in service.sendMessage(request) {
+                    // Task cancellation is cooperative — streamingTask?.cancel() in stopStreaming()
+                    // just sets a flag, it doesn't interrupt an in-flight iteration. Without this
+                    // check, chunks already buffered/in-flight when the user taps Stop kept being
+                    // written via updateLastMessage for a moment afterward, surfacing as a small
+                    // burst of text arriving seconds after the stream was supposedly stopped.
+                    if Task.isCancelled { break }
                     switch event {
                     case .streamStart:
                         break
@@ -643,6 +731,12 @@ final class ChatManager: ObservableObject {
             }
 
             isStreaming = false
+            // Guarded on identity: if the user stopped this stream and immediately sent another
+            // message, streamingMessageId already points at the new turn's placeholder by the time
+            // this (now-stale, cancelled) task reaches here — clearing it unconditionally would
+            // incorrectly erase the new turn's streaming id. Mirrors cai-android's identity guard
+            // on _streamingConversationId in ChatViewModel.continueSendingMessage's finally block.
+            if streamingMessageId == assistantId { streamingMessageId = nil }
             endStreamBackgroundTask()
 
             // Now that the chat exists on the server (stream_start has fired),
@@ -658,6 +752,31 @@ final class ChatManager: ObservableObject {
                 cacheMessages(conv.messages, for: conv.id)
             }
         }
+    }
+
+    /// - Parameter requestPromptOverride: When set, sent to the backend as
+    ///   `ChatRequest.prompt` instead of `text` — used by the ST22 dump
+    ///   decoder (bluefunda/cai-ios#182) to wrap the user's pasted dump in a
+    ///   structured instruction template without cluttering their own chat
+    ///   bubble (which always shows exactly what they typed/pasted).
+    /// - Parameter personaOverride: When set, used as this message's persona
+    ///   instead of the global default (bluefunda/cai-ios#205) — a one-off
+    ///   override for this send only, resolved once here and never persisted;
+    ///   the composer's own override state resets independently (#206).
+    ///
+    /// Convenience wrapper over `beginUserTurn`/`continueSendingMessage` for
+    /// the common case where there's no attachment upload to wait on — the
+    /// user message appears and the request fires in the same call, as before.
+    func sendMessage(
+        _ text: String,
+        fileUrl: String? = nil,
+        requestPromptOverride: String? = nil,
+        personaOverride: Persona? = nil
+    ) async {
+        guard let pending = await beginUserTurn(text, fileUrl: fileUrl, personaOverride: personaOverride) else { return }
+        await continueSendingMessage(
+            pending, text: text, fileUrl: fileUrl, requestPromptOverride: requestPromptOverride
+        )
     }
 
     /// Maps the selected MCP server to a backend agent name.
@@ -676,16 +795,29 @@ final class ChatManager: ObservableObject {
             // The network side already finished — isRevealingLastMessage is the only reason
             // Stop is even visible right now (see its doc comment). Nothing to tell the server;
             // just snap the local reveal straight to the end instead of no-op'ing on a stream
-            // that's already over.
+            // that's already over. Still worth a cleanup pass: if the stream's natural end raced
+            // with this tap and landed on a genuinely empty response, the placeholder was never
+            // removed (the normal completion path only does that via .error/.rateLimited).
             guard isRevealingLastMessage else { return }
             didStopCurrentMessage = true
+            stoppedMessageId = conversation.messages.last?.id
+            removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
             return
         }
 
         isStreaming = false
+        stoppedMessageId = streamingMessageId
+        streamingMessageId = nil
         didStopCurrentMessage = true
         streamingTask?.cancel()
         streamingTask = nil
+
+        // Stopping before any content arrived at all otherwise left a permanently empty response
+        // bubble behind — same fix as the .error/.rateLimited stream-end cases. Done here, before
+        // the network round-trip below, rather than after: the cancelled streamingTask's loop only
+        // notices cancellation on its next iteration (see the Task.isCancelled check added there),
+        // so doing this cleanup after an awaited call gave it a whole extra window to interleave.
+        removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
 
         // The local stream reader is already cancelled above regardless — the UI always looks
         // stopped from here. But service.stopStreaming now actually surfaces a failure (cai-bff
@@ -699,10 +831,6 @@ final class ChatManager: ObservableObject {
         } catch {
             self.error = "Stop may not have reached the server — the response might keep going."
         }
-
-        // Stopping before any content arrived at all otherwise left a permanently empty
-        // response bubble behind — same fix as the .error/.rateLimited stream-end cases.
-        removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
 
         isStreaming = false
         endStreamBackgroundTask()
@@ -741,6 +869,15 @@ final class ChatManager: ObservableObject {
               conversation.messages.last?.content.isEmpty == true else { return }
 
         conversation.messages.removeLast()
+
+        // An attachment-only send (no typed text) stopped before any response arrived leaves
+        // nothing worth keeping — without this, the user bubble would show just an attachment
+        // chip with no text, as if the turn never really happened. Text turns are left alone:
+        // the user's own words are always worth keeping even if the reply never came.
+        if let lastMessage = conversation.messages.last, lastMessage.role == .user, lastMessage.content.isEmpty {
+            conversation.messages.removeLast()
+        }
+
         updateConversation(conversation)
 
         if currentConversation?.id == conversationId {

@@ -10,6 +10,8 @@
 		0F39E987AB185A7D67292A1D /* ST22PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C28B5B3AA1A956C85653B8 /* ST22PromptBuilder.swift */; };
 		1DC4A13684F2854777BCF877 /* RateLimitBannerPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77BF10443BA56D0CFA142022 /* RateLimitBannerPreviews.swift */; };
 		30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */; };
+		E7776B2B62564A31BEFB7543 /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */; };
+		3A6CF33342704D719652E0FC /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */; };
 		36DD901178353045CBE6B0C0 /* ChatManagerFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */; };
 		44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */; };
 		45AF841CB328895A9D51B352 /* ChatManagerPersonaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3574C50AA824A38FA5694A48 /* ChatManagerPersonaTests.swift */; };
@@ -131,6 +133,8 @@
 		5B27AD5F04553CCD0D2AD8B8 /* CAIUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CAIUITests.swift; sourceTree = "<group>"; };
 		5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatToolbarButtons.swift; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
+		57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
+		73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		73D7DD7C43BBF8C906E50131 /* CAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		76EA037805BB647C0BE35070 /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
 		77BF10443BA56D0CFA142022 /* RateLimitBannerPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RateLimitBannerPreviews.swift; sourceTree = "<group>"; };
@@ -303,6 +307,8 @@
 				C8B661515D5D03652EC63D67 /* SyntaxHighlighting.swift */,
 				77BF10443BA56D0CFA142022 /* RateLimitBannerPreviews.swift */,
 				71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */,
+				57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */,
+				73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */,
 				5478A24929F4E5D406E63882 /* ShareableAnswerCard.swift */,
 				5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */,
 				01905164500684B2385FE524 /* ComposerPickers.swift */,
@@ -614,6 +620,8 @@
 				D474F392E6033487FEA57F04 /* SyntaxHighlighting.swift in Sources */,
 				1DC4A13684F2854777BCF877 /* RateLimitBannerPreviews.swift in Sources */,
 				30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */,
+				E7776B2B62564A31BEFB7543 /* CameraCaptureView.swift in Sources */,
+				3A6CF33342704D719652E0FC /* ChatInputView.swift in Sources */,
 				97EB1625B38D58E56F0AC278 /* ScreenshotFixtures.swift in Sources */,
 				83BB536B4B990DE7C8A23210 /* ChatToolbarButtons.swift in Sources */,
 				62BC5ECA748BA2907E12AAA2 /* ComposerPickers.swift in Sources */,

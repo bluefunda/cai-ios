@@ -35,6 +35,9 @@ struct ChatView: View {
     /// Keeps the document-picker delegate alive for the duration of an
     /// imperative presentation (see DocumentPickerCoordinator).
     @State private var documentPickerCoordinator: DocumentPickerCoordinator?
+    /// Keeps the camera delegate alive for the duration of an imperative
+    /// presentation (see CameraCaptureCoordinator).
+    @State private var cameraCoordinator: CameraCaptureCoordinator?
     /// Set when the in-flight photo pick was started via "Decode ST22 Dump"
     /// rather than the plain photo-library action (bluefunda/cai-ios#182) —
     /// read once at send time to decide whether to wrap the request prompt.
@@ -180,17 +183,27 @@ struct ChatView: View {
                                     // here where the surrounding list is available, since
                                     // MessageView only sees a single message.
                                     let precedingQuestion = index > 0 ? conversation.messages[index - 1].content : nil
-                                    // Includes isReconciling: reconcileAfterBackground() clears
-                                    // isStreaming immediately (before its retry loop even starts)
-                                    // to stop the dead local stream task from racing the re-fetch,
-                                    // so without this the still-empty assistant bubble would fall
-                                    // out of the streaming state and show an empty response box
-                                    // (and the composer's mic button instead of Stop) for the
-                                    // seconds reconciliation takes.
-                                    let isThisMessageStreaming = (chatManager.isStreaming || chatManager.isReconciling)
-                                        && index == conversation.messages.count - 1
+                                    // The isStreaming half is keyed on the specific message id
+                                    // (streamingMessageId), not array position — an early Stop can
+                                    // remove trailing messages, and without identity-matching the
+                                    // new "last" message (an older, already-completed response)
+                                    // would briefly inherit isStreaming's true value and look like
+                                    // it had resumed streaming. isReconciling stays position-based:
+                                    // reconcileAfterBackground() clears isStreaming immediately
+                                    // (before its retry loop even starts) to stop the dead local
+                                    // stream task from racing the re-fetch, so without this the
+                                    // still-empty assistant bubble would fall out of the streaming
+                                    // state and show an empty response box (and the composer's mic
+                                    // button instead of Stop) for the seconds reconciliation takes —
+                                    // and the re-fetched message may not keep the same local id.
+                                    let isThisMessageStreaming = (chatManager.isStreaming && message.id == chatManager.streamingMessageId)
+                                        || (chatManager.isReconciling && index == conversation.messages.count - 1)
+                                    // Identity-based for the same reason as isThisMessageStreaming
+                                    // above — didStopCurrentMessage alone, matched by position,
+                                    // would mislabel an older message once an early Stop removes
+                                    // trailing ones.
                                     let wasThisMessageStopped = chatManager.didStopCurrentMessage
-                                        && index == conversation.messages.count - 1
+                                        && message.id == chatManager.stoppedMessageId
                                     let isLastMessage = index == conversation.messages.count - 1
                                     MessageView(
                                         message: message,
@@ -336,6 +349,8 @@ struct ChatView: View {
                 onClearAttachment: { clearAttachment() },
                 onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
                 onPickFile:  BFFeatureFlags.fileUploadEnabled ? { presentDocumentPicker() } : nil,
+                onPickCamera: BFFeatureFlags.fileUploadEnabled && UIImagePickerController.isSourceTypeAvailable(.camera)
+                    ? { presentCamera() } : nil,
                 onPickDumpScreenshot: BFFeatureFlags.fileUploadEnabled ? {
                     attachmentIsForDumpDecode = true
                     showPhotoPicker = true
@@ -395,17 +410,41 @@ struct ChatView: View {
             let localMetadata = attachmentLocalMetadata
             let isDumpScreenshot = attachmentIsForDumpDecode
             clearAttachment(deleteLocal: false)
+            let prompt = text.isEmpty ? "Analyze the attached file." : text
+            let override = isDumpScreenshot
+                ? ST22PromptBuilder.buildPrompt(rawDump: text.isEmpty ? nil : text)
+                : nil
             Task {
-                let fileUrl = try? await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
-                if let fileUrl, let localMetadata {
-                    chatManager.markAttachmentUploaded(localMetadata, remoteURL: fileUrl)
+                // Show the user's own message immediately, independent of the attachment
+                // upload — previously the upload was awaited *before* calling sendMessage at
+                // all, so a slow/stalled upload left even the just-typed prompt invisible for
+                // several seconds after tapping send.
+                // Displays exactly what the user typed (nothing, if they only attached a file) —
+                // `prompt` below (with the "Analyze the attached file." fallback) is for the
+                // backend request only, via continueSendingMessage's own `text` param. The chip
+                // itself renders off fileUrl, so it's seeded with the local filename immediately
+                // (above the prompt, matching the requested layout) rather than staying blank
+                // until the upload resolves — swapped for the real remote URL below once known.
+                guard let pending = await chatManager.beginUserTurn(
+                    text, fileUrl: f, personaOverride: personaForThisSend, allowBlankText: true
+                ) else { return }
+
+                var fileUrl: String?
+                do {
+                    fileUrl = try await chatManager.uploadAttachment(data: d, filename: f, mimeType: m)
+                } catch {
+                    // Was a silent `try?` — logged now so an upload failure shows up in the
+                    // device console instead of just silently sending the prompt text-only.
+                    print("[ChatView] attachment upload failed: \(error)")
                 }
-                let prompt = text.isEmpty ? "Analyze the attached file." : text
-                let override = isDumpScreenshot
-                    ? ST22PromptBuilder.buildPrompt(rawDump: text.isEmpty ? nil : text)
-                    : nil
-                await chatManager.sendMessage(
-                    prompt, fileUrl: fileUrl, requestPromptOverride: override, personaOverride: personaForThisSend
+                if let fileUrl {
+                    chatManager.updateUserMessageFileUrl(fileUrl, messageId: pending.userMessage.id, in: pending.conversation.id)
+                    if let localMetadata {
+                        chatManager.markAttachmentUploaded(localMetadata, remoteURL: fileUrl)
+                    }
+                }
+                await chatManager.continueSendingMessage(
+                    pending, text: prompt, fileUrl: fileUrl, requestPromptOverride: override
                 )
             }
         } else {
@@ -438,8 +477,56 @@ struct ChatView: View {
         Task { await chatManager.stopStreaming() }
     }
 
+    /// `loadTransferable(type: Data.self)` hands back the asset's original,
+    /// untranscoded bytes — on any iPhone using the default "High Efficiency"
+    /// camera format, that's HEIC, not JPEG. Re-encoding through `UIImage`
+    /// guarantees the bytes actually match the `image/jpeg` label sent to the
+    /// backend; sending raw HEIC mislabeled as JPEG produces an undecodable
+    /// image on the LLM provider's end, which reads to the user as "the
+    /// backend doesn't see any image attached".
     private func loadAttachment(from item: PhotosPickerItem?) async {
-        guard let item, let data = try? await item.loadTransferable(type: Data.self) else { return }
+        guard let item,
+              let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data),
+              let jpegData = image.jpegData(compressionQuality: 0.85)
+        else { return }
+        attachmentData = jpegData
+        attachmentMIME = "image/jpeg"
+        attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
+        await persistAttachmentLocally()
+    }
+
+    /// Presents the camera imperatively — see CameraCaptureCoordinator for
+    /// why (mirrors presentDocumentPicker's reasoning for Mac Catalyst).
+    /// Presenting a full-screen `UIImagePickerController` camera session while the
+    /// composer's text field is still first responder (mid keyboard-dismissal)
+    /// corrupts the presentation transition — observed as a "Snapshotting a view
+    /// ... UIKeyboardImpl ... not in a visible window" warning immediately
+    /// followed by AVCapture/XPC session errors (FigCaptureSourceRemote), with no
+    /// image ever delivered to the completion handler. Resigning first responder
+    /// and giving the keyboard a moment to actually finish dismissing before
+    /// presenting avoids the corrupted transition.
+    private func presentCamera() {
+        isInputFocused = false
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            cameraCoordinator = CameraCaptureCoordinator.present(
+                onCapture: { image in
+                    Task { await loadAttachment(from: image) }
+                    cameraCoordinator = nil
+                },
+                onCancel: {
+                    cameraCoordinator = nil
+                }
+            )
+        }
+    }
+
+    private func loadAttachment(from image: UIImage) async {
+        guard let data = image.jpegData(compressionQuality: 0.85) else { return }
         attachmentData = data
         attachmentMIME = "image/jpeg"
         attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
@@ -679,17 +766,22 @@ struct MessageView: View {
                 if let fileUrl = message.fileUrl, !fileUrl.isEmpty {
                     AttachmentChip(filename: URL(string: fileUrl)?.lastPathComponent ?? "Attachment")
                 }
-                Text(message.content)
-                    .font(BFFont.body)
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        BFColor.primary.opacity(0.13),
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    )
-                    .contextMenu { messageActions }
+                // An attachment sent with no typed text has empty content — rendered unconditionally,
+                // this still painted a visible empty rounded pill (padding + background) next to the
+                // chip, even though there was nothing to show inside it.
+                if !message.content.isEmpty {
+                    Text(message.content)
+                        .font(BFFont.body)
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            BFColor.primary.opacity(0.13),
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .contextMenu { messageActions }
+                }
                 HStack(spacing: 6) {
                     personaBadge
                     Text(message.timestamp, style: .time)
@@ -833,208 +925,6 @@ struct EmptyStateView: View {
         }
         .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-// MARK: - Chat Input View
-
-struct ChatInputView: View {
-    @Binding var text: String
-    let isStreaming: Bool
-    let attachmentFilename: String?
-    var isFocused: FocusState<Bool>.Binding
-    var rateLimitExceeded: Bool = false
-    var isRecording: Bool = false
-    var recordingElapsed: TimeInterval = 0
-    let onSend: () -> Void
-    let onStop: () -> Void
-    let onClearAttachment: () -> Void
-    /// nil = file upload feature disabled; non-nil = show the attach button
-    let onPickPhoto: (() -> Void)?
-    let onPickFile: (() -> Void)?
-    /// nil = file upload feature disabled; non-nil = show the "Decode ST22
-    /// Dump" attach option (bluefunda/cai-ios#182).
-    var onPickDumpScreenshot: (() -> Void)? = nil
-    var onMicTap: (() -> Void)? = nil
-    var onCancelRecording: (() -> Void)? = nil
-    var onConfirmRecording: (() -> Void)? = nil
-    /// false = the SAP persona feature is off device-wide (Settings) — the
-    /// composer's toggle/dropdown is hidden entirely rather than shown disabled.
-    var personaFeatureEnabled: Bool = false
-    var personaToggleOn: Binding<Bool> = .constant(false)
-    var currentPersona: Persona = .general
-    var personaOptions: [Persona] = Persona.fallbackCatalog
-    var onSelectPersona: (Persona) -> Void = { _ in }
-    // Mac Catalyst only — see ModeModelPicker.showMenu for why the attach
-    // Menu needs a popover instead (cai-ios#257 follow-up).
-    @State private var showAttachMenu = false
-
-    private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
-    private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if let filename = attachmentFilename {
-                HStack(spacing: 10) {
-                    Image(systemName: "paperclip").foregroundStyle(BFColor.primary)
-                    Text(filename).font(BFFont.bodySmall).lineLimit(1).foregroundStyle(.secondary)
-                    Spacer()
-                    Button(action: onClearAttachment) {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.horizontal, BFSpacing._4)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6))
-            }
-
-            if isRecording {
-                recordingRow
-            } else {
-                composerRow
-            }
-        }
-    }
-
-    // Two-row layout (text field on top, accessory controls below) —
-    // matches the Claude/ChatGPT composer shape (bluefunda/cai-ios#217
-    // follow-up). Keeps the persona toggle's visible "Persona" label from
-    // fighting the text field and send button for horizontal space on
-    // narrow screens, which is exactly what a single-row layout couldn't do.
-    private var composerRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
-                .font(BFFont.body)
-                .textFieldStyle(.plain)
-                .focused(isFocused)
-                .lineLimit(1...5)
-                .padding(.horizontal, 4)
-
-            HStack(alignment: .center, spacing: 6) {
-                // Attach button — only rendered when the feature flag is on
-                if attachEnabled {
-                    // Plain Menu — matches the profile menu's recipe
-                    // (ContentView.swift's bottom-left account row), which
-                    // has correct upward-flip and mouse-hover behavior on
-                    // Mac Catalyst. A popover-based rebuild here regressed
-                    // mouse-click reliability, so back to Menu (cai-ios#257
-                    // follow-up).
-                    Menu {
-                        if let pickPhoto = onPickPhoto {
-                            Button { pickPhoto() } label: {
-                                Label("Photo Library", systemImage: "photo")
-                            }
-                        }
-                        if let pickFile = onPickFile {
-                            Button { pickFile() } label: {
-                                Label("Browse Files", systemImage: "folder")
-                            }
-                        }
-                        if let pickDumpScreenshot = onPickDumpScreenshot {
-                            Button { pickDumpScreenshot() } label: {
-                                Label("Decode ST22 Dump", systemImage: "exclamationmark.triangle")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 32, height: 32)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .fixedSize()
-                    .disabled(isStreaming)
-                }
-
-                if personaFeatureEnabled {
-                    PersonaComposerControl(
-                        isOn: personaToggleOn,
-                        currentPersona: currentPersona,
-                        options: personaOptions,
-                        onSelect: onSelectPersona
-                    )
-                    .disabled(isStreaming)
-                }
-
-                Spacer(minLength: 0)
-
-                // Lives inside the composer (like Persona on the left) rather
-                // than the top bar — right side, directly next to mic/send.
-                ModeModelPicker()
-                    .disabled(isStreaming)
-
-                // Mic button — replaced by the send button once there's something to send, and
-                // by the stop button while streaming (canSend alone goes false once the
-                // composer clears post-send, which without the isStreaming check here would
-                // fall through to showing the mic button instead of Stop during the response).
-                if let micTap = onMicTap, !canSend, !isStreaming {
-                    Button(action: micTap) {
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isStreaming)
-                } else {
-                    Button {
-                        isStreaming ? onStop() : onSend()
-                    } label: {
-                        let active = isStreaming || canSend
-                        Circle()
-                            .fill(active ? BFColor.primary : Color(.systemGray4))
-                            .frame(width: 30, height: 30)
-                            .overlay {
-                                Image(systemName: isStreaming ? "stop.fill" : "arrow.up")
-                                    .font(.system(size: isStreaming ? 12 : 14, weight: .bold))
-                                    .foregroundStyle(active ? .white : .secondary)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!isStreaming && !canSend)
-                    // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
-                    .keyboardShortcut(.return, modifiers: .command)
-                }
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 10)
-        .background(Color(.systemBackground))
-    }
-
-    private var recordingRow: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.red)
-                .frame(width: 10, height: 10)
-            Text(formattedElapsed)
-                .font(BFFont.body.monospacedDigit())
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button(action: { onCancelRecording?() }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.secondary)
-            }
-            Button(action: { onConfirmRecording?() }) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(BFColor.primary)
-            }
-        }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, 10)
-        .background(Color(.systemBackground))
-    }
-
-    private var formattedElapsed: String {
-        let minutes = Int(recordingElapsed) / 60
-        let seconds = Int(recordingElapsed) % 60
-        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
