@@ -34,6 +34,7 @@
 		A1000006201BCDEF /* ChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDEF /* ChatManager.swift */; };
 		A1000006201BCDF1 /* ChatManager+Background.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF1 /* ChatManager+Background.swift */; };
 		A1000006201BCDF2 /* ChatManager+FileHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF2 /* ChatManager+FileHistory.swift */; };
+		46F1EB0C991F26F90A9898DD /* ChatManager+MessageMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */; };
 		A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017201BCDEF /* ChatServiceProtocol.swift */; };
 		A1000008201BCDEF /* NATSChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018201BCDEF /* NATSChatService.swift */; };
 		A1000009201BCDEF /* BFFChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019201BCDEF /* BFFChatService.swift */; };
@@ -148,6 +149,7 @@
 		A1000016201BCDEF /* ChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatManager.swift; sourceTree = "<group>"; };
 		A1000016201BCDF1 /* ChatManager+Background.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+Background.swift"; sourceTree = "<group>"; };
 		A1000016201BCDF2 /* ChatManager+FileHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+FileHistory.swift"; sourceTree = "<group>"; };
+		CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+MessageMutation.swift"; sourceTree = "<group>"; };
 		A1000017201BCDEF /* ChatServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatServiceProtocol.swift; sourceTree = "<group>"; };
 		A1000018201BCDEF /* NATSChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NATSChatService.swift; sourceTree = "<group>"; };
 		A1000019201BCDEF /* BFFChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFChatService.swift; sourceTree = "<group>"; };
@@ -322,6 +324,7 @@
 				A1000016201BCDEF /* ChatManager.swift */,
 				A1000016201BCDF1 /* ChatManager+Background.swift */,
 				A1000016201BCDF2 /* ChatManager+FileHistory.swift */,
+				CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */,
 				D1000008201BCDEF /* StorageViewModel.swift */,
 				G1000011201BCDEF /* CodeManager.swift */,
 			);
@@ -565,6 +568,7 @@
 				A1000006201BCDEF /* ChatManager.swift in Sources */,
 				A1000006201BCDF1 /* ChatManager+Background.swift in Sources */,
 				A1000006201BCDF2 /* ChatManager+FileHistory.swift in Sources */,
+				46F1EB0C991F26F90A9898DD /* ChatManager+MessageMutation.swift in Sources */,
 				A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */,
 				A1000008201BCDEF /* NATSChatService.swift in Sources */,
 				A1000009201BCDEF /* BFFChatService.swift in Sources */,
