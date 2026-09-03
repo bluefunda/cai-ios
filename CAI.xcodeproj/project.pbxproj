@@ -10,11 +10,11 @@
 		0F39E987AB185A7D67292A1D /* ST22PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C28B5B3AA1A956C85653B8 /* ST22PromptBuilder.swift */; };
 		1DC4A13684F2854777BCF877 /* RateLimitBannerPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77BF10443BA56D0CFA142022 /* RateLimitBannerPreviews.swift */; };
 		30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */; };
-		E7776B2B62564A31BEFB7543 /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */; };
-		3A6CF33342704D719652E0FC /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */; };
 		36DD901178353045CBE6B0C0 /* ChatManagerFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */; };
+		3A6CF33342704D719652E0FC /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */; };
 		44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */; };
 		45AF841CB328895A9D51B352 /* ChatManagerPersonaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3574C50AA824A38FA5694A48 /* ChatManagerPersonaTests.swift */; };
+		46F1EB0C991F26F90A9898DD /* ChatManager+MessageMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */; };
 		4825950C249ABF3CC61D75F0 /* ChatManagerTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */; };
 		4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */; };
 		536F861E705EDC6CCE7A910A /* PersonaCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C100E3C73AB54B4E17FBFBF2 /* PersonaCatalogTests.swift */; };
@@ -34,7 +34,6 @@
 		A1000006201BCDEF /* ChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDEF /* ChatManager.swift */; };
 		A1000006201BCDF1 /* ChatManager+Background.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF1 /* ChatManager+Background.swift */; };
 		A1000006201BCDF2 /* ChatManager+FileHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF2 /* ChatManager+FileHistory.swift */; };
-		46F1EB0C991F26F90A9898DD /* ChatManager+MessageMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */; };
 		A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017201BCDEF /* ChatServiceProtocol.swift */; };
 		A1000008201BCDEF /* NATSChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018201BCDEF /* NATSChatService.swift */; };
 		A1000009201BCDEF /* BFFChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019201BCDEF /* BFFChatService.swift */; };
@@ -73,6 +72,7 @@
 		E100001101BCDEF /* MockChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002101BCDEF /* MockChatService.swift */; };
 		E205E936118E358F35CAE939 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D1A595C64D9C17C89A28E571 /* Foundation.framework */; };
 		E6A72825067324D318C14ECF /* Persona.swift in Sources */ = {isa = PBXBuildFile; fileRef = E69AD9A3F1811EA79D6F71AF /* Persona.swift */; };
+		E7776B2B62564A31BEFB7543 /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */; };
 		E900FE732FFC198B00881287 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E900FE722FFC198B00881287 /* StoreKit.framework */; };
 		E900FE762FFC32F100881287 /* Products.storekit in Resources */ = {isa = PBXBuildFile; fileRef = E900FE752FFC32F100881287 /* Products.storekit */; };
 		E900FE782FFC336200881287 /* IAPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E900FE772FFC336200881287 /* IAPManager.swift */; };
@@ -131,10 +131,10 @@
 		3574C50AA824A38FA5694A48 /* ChatManagerPersonaTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerPersonaTests.swift; sourceTree = "<group>"; };
 		52C4C03127B03E74AFFADA5E /* ScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
 		5478A24929F4E5D406E63882 /* ShareableAnswerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareableAnswerCard.swift; sourceTree = "<group>"; };
+		57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		5B27AD5F04553CCD0D2AD8B8 /* CAIUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CAIUITests.swift; sourceTree = "<group>"; };
 		5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatToolbarButtons.swift; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
-		57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		73D7DD7C43BBF8C906E50131 /* CAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		76EA037805BB647C0BE35070 /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
@@ -149,7 +149,6 @@
 		A1000016201BCDEF /* ChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatManager.swift; sourceTree = "<group>"; };
 		A1000016201BCDF1 /* ChatManager+Background.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+Background.swift"; sourceTree = "<group>"; };
 		A1000016201BCDF2 /* ChatManager+FileHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+FileHistory.swift"; sourceTree = "<group>"; };
-		CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+MessageMutation.swift"; sourceTree = "<group>"; };
 		A1000017201BCDEF /* ChatServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatServiceProtocol.swift; sourceTree = "<group>"; };
 		A1000018201BCDEF /* NATSChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NATSChatService.swift; sourceTree = "<group>"; };
 		A1000019201BCDEF /* BFFChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFChatService.swift; sourceTree = "<group>"; };
@@ -171,6 +170,7 @@
 		C1000007201BCDF0 /* PacedMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacedMarkdownView.swift; sourceTree = "<group>"; };
 		C100E3C73AB54B4E17FBFBF2 /* PersonaCatalogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PersonaCatalogTests.swift; sourceTree = "<group>"; };
 		C8B661515D5D03652EC63D67 /* SyntaxHighlighting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SyntaxHighlighting.swift; sourceTree = "<group>"; };
+		CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+MessageMutation.swift"; sourceTree = "<group>"; };
 		D1000008201BCDEF /* StorageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageViewModel.swift; sourceTree = "<group>"; };
 		D1A595C64D9C17C89A28E571 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		D6D4625865551367AF054908 /* MarkdownParsingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownParsingTests.swift; sourceTree = "<group>"; };
@@ -835,7 +835,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 139;
+				CURRENT_PROJECT_VERSION = 142;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -867,7 +867,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.4.4;
+				MARKETING_VERSION = 2.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -887,7 +887,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 139;
+				CURRENT_PROJECT_VERSION = 142;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -919,7 +919,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.4.4;
+				MARKETING_VERSION = 2.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -937,10 +937,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 139;
+				CURRENT_PROJECT_VERSION = 142;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.4.4;
+				MARKETING_VERSION = 2.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -955,10 +955,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 139;
+				CURRENT_PROJECT_VERSION = 142;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.4.4;
+				MARKETING_VERSION = 2.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
