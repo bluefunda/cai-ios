@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/bluefunda/cai-ios/compare/v2.4.4...v2.5.0) (2026-09-03)
+
+
+### Features
+
+* add camera capture to composer, fix attachment and streaming edge cases ([8a30acd](https://github.com/bluefunda/cai-ios/commit/8a30acd2e993725e85ca4303a998cc8299fd1d1d))
+
 ## [2.4.4](https://github.com/bluefunda/cai-ios/compare/v2.4.3...v2.4.4) (2026-09-01)
 
 
