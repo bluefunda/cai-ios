@@ -156,7 +156,7 @@ final class BFFChatService: ChatServiceProtocol {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.httpBody = "{}".data(using: .utf8)
+        request.httpBody = Data("{}".utf8)
 
         let (_, response) = try await URLSession.shared.data(for: request)
 

@@ -1074,7 +1074,13 @@ extension ChatManager {
                 // Logs exactly what the backend actually sent so a real deployed-backend gap
                 // (vs. a stale-client-state issue) is visible in the console instead of just
                 // showing "missing required fields" with no way to see which ones or why.
-                print("[ChatManager] loadRateLimit: missing hourly/weekly limit fields. planName=\(dto.stats?.planName ?? "nil") hourlyLimit=\(dto.stats?.hourlyTokensLimit.map(String.init) ?? "nil") weeklyLimit=\(dto.stats?.weeklyTokensLimit.map(String.init) ?? "nil") statsIsNil=\(dto.stats == nil)")
+                let hourlyStr = dto.stats?.hourlyTokensLimit.map(String.init) ?? "nil"
+                let weeklyStr = dto.stats?.weeklyTokensLimit.map(String.init) ?? "nil"
+                print("""
+                [ChatManager] loadRateLimit: missing hourly/weekly limit fields. \
+                planName=\(dto.stats?.planName ?? "nil") hourlyLimit=\(hourlyStr) \
+                weeklyLimit=\(weeklyStr) statsIsNil=\(dto.stats == nil)
+                """)
                 rateLimitError = "Couldn't load usage data — the backend response is missing required fields"
                 return
             }
