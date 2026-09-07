@@ -8,9 +8,9 @@ final class APIModelsTests: XCTestCase {
     // MARK: ModelsResponse
 
     func test_modelsResponse_decodesArray() throws {
-        let json = """
+        let json = Data("""
         [{"id":"groq","name":"Groq Llama","provider":"Groq"}]
-        """.data(using: .utf8)!
+        """.utf8)
 
         let response = try JSONDecoder().decode(ModelsResponse.self, from: json)
         XCTAssertEqual(response.models.count, 1)
@@ -19,9 +19,9 @@ final class APIModelsTests: XCTestCase {
     }
 
     func test_modelsResponse_decodesWrapped() throws {
-        let json = """
+        let json = Data("""
         {"models":[{"id":"openai","name":"GPT-4o","provider":"OpenAI"}]}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let response = try JSONDecoder().decode(ModelsResponse.self, from: json)
         XCTAssertEqual(response.models.count, 1)
@@ -31,9 +31,9 @@ final class APIModelsTests: XCTestCase {
     // MARK: ChatSummaryDTO
 
     func test_chatSummaryDTO_decodesSnakeCase() throws {
-        let json = """
+        let json = Data("""
         {"chatId":"abc-123","chatTitle":"My Chat","model":"groq","createdAt":"2024-01-01T00:00:00Z"}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(ChatSummaryDTO.self, from: json)
         XCTAssertEqual(dto.id, "abc-123")
@@ -44,25 +44,25 @@ final class APIModelsTests: XCTestCase {
     // MARK: ChatMessageDTO
 
     func test_chatMessageDTO_normalizesHumanRole() throws {
-        let json = """
+        let json = Data("""
         {"role":"Human","content":"Hello"}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
         XCTAssertEqual(dto.normalizedRoleString, "user")
     }
 
     func test_chatMessageDTO_normalizesAIRole() throws {
-        let json = """
+        let json = Data("""
         {"role":"AI","content":"Hello back"}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
         XCTAssertEqual(dto.normalizedRoleString, "assistant")
     }
 
     func test_chatMessageDTO_decodesFileFields() throws {
-        let json = """
+        let json = Data("""
         {
           "role": "AI",
           "content": "Here's your chart",
@@ -79,7 +79,7 @@ final class APIModelsTests: XCTestCase {
             }
           ]
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
         XCTAssertEqual(dto.fileUrl, "https://storage.example.com/upload.pdf")
@@ -91,9 +91,9 @@ final class APIModelsTests: XCTestCase {
     }
 
     func test_chatMessageDTO_fileFieldsDefaultNilWhenAbsent() throws {
-        let json = """
+        let json = Data("""
         {"role":"user","content":"Hello"}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(ChatMessageDTO.self, from: json)
         XCTAssertNil(dto.fileUrl)
@@ -104,7 +104,7 @@ final class APIModelsTests: XCTestCase {
     // MARK: RateLimitStatsDTO
 
     func test_rateLimitStatsDTO_decodesSnakeCase() throws {
-        let json = """
+        let json = Data("""
         {
           "plan_name": "free",
           "hourly_tokens_used": 5000,
@@ -113,7 +113,7 @@ final class APIModelsTests: XCTestCase {
           "weekly_tokens_limit": 900000,
           "hourly_reset_seconds": 12000
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(RateLimitStatsDTO.self, from: json)
         XCTAssertEqual(dto.planName, "free")
@@ -127,7 +127,7 @@ final class APIModelsTests: XCTestCase {
     // MARK: RateLimitDTO (nested stats shape)
 
     func test_rateLimitDTO_decodesNestedStats() throws {
-        let json = """
+        let json = Data("""
         {
           "stats": {
             "plan_name": "free",
@@ -141,7 +141,7 @@ final class APIModelsTests: XCTestCase {
           "reset_in_seconds": 3600,
           "reset_label": "1h"
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
         XCTAssertEqual(dto.stats?.planName, "free")
@@ -155,50 +155,50 @@ final class APIModelsTests: XCTestCase {
     }
 
     func test_rateLimitDTO_hourlyUsagePercent_capsAt100() throws {
-        let json = """
+        let json = Data("""
         {
           "stats": {
             "hourly_tokens_used": 200000,
             "hourly_tokens_limit": 150000
           }
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
         XCTAssertEqual(dto.hourlyUsagePercent, 1.0, accuracy: 0.001)
     }
 
     func test_rateLimitDTO_hourlyUsagePercent_zeroWhenNoStats() throws {
-        let json = """
+        let json = Data("""
         { "is_blocked": false }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
         XCTAssertEqual(dto.hourlyUsagePercent, 0.0, accuracy: 0.001)
     }
 
     func test_rateLimitDTO_weeklyUsagePercent() throws {
-        let json = """
+        let json = Data("""
         {
           "stats": {
             "weekly_tokens_used": 450000,
             "weekly_tokens_limit": 900000
           }
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
         XCTAssertEqual(dto.weeklyUsagePercent, 0.5, accuracy: 0.001)
     }
 
     func test_rateLimitDTO_blockedFlag() throws {
-        let json = """
+        let json = Data("""
         {
           "stats": { "plan_name": "free" },
           "is_blocked": true,
           "block_reason": "Abuse detected"
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
         XCTAssertEqual(dto.isBlocked, true)
@@ -208,18 +208,18 @@ final class APIModelsTests: XCTestCase {
     // MARK: TitleResponse
 
     func test_titleResponse_decodesGeneratedTitle() throws {
-        let json = """
+        let json = Data("""
         {"generatedTitle":"My Conversation"}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(TitleResponse.self, from: json)
         XCTAssertEqual(dto.title, "My Conversation")
     }
 
     func test_titleResponse_decodesTitleKey() throws {
-        let json = """
+        let json = Data("""
         {"title":"Another Chat"}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(TitleResponse.self, from: json)
         XCTAssertEqual(dto.title, "Another Chat")
@@ -228,9 +228,9 @@ final class APIModelsTests: XCTestCase {
     // MARK: MCPServerDTO
 
     func test_mcpServerDTO_resolvesURL() throws {
-        let json = """
+        let json = Data("""
         {"id":"abaper","name":"ABAP MCP","mcp_server_url":"http://abaper:8015/sse"}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(MCPServerDTO.self, from: json)
         XCTAssertEqual(dto.resolvedURL, "http://abaper:8015/sse")
@@ -239,9 +239,9 @@ final class APIModelsTests: XCTestCase {
     // MARK: StorageObjectDTO
 
     func test_storageObject_formatsSize() throws {
-        let json = """
+        let json = Data("""
         {"key":"folder/file.txt","size":1536}
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(dto.formattedSize, "1.5 KB")
@@ -282,18 +282,18 @@ final class APIModelsTests: XCTestCase {
     func test_fileUploadForPromptResponseDTO_decodesURL() throws {
         // Verified against the live gateway response, 2026-07-24: cai-gw wraps
         // trm-s3's raw array under a top-level "file" key, no "data" nesting.
-        let json = """
+        let json = Data("""
         { "file": [ { "url": "https://storage.example.com/abc.pdf", "name": "abc.pdf", "size": 123 } ] }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
         XCTAssertEqual(dto.resolvedURL, "https://storage.example.com/abc.pdf")
     }
 
     func test_fileUploadForPromptResponseDTO_resolvedURLNilWhenEmpty() throws {
-        let json = """
+        let json = Data("""
         { "file": [] }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let dto = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: json)
         XCTAssertNil(dto.resolvedURL)
@@ -589,7 +589,7 @@ final class AuthSecurityTests: XCTestCase {
     }
 
     private func makeTokenJSON(expiresIn: Int = 3600) -> Data {
-        let json = """
+        let json = Data("""
         {
           "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.\
         eyJzdWIiOiJ1c2VyLTEyMyIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsInByZWZlcnJlZF91c2VybmFtZSI6InRlc3QiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsidXNlciJdfX0.sig",
@@ -597,7 +597,7 @@ final class AuthSecurityTests: XCTestCase {
           "expires_in": \(expiresIn),
           "token_type": "Bearer"
         }
-        """.data(using: .utf8)!
+        """.utf8)
         return json
     }
 
@@ -823,14 +823,14 @@ final class AuthSecurityTests: XCTestCase {
             let body = request.httpBody.flatMap { String(data: $0, encoding: .utf8) } ?? ""
             guard body.contains("grant_type=refresh_token") else { throw URLError(.badURL) }
 
-            let json = """
+            let json = Data("""
             {
               "access_token": "\(newAccessToken)",
               "refresh_token": "new-refresh-token",
               "expires_in": 900,
               "token_type": "Bearer"
             }
-            """.data(using: .utf8)!
+            """.utf8)
             let response = HTTPURLResponse(
                 url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
             )!
@@ -841,9 +841,9 @@ final class AuthSecurityTests: XCTestCase {
 
         // restoreSession calls performTokenRefresh which needs a stored refresh token.
         // We test the token response decoding shape directly:
-        let json = """
+        let json = Data("""
         {"access_token":"\(newAccessToken)","refresh_token":"rt","expires_in":900,"token_type":"Bearer"}
-        """.data(using: .utf8)!
+        """.utf8)
         let decoded = try? JSONDecoder().decode(TokenResponse.self, from: json)
         XCTAssertEqual(decoded?.accessToken, newAccessToken)
         XCTAssertEqual(decoded?.refreshToken, "rt")
@@ -875,9 +875,9 @@ final class AuthSecurityTests: XCTestCase {
     // MARK: - TokenResponse Decoding
 
     func test_tokenResponse_decodesSnakeCaseKeys() throws {
-        let json = """
+        let json = Data("""
         {"access_token":"at","refresh_token":"rt","expires_in":300,"token_type":"Bearer"}
-        """.data(using: .utf8)!
+        """.utf8)
         let r = try JSONDecoder().decode(TokenResponse.self, from: json)
         XCTAssertEqual(r.accessToken, "at")
         XCTAssertEqual(r.refreshToken, "rt")
@@ -885,9 +885,9 @@ final class AuthSecurityTests: XCTestCase {
     }
 
     func test_tokenResponse_optionalRefreshToken() throws {
-        let json = """
+        let json = Data("""
         {"access_token":"at","expires_in":86400,"token_type":"Bearer"}
-        """.data(using: .utf8)!
+        """.utf8)
         let r = try JSONDecoder().decode(TokenResponse.self, from: json)
         XCTAssertEqual(r.accessToken, "at")
         XCTAssertNil(r.refreshToken)
@@ -1049,13 +1049,13 @@ final class ExtensionsTests: XCTestCase {
     }
 
     func test_storageObject_formattedSizeBytes() throws {
-        let json = "{\"key\":\"f.txt\",\"size\":512}".data(using: .utf8)!
+        let json = Data("{\"key\":\"f.txt\",\"size\":512}".utf8)
         let obj = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(obj.formattedSize, "512 B")
     }
 
     func test_storageObject_formattedSizeMB() throws {
-        let json = "{\"key\":\"f.bin\",\"size\":2097152}".data(using: .utf8)!
+        let json = Data("{\"key\":\"f.bin\",\"size\":2097152}".utf8)
         let obj = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(obj.formattedSize, "2.0 MB")
     }
@@ -1079,7 +1079,7 @@ final class LocalFileStoreTests: XCTestCase {
     }
 
     func test_saveAndLoad_roundTrips() async throws {
-        let data = "hello world".data(using: .utf8)!
+        let data = Data("hello world".utf8)
         let metadata = try await store.save(
             data: data, filename: "note.txt", mimeType: "text/plain",
             conversationId: "conv-1", source: .userUpload, remoteURL: nil

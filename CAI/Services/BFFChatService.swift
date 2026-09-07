@@ -281,10 +281,9 @@ final class BFFChatService: ChatServiceProtocol {
             }
         }
 
-        guard let data = eventData,
-              !data.isEmpty,
-              let jsonData = data.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+        guard let data = eventData, !data.isEmpty else { return nil }
+        let jsonData = Data(data.utf8)
+        guard let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
             return nil
         }
 
