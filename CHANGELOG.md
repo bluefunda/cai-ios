@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.6.0](https://github.com/bluefunda/cai-ios/compare/v2.5.0...v2.6.0) (2026-09-07)
+
+
+### Features
+
+* **rate-limit:** hourly/weekly usage limits, Claude-style Usage & Limits redesign ([869eab4](https://github.com/bluefunda/cai-ios/commit/869eab4e70186cfaa7c5d0829dc6d5b3626db91d))
+* **rate-limit:** hourly/weekly usage limits, Claude-style Usage & Limits redesign ([4fed988](https://github.com/bluefunda/cai-ios/commit/4fed988bbb334ad1ddb35bf7ff73d76fa4655d1b))
+
+
+### Bug Fixes
+
+* **lint:** use non-optional Data(_:) initializer instead of .data(using: .utf8)! ([ae8cefb](https://github.com/bluefunda/cai-ios/commit/ae8cefb3183bd834d83f89c2f78f6cbe4a1a243f))
+* **lint:** wrap long diagnostic print, fix remaining Data(_:) conversion ([ff8abd8](https://github.com/bluefunda/cai-ios/commit/ff8abd8498f4249da30a475b15bab7a18d276558))
+* **settings:** flatten Subscription navigation, fix stale rate-limit error flash ([dddf61d](https://github.com/bluefunda/cai-ios/commit/dddf61d8304891ea1d6fdd78c6c57aa1e6c078c6))
+* **settings:** flatten Usage navigation to match cai-android, drop dead CompactUsageBar ([1350980](https://github.com/bluefunda/cai-ios/commit/1350980e962127d6fd139d48725ff9d4515e90ba))
+
 ## [2.5.0](https://github.com/bluefunda/cai-ios/compare/v2.4.4...v2.5.0) (2026-09-03)
 
 
