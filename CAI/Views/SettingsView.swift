@@ -33,7 +33,6 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
-    @EnvironmentObject var iapManager: IAPManager
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showLogoutConfirmation = false
@@ -80,8 +79,18 @@ struct SettingsView: View {
         NavigationSplitView {
             List(selection: $selectedCategory) {
                 ForEach(categories) { category in
-                    Label(category.title, systemImage: category.icon)
-                        .tag(category)
+                    HStack {
+                        Label(category.title, systemImage: category.icon)
+                        Spacer()
+                        // The sidebar list style (automatic here, as the first content of
+                        // NavigationSplitView) doesn't draw a disclosure chevron on its own —
+                        // sidebar rows are selection rows, not NavigationLinks. Added explicitly
+                        // to match cai-android's ChevronRight on each Settings row.
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    .tag(category)
                 }
             }
             .navigationTitle("Settings")
@@ -247,27 +256,12 @@ struct SettingsView: View {
 
     // MARK: - Subscription
 
+    // Embeds SubscriptionContent directly (no dismiss chrome, no NavigationStack of its
+    // own) — matches cai-android's flat Settings -> Subscription navigation instead of
+    // pushing through an extra "Upgrade to Pro / Free >" summary row first.
     @ViewBuilder
     private var subscriptionDetail: some View {
-        List {
-            Section {
-                NavigationLink {
-                    SubscriptionView()
-                        .environmentObject(iapManager)
-                } label: {
-                    HStack {
-                        Label(
-                            iapManager.hasActiveSubscription ? "BlueFunda AI Pro" : "Upgrade to Pro",
-                            systemImage: iapManager.hasActiveSubscription ? "checkmark.seal.fill" : "sparkles"
-                        )
-                        Spacer()
-                        Text(iapManager.hasActiveSubscription ? "Active" : "Free")
-                            .foregroundColor(iapManager.hasActiveSubscription ? BFColor.success : .secondary)
-                    }
-                }
-            }
-        }
-        .navigationTitle("Subscription")
+        SubscriptionContent()
     }
 
     // MARK: - Legal

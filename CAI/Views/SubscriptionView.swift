@@ -1,9 +1,29 @@
 import SwiftUI
 import StoreKit
 
+/// Modal presentation of the subscription screen (used from ContentView's sheet) — wraps
+/// `SubscriptionContent` in its own NavigationStack plus a "Done" button to dismiss.
 struct SubscriptionView: View {
-    @EnvironmentObject var iapManager: IAPManager
     @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SubscriptionContent()
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+        }
+    }
+}
+
+/// The actual subscription content, with no dismiss chrome or NavigationStack of its own —
+/// also embedded directly inside SettingsView's Subscription detail pane (which already
+/// provides its own NavigationStack/back button via the split view), matching cai-android's
+/// flat Settings -> Subscription navigation instead of pushing through an extra screen.
+struct SubscriptionContent: View {
+    @EnvironmentObject var iapManager: IAPManager
     @Environment(\.openURL) private var openURL
 
     @State private var selectedProductID: String = "com.bluefunda.ai.pro.yearly"
@@ -18,23 +38,23 @@ struct SubscriptionView: View {
     private let termsURL   = URL(string: "https://bluefunda.com/terms/")!
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if iapManager.hasActiveSubscription {
-                    subscribedView
-                } else {
-                    upgradeView
-                }
-            }
-            .navigationTitle(iapManager.hasActiveSubscription ? "Your Plan" : "Upgrade to Pro")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
+        Group {
+            if iapManager.hasActiveSubscription {
+                subscribedView
+            } else {
+                upgradeView
             }
         }
+        .navigationTitle(iapManager.hasActiveSubscription ? "Your Plan" : "Upgrade to Pro")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
+            // Re-checks on every visit instead of relying solely on the app-level
+            // auth-change hook (CAIApp.swift), which only fires on a false->true
+            // transition and can miss an already-authenticated persisted session on
+            // cold launch — silently leaving a real Stripe/Apple/Google subscriber
+            // stuck showing "Upgrade to Pro". Mirrors cai-android's UpgradeViewModel
+            // .loadIfNeeded(), which already re-syncs every time that screen opens.
+            await iapManager.syncWithBackend()
             if iapManager.products.isEmpty {
                 await iapManager.loadProducts()
             }

@@ -1056,6 +1056,13 @@ extension ChatManager {
     func loadRateLimit() async {
         guard let api = apiService else { return }
 
+        // Cleared here, not just on success — otherwise a stale error from an earlier failed
+        // attempt (e.g. the very first fetch racing app cold start before auth/network was
+        // ready) stays displayed through this entire new attempt, since RateLimitView's body
+        // checks rateLimit == nil before falling through to rateLimitError. Without this, a
+        // fresh in-flight retry incorrectly renders the old error screen instead of Loading.
+        rateLimitError = nil
+
         do {
             let dto = try await api.fetchRateLimit()
             // 0 is a real, meaningful value (an explicitly configured "no cap" plan) — falling
@@ -1064,6 +1071,10 @@ extension ChatManager {
             // genuinely unlimited plan. Only proceed once both are actually present.
             guard let hourlyLimit = dto.stats?.hourlyTokensLimit,
                   let weeklyLimit = dto.stats?.weeklyTokensLimit else {
+                // Logs exactly what the backend actually sent so a real deployed-backend gap
+                // (vs. a stale-client-state issue) is visible in the console instead of just
+                // showing "missing required fields" with no way to see which ones or why.
+                print("[ChatManager] loadRateLimit: missing hourly/weekly limit fields. planName=\(dto.stats?.planName ?? "nil") hourlyLimit=\(dto.stats?.hourlyTokensLimit.map(String.init) ?? "nil") weeklyLimit=\(dto.stats?.weeklyTokensLimit.map(String.init) ?? "nil") statsIsNil=\(dto.stats == nil)")
                 rateLimitError = "Couldn't load usage data — the backend response is missing required fields"
                 return
             }
