@@ -12,43 +12,44 @@ struct RateLimitView: View {
         chatManager.rateLimit?.weeklyLimit == 0
     }
 
+    // No own NavigationStack — this is embedded directly as SettingsView's Usage detail
+    // pane (which already provides one), matching cai-android's flat Settings -> Usage
+    // navigation instead of pushing through an extra intermediate summary screen.
     var body: some View {
-        NavigationStack {
-            Group {
-                if let info = chatManager.rateLimit {
-                    if isUnlimited {
-                        unlimitedContent
-                    } else {
-                        rateContent(info: info)
-                    }
-                } else if let rateLimitError = chatManager.rateLimitError {
-                    ErrorRateLimitView(message: rateLimitError)
+        Group {
+            if let info = chatManager.rateLimit {
+                if isUnlimited {
+                    unlimitedContent
                 } else {
-                    LoadingRateLimitView()
+                    rateContent(info: info)
                 }
+            } else if let rateLimitError = chatManager.rateLimitError {
+                ErrorRateLimitView(message: rateLimitError)
+            } else {
+                LoadingRateLimitView()
             }
-            .navigationTitle("Usage & Limits")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        refresh()
-                    } label: {
-                        if isRefreshing {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
+        }
+        .navigationTitle("Usage & Limits")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    refresh()
+                } label: {
+                    if isRefreshing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
                     }
-                    .disabled(isRefreshing)
                 }
+                .disabled(isRefreshing)
             }
-            .task {
-                isRefreshing = true
-                await chatManager.loadRateLimit()
-                lastFetchedAt = Date()
-                isRefreshing = false
-            }
+        }
+        .task {
+            isRefreshing = true
+            await chatManager.loadRateLimit()
+            lastFetchedAt = Date()
+            isRefreshing = false
         }
     }
 
@@ -253,7 +254,7 @@ struct ErrorRateLimitView: View {
 }
 
 #Preview {
-    RateLimitView()
+    NavigationStack { RateLimitView() }
         .environmentObject({
             let m = ChatManager(service: BFFChatService())
             m.rateLimit = RateLimitInfo(

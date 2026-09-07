@@ -238,26 +238,11 @@ struct SettingsView: View {
 
     // MARK: - Usage
 
+    // Embeds RateLimitView's content directly (no intermediate summary screen to tap
+    // through first) — matches cai-android's flat Settings -> Usage navigation.
     @ViewBuilder
     private var usageDetail: some View {
-        List {
-            Section {
-                NavigationLink {
-                    RateLimitView()
-                } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Usage & Limits", systemImage: "chart.bar")
-                        if let info = chatManager.rateLimit, info.weeklyLimit > 0 {
-                            CompactUsageBar(label: "Session", percent: info.hourlyPercent)
-                            CompactUsageBar(label: "Weekly", percent: info.weeklyPercent)
-                        }
-                    }
-                    .padding(.vertical, chatManager.rateLimit != nil ? 4 : 0)
-                }
-            }
-        }
-        .navigationTitle("Usage")
-        .task { await chatManager.loadRateLimit() }
+        RateLimitView()
     }
 
     // MARK: - Subscription
@@ -415,42 +400,6 @@ struct SettingsView: View {
         case .disconnected:
             return BFColor.neutral400
         }
-    }
-}
-
-// MARK: - Compact Usage Bar
-
-private struct CompactUsageBar: View {
-    let label: String
-    let percent: Double
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .frame(width: 48, alignment: .leading)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color(.systemGray5))
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(barColor)
-                        .frame(width: geo.size.width * min(percent, 1.0))
-                }
-            }
-            .frame(height: 4)
-            Text("\(Int(percent * 100))%")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .frame(width: 32, alignment: .trailing)
-        }
-    }
-
-    private var barColor: Color {
-        if percent >= 1.0 { return .red }
-        if percent >= 0.8 { return .orange }
-        return BFColor.primary
     }
 }
 
