@@ -156,7 +156,7 @@ final class BFFChatService: ChatServiceProtocol {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.httpBody = "{}".data(using: .utf8)
+        request.httpBody = Data("{}".utf8)
 
         let (_, response) = try await URLSession.shared.data(for: request)
 
@@ -281,10 +281,9 @@ final class BFFChatService: ChatServiceProtocol {
             }
         }
 
-        guard let data = eventData,
-              !data.isEmpty,
-              let jsonData = data.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+        guard let data = eventData, !data.isEmpty else { return nil }
+        let jsonData = Data(data.utf8)
+        guard let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
             return nil
         }
 
@@ -320,8 +319,13 @@ final class BFFChatService: ChatServiceProtocol {
             return .error(message: message, details: details)
 
         case "rate_limited":
-            let period = json["period"] as? String ?? "daily"
-            let resetLabel = json["reset_label"] as? String ?? ""
+            let period = json["period"] as? String ?? "weekly"
+            // The stream event only ever carries reset_in_seconds, never a pre-formatted
+            // label (unlike the /rate-limit REST endpoint) — format it client-side so the
+            // UI always shows an exact countdown instead of a blank/vague string.
+            let resetInSeconds = json["reset_in_seconds"] as? Int ?? 0
+            let resetLabel = (json["reset_label"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? RateLimitInfo.formatResetLabel(seconds: resetInSeconds)
             return .rateLimited(period: period, resetLabel: resetLabel)
 
         // Sidebar/telemetry events that happen to carry a non-empty "content" field in a

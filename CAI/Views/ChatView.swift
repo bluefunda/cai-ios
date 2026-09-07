@@ -110,11 +110,11 @@ struct ChatView: View {
             hasTriggeredInitialFocus = true
             triggerFocus(delay: 150)
         }
-        // Focus whenever showing the empty / new-chat state (no conversation open).
-        // Guards with hasTriggeredInitialFocus so it fires at most once per session.
+        // Focus on launch regardless of whether an existing conversation reopens — the
+        // user shouldn't have to tap the composer just to start typing. Guards with
+        // hasTriggeredInitialFocus so it fires at most once per session.
         .onChange(of: chatManager.isLoadingChats) { _, loading in
             guard !loading, !hasTriggeredInitialFocus else { return }
-            guard chatManager.currentConversation == nil else { return }
             hasTriggeredInitialFocus = true
             triggerFocus(delay: 300)
         }
@@ -123,7 +123,7 @@ struct ChatView: View {
                 chatManager.shouldAutoFocusInput = false
                 hasTriggeredInitialFocus = true
                 triggerFocus(delay: 300)
-            } else if !hasTriggeredInitialFocus, chatManager.currentConversation == nil {
+            } else if !hasTriggeredInitialFocus {
                 hasTriggeredInitialFocus = true
                 triggerFocus(delay: 500)
             }
@@ -325,7 +325,7 @@ struct ChatView: View {
             if let info = chatManager.rateLimit, info.status != .normal {
                 RateLimitBanner(
                     status: info.status,
-                    percent: info.dailyPercent,
+                    percent: max(info.hourlyPercent, info.weeklyPercent),
                     resetLabel: info.resetLabel
                 )
             }
@@ -984,9 +984,9 @@ struct RateLimitBanner: View {
     private var message: String {
         switch status {
         case .warning:
-            return "You've used \(Int(percent * 100))% of your daily token limit"
+            return "You've used \(Int(percent * 100))% of your usage limit"
         case .exceeded:
-            return "Token limit reached. Resets in \(resetLabel)."
+            return "Usage limit reached — renews in \(resetLabel)"
         case .blocked:
             return "Your account has been temporarily blocked."
         case .normal:
@@ -1006,9 +1006,9 @@ struct RateLimitModal: View {
 
     private var planName: String { info?.planName ?? "current" }
 
-    private var isMonthly: Bool {
-        if let info, info.monthlyPercent >= 1.0 && info.dailyPercent < 1.0 { return true }
-        return period == "monthly"
+    private var isWeekly: Bool {
+        if let info, info.weeklyPercent >= 1.0 && info.hourlyPercent < 1.0 { return true }
+        return period == "weekly"
     }
 
     var body: some View {
@@ -1026,7 +1026,7 @@ struct RateLimitModal: View {
                         .font(.system(size: 26))
                         .foregroundStyle(BFColor.error)
                 }
-                Text("Token Limit Reached")
+                Text("Usage Limit Reached")
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundStyle(BFColor.textHeading)
@@ -1036,10 +1036,10 @@ struct RateLimitModal: View {
             .padding(.bottom, BFSpacing._3)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("You've reached your **\(planName)** plan's token limit.")
+                Text("You've reached your **\(planName)** plan's usage limit for now.")
                     .font(.body)
                     .foregroundStyle(BFColor.textBody)
-                Text("\(isMonthly ? "Monthly" : "Daily") limit resets in **\(resetLabel)**.")
+                Text("Your \(isWeekly ? "weekly" : "session") limit renews in **\(resetLabel)** — you can continue chatting once it resets.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }

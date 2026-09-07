@@ -117,7 +117,7 @@ struct ChatInputView: View {
     // narrow screens, which is exactly what a single-row layout couldn't do.
     private var composerRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField(rateLimitExceeded ? "Daily limit reached" : "Message...", text: $text, axis: .vertical)
+            TextField(rateLimitExceeded ? "Usage limit reached" : "Message...", text: $text, axis: .vertical)
                 .font(BFFont.body)
                 .textFieldStyle(.plain)
                 .focused(isFocused)

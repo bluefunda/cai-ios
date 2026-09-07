@@ -235,9 +235,13 @@ final class ChatManager: ObservableObject {
     }
 
     @Published var rateLimit: RateLimitInfo?
+    /// Set when loadRateLimit() fails to produce usable data (network error, or a stale backend
+    /// response missing required fields) — scoped separately from the general `error` alert since
+    /// this is a background settings-screen refresh, not something that should interrupt chat.
+    @Published var rateLimitError: String?
     @Published var showRateLimitModal = false
     // Fallback data from the rate_limited event itself, used when API call fails
-    private(set) var rateLimitEventPeriod: String = "daily"
+    private(set) var rateLimitEventPeriod: String = "weekly"
     private(set) var rateLimitEventResetLabel: String = ""
     @Published var greeting: String = ""
     /// True only when a fresh draft was just created via newConversation(). Cleared on first use.
@@ -1052,20 +1056,49 @@ extension ChatManager {
     func loadRateLimit() async {
         guard let api = apiService else { return }
 
+        // Cleared here, not just on success — otherwise a stale error from an earlier failed
+        // attempt (e.g. the very first fetch racing app cold start before auth/network was
+        // ready) stays displayed through this entire new attempt, since RateLimitView's body
+        // checks rateLimit == nil before falling through to rateLimitError. Without this, a
+        // fresh in-flight retry incorrectly renders the old error screen instead of Loading.
+        rateLimitError = nil
+
         do {
             let dto = try await api.fetchRateLimit()
+            // 0 is a real, meaningful value (an explicitly configured "no cap" plan) — falling
+            // back to it here for a *missing* field would make an invalid/stale backend response
+            // (e.g. one still sending only daily/monthly fields) indistinguishable from a
+            // genuinely unlimited plan. Only proceed once both are actually present.
+            guard let hourlyLimit = dto.stats?.hourlyTokensLimit,
+                  let weeklyLimit = dto.stats?.weeklyTokensLimit else {
+                // Logs exactly what the backend actually sent so a real deployed-backend gap
+                // (vs. a stale-client-state issue) is visible in the console instead of just
+                // showing "missing required fields" with no way to see which ones or why.
+                let hourlyStr = dto.stats?.hourlyTokensLimit.map(String.init) ?? "nil"
+                let weeklyStr = dto.stats?.weeklyTokensLimit.map(String.init) ?? "nil"
+                print("""
+                [ChatManager] loadRateLimit: missing hourly/weekly limit fields. \
+                planName=\(dto.stats?.planName ?? "nil") hourlyLimit=\(hourlyStr) \
+                weeklyLimit=\(weeklyStr) statsIsNil=\(dto.stats == nil)
+                """)
+                rateLimitError = "Couldn't load usage data — the backend response is missing required fields"
+                return
+            }
+            rateLimitError = nil
             rateLimit = RateLimitInfo(
                 planName: dto.stats?.planName ?? "—",
-                dailyUsed: dto.stats?.dailyTokensUsed ?? 0,
-                dailyLimit: dto.stats?.dailyTokensLimit ?? 0,
-                monthlyUsed: dto.stats?.monthlyTokensUsed ?? 0,
-                monthlyLimit: dto.stats?.monthlyTokensLimit ?? 0,
+                hourlyUsed: dto.stats?.hourlyTokensUsed ?? 0,
+                hourlyLimit: hourlyLimit,
+                weeklyUsed: dto.stats?.weeklyTokensUsed ?? 0,
+                weeklyLimit: weeklyLimit,
                 isBlocked: dto.isBlocked ?? false,
                 blockReason: dto.blockReason,
-                resetLabel: dto.resetLabel ?? "midnight"
+                resetLabel: dto.resetLabel ?? RateLimitInfo.formatResetLabel(seconds: dto.resetInSeconds ?? 0),
+                hourlyResetLabel: RateLimitInfo.formatResetLabel(seconds: dto.stats?.hourlyResetSeconds ?? 0)
             )
         } catch {
             print("[ChatManager] loadRateLimit error: \(error)")
+            rateLimitError = "Couldn't load usage data — \(error.localizedDescription)"
         }
     }
 
@@ -1190,35 +1223,59 @@ struct MCPServer: Identifiable, Hashable {
 
 enum RateLimitStatus {
     case normal
-    case warning   // daily >= 80%
-    case exceeded  // daily >= 100%
+    case warning   // hourly or weekly >= 80%
+    case exceeded  // hourly or weekly >= 100%
     case blocked
 }
 
 struct RateLimitInfo {
     let planName: String
-    let dailyUsed: Int
-    let dailyLimit: Int
-    let monthlyUsed: Int
-    let monthlyLimit: Int
+    let hourlyUsed: Int
+    let hourlyLimit: Int
+    let weeklyUsed: Int
+    let weeklyLimit: Int
     let isBlocked: Bool
     let blockReason: String?
+    /// Reset countdown for whichever period is primary/exceeded — currently always weekly.
     let resetLabel: String
+    /// The 5-hour session window's own reset countdown, independent of `resetLabel` above.
+    let hourlyResetLabel: String
 
-    var dailyPercent: Double {
-        guard dailyLimit > 0 else { return 0 }
-        return min(Double(dailyUsed) / Double(dailyLimit), 1.0)
+    var hourlyPercent: Double {
+        guard hourlyLimit > 0 else { return 0 }
+        return min(Double(hourlyUsed) / Double(hourlyLimit), 1.0)
     }
 
-    var monthlyPercent: Double {
-        guard monthlyLimit > 0 else { return 0 }
-        return min(Double(monthlyUsed) / Double(monthlyLimit), 1.0)
+    var weeklyPercent: Double {
+        guard weeklyLimit > 0 else { return 0 }
+        return min(Double(weeklyUsed) / Double(weeklyLimit), 1.0)
     }
 
     var status: RateLimitStatus {
         if isBlocked { return .blocked }
-        if dailyPercent >= 1.0 || monthlyPercent >= 1.0 { return .exceeded }
-        if dailyPercent >= 0.8 || monthlyPercent >= 0.8 { return .warning }
+        if hourlyPercent >= 1.0 || weeklyPercent >= 1.0 { return .exceeded }
+        if hourlyPercent >= 0.8 || weeklyPercent >= 0.8 { return .warning }
         return .normal
+    }
+
+    /// Converts a reset countdown in seconds to a human-readable string (e.g.
+    /// "3h 20m", "2d 5h", "45s") — mirrors cai-mcp-go's FormatResetLabel.
+    /// Used whenever a server response doesn't carry a pre-formatted label of
+    /// its own (e.g. the SSE `rate_limited` stream event only sends seconds,
+    /// never a label), so the UI always shows an exact countdown instead of a
+    /// vague fallback like "soon".
+    static func formatResetLabel(seconds: Int) -> String {
+        guard seconds > 0 else { return "shortly" }
+        let days = seconds / 86400
+        let hours = (seconds % 86400) / 3600
+        let mins = (seconds % 3600) / 60
+        switch (days, hours, mins) {
+        case let (d, h, _) where d > 0 && h > 0: return "\(d)d \(h)h"
+        case let (d, _, _) where d > 0: return "\(d)d"
+        case let (_, h, m) where h > 0 && m > 0: return "\(h)h \(m)m"
+        case let (_, h, _) where h > 0: return "\(h)h"
+        case let (_, _, m) where m > 0: return "\(m)m"
+        default: return "\(seconds)s"
+        }
     }
 }
