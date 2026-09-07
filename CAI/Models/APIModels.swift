@@ -328,21 +328,22 @@ struct AnyCodable: Codable {
 
 struct RateLimitStatsDTO: Codable {
     let planName: String?
-    let dailyTokensUsed: Int?
-    let dailyTokensLimit: Int?
-    let monthlyTokensUsed: Int?
-    let monthlyTokensLimit: Int?
     let hourlyTokensUsed: Int?
     let hourlyTokensLimit: Int?
+    let weeklyTokensUsed: Int?
+    let weeklyTokensLimit: Int?
+    /// The session (5h) window's own reset countdown — independent of RateLimitDTO's top-level
+    /// resetInSeconds/resetLabel, which track whichever period is primary (weekly). Omitted by
+    /// the backend (omitempty) whenever it's genuinely 0, not a staleness signal.
+    let hourlyResetSeconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case planName = "plan_name"
-        case dailyTokensUsed = "daily_tokens_used"
-        case dailyTokensLimit = "daily_tokens_limit"
-        case monthlyTokensUsed = "monthly_tokens_used"
-        case monthlyTokensLimit = "monthly_tokens_limit"
         case hourlyTokensUsed = "hourly_tokens_used"
         case hourlyTokensLimit = "hourly_tokens_limit"
+        case weeklyTokensUsed = "weekly_tokens_used"
+        case weeklyTokensLimit = "weekly_tokens_limit"
+        case hourlyResetSeconds = "hourly_reset_seconds"
     }
 }
 
@@ -361,13 +362,13 @@ struct RateLimitDTO: Codable {
         case resetLabel = "reset_label"
     }
 
-    var dailyUsagePercent: Double {
-        guard let used = stats?.dailyTokensUsed, let limit = stats?.dailyTokensLimit, limit > 0 else { return 0 }
+    var hourlyUsagePercent: Double {
+        guard let used = stats?.hourlyTokensUsed, let limit = stats?.hourlyTokensLimit, limit > 0 else { return 0 }
         return min(Double(used) / Double(limit), 1.0)
     }
 
-    var monthlyUsagePercent: Double {
-        guard let used = stats?.monthlyTokensUsed, let limit = stats?.monthlyTokensLimit, limit > 0 else { return 0 }
+    var weeklyUsagePercent: Double {
+        guard let used = stats?.weeklyTokensUsed, let limit = stats?.weeklyTokensLimit, limit > 0 else { return 0 }
         return min(Double(used) / Double(limit), 1.0)
     }
 }

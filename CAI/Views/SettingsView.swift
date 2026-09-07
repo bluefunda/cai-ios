@@ -247,9 +247,9 @@ struct SettingsView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Usage & Limits", systemImage: "chart.bar")
-                        if let info = chatManager.rateLimit, info.dailyLimit > 0 {
-                            CompactUsageBar(label: "Daily", percent: info.dailyPercent)
-                            CompactUsageBar(label: "Monthly", percent: info.monthlyPercent)
+                        if let info = chatManager.rateLimit, info.weeklyLimit > 0 {
+                            CompactUsageBar(label: "Session", percent: info.hourlyPercent)
+                            CompactUsageBar(label: "Weekly", percent: info.weeklyPercent)
                         }
                     }
                     .padding(.vertical, chatManager.rateLimit != nil ? 4 : 0)

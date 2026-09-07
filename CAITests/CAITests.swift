@@ -106,20 +106,22 @@ final class APIModelsTests: XCTestCase {
     func test_rateLimitStatsDTO_decodesSnakeCase() throws {
         let json = """
         {
-          "plan_name": "premium",
-          "daily_tokens_used": 5000,
-          "daily_tokens_limit": 10000,
-          "monthly_tokens_used": 20000,
-          "monthly_tokens_limit": 100000
+          "plan_name": "free",
+          "hourly_tokens_used": 5000,
+          "hourly_tokens_limit": 150000,
+          "weekly_tokens_used": 20000,
+          "weekly_tokens_limit": 900000,
+          "hourly_reset_seconds": 12000
         }
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(RateLimitStatsDTO.self, from: json)
-        XCTAssertEqual(dto.planName, "premium")
-        XCTAssertEqual(dto.dailyTokensUsed, 5000)
-        XCTAssertEqual(dto.dailyTokensLimit, 10000)
-        XCTAssertEqual(dto.monthlyTokensUsed, 20000)
-        XCTAssertEqual(dto.monthlyTokensLimit, 100000)
+        XCTAssertEqual(dto.planName, "free")
+        XCTAssertEqual(dto.hourlyTokensUsed, 5000)
+        XCTAssertEqual(dto.hourlyTokensLimit, 150000)
+        XCTAssertEqual(dto.weeklyTokensUsed, 20000)
+        XCTAssertEqual(dto.weeklyTokensLimit, 900000)
+        XCTAssertEqual(dto.hourlyResetSeconds, 12000)
     }
 
     // MARK: RateLimitDTO (nested stats shape)
@@ -128,11 +130,11 @@ final class APIModelsTests: XCTestCase {
         let json = """
         {
           "stats": {
-            "plan_name": "premium",
-            "daily_tokens_used": 5000,
-            "daily_tokens_limit": 10000,
-            "monthly_tokens_used": 20000,
-            "monthly_tokens_limit": 100000
+            "plan_name": "free",
+            "hourly_tokens_used": 5000,
+            "hourly_tokens_limit": 150000,
+            "weekly_tokens_used": 20000,
+            "weekly_tokens_limit": 100000
           },
           "is_blocked": false,
           "block_reason": null,
@@ -142,50 +144,51 @@ final class APIModelsTests: XCTestCase {
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
-        XCTAssertEqual(dto.stats?.planName, "premium")
-        XCTAssertEqual(dto.stats?.dailyTokensUsed, 5000)
-        XCTAssertEqual(dto.stats?.dailyTokensLimit, 10000)
+        XCTAssertEqual(dto.stats?.planName, "free")
+        XCTAssertEqual(dto.stats?.hourlyTokensUsed, 5000)
+        XCTAssertEqual(dto.stats?.hourlyTokensLimit, 150000)
         XCTAssertEqual(dto.isBlocked, false)
         XCTAssertEqual(dto.resetInSeconds, 3600)
         XCTAssertEqual(dto.resetLabel, "1h")
-        XCTAssertEqual(dto.dailyUsagePercent, 0.5, accuracy: 0.001)
+        XCTAssertEqual(dto.hourlyUsagePercent, 5000.0 / 150000.0, accuracy: 0.001)
+        XCTAssertEqual(dto.weeklyUsagePercent, 0.2, accuracy: 0.001)
     }
 
-    func test_rateLimitDTO_dailyUsagePercent_capsAt100() throws {
+    func test_rateLimitDTO_hourlyUsagePercent_capsAt100() throws {
         let json = """
         {
           "stats": {
-            "daily_tokens_used": 120000,
-            "daily_tokens_limit": 100000
+            "hourly_tokens_used": 200000,
+            "hourly_tokens_limit": 150000
           }
         }
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
-        XCTAssertEqual(dto.dailyUsagePercent, 1.0, accuracy: 0.001)
+        XCTAssertEqual(dto.hourlyUsagePercent, 1.0, accuracy: 0.001)
     }
 
-    func test_rateLimitDTO_dailyUsagePercent_zeroWhenNoStats() throws {
+    func test_rateLimitDTO_hourlyUsagePercent_zeroWhenNoStats() throws {
         let json = """
         { "is_blocked": false }
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
-        XCTAssertEqual(dto.dailyUsagePercent, 0.0, accuracy: 0.001)
+        XCTAssertEqual(dto.hourlyUsagePercent, 0.0, accuracy: 0.001)
     }
 
-    func test_rateLimitDTO_monthlyUsagePercent() throws {
+    func test_rateLimitDTO_weeklyUsagePercent() throws {
         let json = """
         {
           "stats": {
-            "monthly_tokens_used": 3000000,
-            "monthly_tokens_limit": 6000000
+            "weekly_tokens_used": 450000,
+            "weekly_tokens_limit": 900000
           }
         }
         """.data(using: .utf8)!
 
         let dto = try JSONDecoder().decode(RateLimitDTO.self, from: json)
-        XCTAssertEqual(dto.monthlyUsagePercent, 0.5, accuracy: 0.001)
+        XCTAssertEqual(dto.weeklyUsagePercent, 0.5, accuracy: 0.001)
     }
 
     func test_rateLimitDTO_blockedFlag() throws {
@@ -896,78 +899,80 @@ final class AuthSecurityTests: XCTestCase {
 final class RateLimitInfoTests: XCTestCase {
 
     private func makeInfo(
-        dailyUsed: Int = 0,
-        dailyLimit: Int = 100000,
-        monthlyUsed: Int = 0,
-        monthlyLimit: Int = 1500000,
+        hourlyUsed: Int = 0,
+        hourlyLimit: Int = 150000,
+        weeklyUsed: Int = 0,
+        weeklyLimit: Int = 900000,
         isBlocked: Bool = false,
-        resetLabel: String = "midnight"
+        resetLabel: String = "shortly",
+        hourlyResetLabel: String = "shortly"
     ) -> RateLimitInfo {
         RateLimitInfo(
             planName: "free",
-            dailyUsed: dailyUsed,
-            dailyLimit: dailyLimit,
-            monthlyUsed: monthlyUsed,
-            monthlyLimit: monthlyLimit,
+            hourlyUsed: hourlyUsed,
+            hourlyLimit: hourlyLimit,
+            weeklyUsed: weeklyUsed,
+            weeklyLimit: weeklyLimit,
             isBlocked: isBlocked,
             blockReason: nil,
-            resetLabel: resetLabel
+            resetLabel: resetLabel,
+            hourlyResetLabel: hourlyResetLabel
         )
     }
 
-    // MARK: dailyPercent
+    // MARK: hourlyPercent
 
-    func test_dailyPercent_calculatesCorrectly() {
-        let info = makeInfo(dailyUsed: 50000, dailyLimit: 100000)
-        XCTAssertEqual(info.dailyPercent, 0.5, accuracy: 0.001)
+    func test_hourlyPercent_calculatesCorrectly() {
+        let info = makeInfo(hourlyUsed: 75000, hourlyLimit: 150000)
+        XCTAssertEqual(info.hourlyPercent, 0.5, accuracy: 0.001)
     }
 
-    func test_dailyPercent_capsAt1() {
-        let info = makeInfo(dailyUsed: 120000, dailyLimit: 100000)
-        XCTAssertEqual(info.dailyPercent, 1.0, accuracy: 0.001)
+    func test_hourlyPercent_capsAt1() {
+        let info = makeInfo(hourlyUsed: 180000, hourlyLimit: 150000)
+        XCTAssertEqual(info.hourlyPercent, 1.0, accuracy: 0.001)
     }
 
-    func test_dailyPercent_zeroWhenLimitIsZero() {
-        let info = makeInfo(dailyUsed: 5000, dailyLimit: 0)
-        XCTAssertEqual(info.dailyPercent, 0.0, accuracy: 0.001)
+    func test_hourlyPercent_zeroWhenLimitIsZero() {
+        let info = makeInfo(hourlyUsed: 5000, hourlyLimit: 0)
+        XCTAssertEqual(info.hourlyPercent, 0.0, accuracy: 0.001)
     }
 
-    // MARK: monthlyPercent
+    // MARK: weeklyPercent
 
-    func test_monthlyPercent_calculatesCorrectly() {
-        let info = makeInfo(monthlyUsed: 750000, monthlyLimit: 1500000)
-        XCTAssertEqual(info.monthlyPercent, 0.5, accuracy: 0.001)
+    func test_weeklyPercent_calculatesCorrectly() {
+        let info = makeInfo(weeklyUsed: 450000, weeklyLimit: 900000)
+        XCTAssertEqual(info.weeklyPercent, 0.5, accuracy: 0.001)
     }
 
     // MARK: status
 
     func test_status_normalWhenUnder80Percent() {
-        let info = makeInfo(dailyUsed: 79000, dailyLimit: 100000)
+        let info = makeInfo(hourlyUsed: 119000, hourlyLimit: 150000)
         XCTAssertEqual(info.status, .normal)
     }
 
     func test_status_warningAt80Percent() {
-        let info = makeInfo(dailyUsed: 80000, dailyLimit: 100000)
+        let info = makeInfo(hourlyUsed: 120000, hourlyLimit: 150000)
         XCTAssertEqual(info.status, .warning)
     }
 
     func test_status_warningBetween80And100() {
-        let info = makeInfo(dailyUsed: 95000, dailyLimit: 100000)
+        let info = makeInfo(hourlyUsed: 142500, hourlyLimit: 150000)
         XCTAssertEqual(info.status, .warning)
     }
 
     func test_status_exceededAt100Percent() {
-        let info = makeInfo(dailyUsed: 100000, dailyLimit: 100000)
+        let info = makeInfo(hourlyUsed: 150000, hourlyLimit: 150000)
         XCTAssertEqual(info.status, .exceeded)
     }
 
     func test_status_exceededWhenOver100Percent() {
-        let info = makeInfo(dailyUsed: 110000, dailyLimit: 100000)
+        let info = makeInfo(hourlyUsed: 165000, hourlyLimit: 150000)
         XCTAssertEqual(info.status, .exceeded)
     }
 
     func test_status_blockedTakesPriorityOverExceeded() {
-        let info = makeInfo(dailyUsed: 100000, dailyLimit: 100000, isBlocked: true)
+        let info = makeInfo(hourlyUsed: 150000, hourlyLimit: 150000, isBlocked: true)
         XCTAssertEqual(info.status, .blocked)
     }
 
@@ -976,18 +981,18 @@ final class RateLimitInfoTests: XCTestCase {
         XCTAssertEqual(info.status, .blocked)
     }
 
-    func test_status_exceededWhenMonthlyAt100Percent() {
-        let info = makeInfo(dailyUsed: 0, dailyLimit: 100000, monthlyUsed: 1500000, monthlyLimit: 1500000)
+    func test_status_exceededWhenWeeklyAt100Percent() {
+        let info = makeInfo(hourlyUsed: 0, hourlyLimit: 150000, weeklyUsed: 900000, weeklyLimit: 900000)
         XCTAssertEqual(info.status, .exceeded)
     }
 
-    func test_status_warningWhenMonthlyAt80Percent() {
-        let info = makeInfo(dailyUsed: 0, dailyLimit: 100000, monthlyUsed: 1200000, monthlyLimit: 1500000)
+    func test_status_warningWhenWeeklyAt80Percent() {
+        let info = makeInfo(hourlyUsed: 0, hourlyLimit: 150000, weeklyUsed: 720000, weeklyLimit: 900000)
         XCTAssertEqual(info.status, .warning)
     }
 
     func test_status_normalWhenBothUnder80Percent() {
-        let info = makeInfo(dailyUsed: 50000, dailyLimit: 100000, monthlyUsed: 600000, monthlyLimit: 1500000)
+        let info = makeInfo(hourlyUsed: 75000, hourlyLimit: 150000, weeklyUsed: 360000, weeklyLimit: 900000)
         XCTAssertEqual(info.status, .normal)
     }
 
@@ -998,9 +1003,24 @@ final class RateLimitInfoTests: XCTestCase {
         XCTAssertEqual(info.resetLabel, "3h 20m")
     }
 
-    func test_resetLabel_defaultIsMidnight() {
+    func test_resetLabel_defaultIsShortly() {
         let info = makeInfo()
-        XCTAssertEqual(info.resetLabel, "midnight")
+        XCTAssertEqual(info.resetLabel, "shortly")
+    }
+
+    // MARK: hourlyResetLabel — independent of resetLabel, tracks the 5h session window
+
+    func test_hourlyResetLabel_storedFromServer() {
+        let info = makeInfo(hourlyResetLabel: "45m")
+        XCTAssertEqual(info.hourlyResetLabel, "45m")
+    }
+
+    func test_formatResetLabel_zeroSecondsIsShortly() {
+        XCTAssertEqual(RateLimitInfo.formatResetLabel(seconds: 0), "shortly")
+    }
+
+    func test_formatResetLabel_hoursAndMinutes() {
+        XCTAssertEqual(RateLimitInfo.formatResetLabel(seconds: 12000), "3h 20m")
     }
 }
 

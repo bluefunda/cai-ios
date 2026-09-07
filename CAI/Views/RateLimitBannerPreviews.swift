@@ -8,11 +8,11 @@ import SwiftUI
 }
 
 #Preview("Rate Limit Banner — Exceeded") {
-    RateLimitBanner(status: .exceeded, percent: 1.0, resetLabel: "midnight")
+    RateLimitBanner(status: .exceeded, percent: 1.0, resetLabel: "3h 20m")
 }
 
 #Preview("Rate Limit Banner — Blocked") {
-    RateLimitBanner(status: .blocked, percent: 1.0, resetLabel: "midnight")
+    RateLimitBanner(status: .blocked, percent: 1.0, resetLabel: "3h 20m")
 }
 
 #Preview("Rate Limit Modal") {
@@ -20,11 +20,12 @@ import SwiftUI
         Color.black.opacity(0.4).ignoresSafeArea()
         RateLimitModal(
             info: RateLimitInfo(
-                planName: "premium", dailyUsed: 10_000, dailyLimit: 10_000,
-                monthlyUsed: 45_000, monthlyLimit: 100_000,
-                isBlocked: false, blockReason: nil, resetLabel: "6h"
+                planName: "pro", hourlyUsed: 10_000, hourlyLimit: 10_000,
+                weeklyUsed: 45_000, weeklyLimit: 100_000,
+                isBlocked: false, blockReason: nil, resetLabel: "6h",
+                hourlyResetLabel: "20m"
             ),
-            period: "daily",
+            period: "hourly",
             resetLabel: "6h",
             onClose: {},
             onUpgrade: {}
