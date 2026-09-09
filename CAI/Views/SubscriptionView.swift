@@ -12,6 +12,7 @@ struct SubscriptionView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") { dismiss() }
+                            .bfPointerHover()
                     }
                 }
         }
@@ -107,8 +108,10 @@ struct SubscriptionContent: View {
                     .frame(height: 50)
                     .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
                     .foregroundStyle(.primary)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            .bfPointerHover()
             .padding(.horizontal, 24)
             .padding(.bottom, 40)
         }
@@ -204,8 +207,11 @@ struct SubscriptionContent: View {
                     .frame(height: 52)
                     .background(BFColor.primary, in: Capsule())
                     .foregroundStyle(.white)
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
                 .disabled(iapManager.isPurchasing || selectedProduct == nil)
+                .bfPointerHover()
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
 
@@ -217,6 +223,7 @@ struct SubscriptionContent: View {
                     .font(BFFont.bodySmall)
                     .foregroundStyle(BFColor.primary)
                     .disabled(iapManager.isPurchasing)
+                    .bfPointerHover()
 
                     Text("Subscriptions auto-renew until cancelled. Manage in Settings.")
                         .font(BFFont.micro)
@@ -226,8 +233,10 @@ struct SubscriptionContent: View {
 
                     HStack(spacing: 16) {
                         Button("Privacy Policy") { openURL(privacyURL) }
+                            .bfPointerHover()
                         Text("·").foregroundStyle(BFColor.textMuted)
                         Button("Terms of Service") { openURL(termsURL) }
+                            .bfPointerHover()
                     }
                     .font(BFFont.micro)
                     .foregroundStyle(BFColor.textMuted)
@@ -316,6 +325,7 @@ private struct PlanCard: View {
                 }
             }
             .padding(16)
+            .contentShape(RoundedRectangle(cornerRadius: BFRadius.md))
             .background(
                 RoundedRectangle(cornerRadius: BFRadius.md)
                     .fill(Color(.systemBackground))
@@ -329,6 +339,7 @@ private struct PlanCard: View {
             )
         }
         .buttonStyle(.plain)
+        .bfPointerHover()
         .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 }

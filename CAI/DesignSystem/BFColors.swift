@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Hex Initializer
 
@@ -14,6 +15,17 @@ extension Color {
             blue: Double(rgb & 0xFF) / 255
         )
     }
+
+    /// A color that actually adapts to the device's light/dark appearance — unlike a bare
+    /// `Color(hex:)`, which stays fixed regardless of theme. Needed for any token meant to read
+    /// correctly (not clash with a black background) whether the user is in light or dark mode,
+    /// on any device (this is a UITraitCollection-driven UIColor under the hood, so it updates
+    /// live on a theme switch rather than needing a relaunch).
+    init(lightHex: String, darkHex: String) {
+        self.init(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(Color(hex: darkHex)) : UIColor(Color(hex: lightHex))
+        })
+    }
 }
 
 // MARK: - Brand Color Tokens
@@ -25,7 +37,11 @@ enum BFColor {
     static let primary = Color(hex: "#1E64E7")
     static let primaryHover = Color(hex: "#1D4ED8")
     static let primaryPressed = Color(hex: "#1A56D4")
-    static let primaryTint = Color(hex: "#EEF2FF")
+    // A bare Color(hex:) stays fixed regardless of theme — in dark mode this rendered as a
+    // stark near-white pill (the composer's mode picker, the "Upgrade to Pro" row) clashing
+    // hard against a black background, with default `.primary`-label text (white in dark mode)
+    // landing on a near-white background. lightHex/darkHex makes it adapt on every device.
+    static let primaryTint = Color(lightHex: "#EEF2FF", darkHex: "#1B2440")
     static let primarySubtle = Color(hex: "#F2F6FF")
 
     // MARK: Secondary (Navy / Deep Blue)

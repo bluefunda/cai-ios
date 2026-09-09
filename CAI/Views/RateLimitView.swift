@@ -31,20 +31,6 @@ struct RateLimitView: View {
         }
         .navigationTitle("Usage & Limits")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    refresh()
-                } label: {
-                    if isRefreshing {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-                .disabled(isRefreshing)
-            }
-        }
         .task {
             isRefreshing = true
             await chatManager.loadRateLimit()
@@ -71,6 +57,14 @@ struct RateLimitView: View {
                 .padding(.vertical, 4)
             } header: {
                 Text("Status")
+            }
+
+            Section {
+                LastUpdatedRow(
+                    lastFetchedAt: lastFetchedAt,
+                    isRefreshing: isRefreshing,
+                    onRefresh: refresh
+                )
             }
         }
     }
@@ -120,7 +114,11 @@ struct RateLimitView: View {
             }
 
             Section {
-                LastUpdatedRow(lastFetchedAt: lastFetchedAt)
+                LastUpdatedRow(
+                    lastFetchedAt: lastFetchedAt,
+                    isRefreshing: isRefreshing,
+                    onRefresh: refresh
+                )
             }
         }
     }
@@ -197,14 +195,38 @@ struct UsageRow: View {
 
 struct LastUpdatedRow: View {
     let lastFetchedAt: Date
+    let isRefreshing: Bool
+    let onRefresh: () -> Void
 
     // Ticks every 30s so this stays honest while the user sits on the screen,
     // instead of freezing at "just now" forever once the fetch completes.
     var body: some View {
-        TimelineView(.periodic(from: lastFetchedAt, by: 30)) { context in
-            Text("Last updated: \(label(now: context.date))")
-                .font(.caption)
-                .foregroundColor(.secondary)
+        HStack(spacing: 8) {
+            Button {
+                onRefresh()
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                        .frame(width: 18, height: 18)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption.weight(.medium))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isRefreshing)
+            .foregroundColor(.secondary)
+            .bfPointerHover()
+
+            TimelineView(.periodic(from: lastFetchedAt, by: 30)) { context in
+                Text("Last updated: \(label(now: context.date))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
         }
     }
 

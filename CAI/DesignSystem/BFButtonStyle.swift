@@ -12,6 +12,7 @@ struct BlueFundaPrimaryButtonStyle: ButtonStyle {
             .bfShadow(configuration.isPressed ? BFShadow.md : BFShadow.lg)
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(BFMotion.easingInOut, value: configuration.isPressed)
+            .bfPointerHover()
     }
 }
 
@@ -30,6 +31,7 @@ struct BlueFundaSecondaryButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(BFMotion.easingInOut, value: configuration.isPressed)
+            .bfPointerHover()
     }
 }
 
@@ -44,6 +46,7 @@ struct BlueFundaDangerButtonStyle: ButtonStyle {
             .cornerRadius(BFRadius.lg)
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(BFMotion.easingInOut, value: configuration.isPressed)
+            .bfPointerHover()
     }
 }
 
@@ -57,4 +60,46 @@ extension ButtonStyle where Self == BlueFundaSecondaryButtonStyle {
 
 extension ButtonStyle where Self == BlueFundaDangerButtonStyle {
     static var bfDanger: BlueFundaDangerButtonStyle { .init() }
+}
+
+#if targetEnvironment(macCatalyst)
+import UIKit
+
+/// ViewModifier that toggles the macOS pointing-hand cursor on hover for Mac Catalyst.
+/// Uses a push/pop stack on NSCursor and resets on disappear so the cursor stack is never leaked.
+private struct BFPointerHoverModifier: ViewModifier {
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                guard hovering != isHovered else { return }
+                isHovered = hovering
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .onDisappear {
+                if isHovered {
+                    isHovered = false
+                    NSCursor.pop()
+                }
+            }
+    }
+}
+#endif
+
+extension View {
+    /// Shows the pointing-hand cursor on hover on Mac Catalyst.
+    /// A no-op everywhere else (iOS/iPadOS touch has no mouse cursor).
+    @ViewBuilder
+    func bfPointerHover() -> some View {
+        #if targetEnvironment(macCatalyst)
+        modifier(BFPointerHoverModifier())
+        #else
+        self
+        #endif
+    }
 }

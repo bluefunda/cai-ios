@@ -114,6 +114,7 @@ struct StorageView: View {
                                 .onTapGesture {
                                     Task { await viewModel.enterFolder(folder.name) }
                                 }
+                                .bfPointerHover()
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
                                         itemToDelete = folder
@@ -136,6 +137,7 @@ struct StorageView: View {
                                     }
                                 }
                             }
+                            .bfPointerHover()
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     itemToDelete = file
@@ -188,8 +190,11 @@ struct StorageView: View {
                 }
             } label: {
                 Image(systemName: "plus")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .disabled(!viewModel.isBound || viewModel.isUploading)
+            .bfPointerHover()
         }
     }
 
@@ -276,6 +281,7 @@ private struct BreadcrumbBar: View {
                         .font(.caption)
                         .foregroundStyle(.blue)
                 }
+                .bfPointerHover()
 
                 ForEach(Array(breadcrumbs.enumerated()), id: \.offset) { idx, crumb in
                     Image(systemName: "chevron.right")
@@ -286,6 +292,7 @@ private struct BreadcrumbBar: View {
                         Button(crumb) { onNavigate(idx) }
                             .font(.caption)
                             .foregroundStyle(.blue)
+                            .bfPointerHover()
                     } else {
                         Text(crumb)
                             .font(.caption)
@@ -364,6 +371,7 @@ private struct FileRow: View {
             .padding(.vertical, 2)
         }
         .buttonStyle(.plain)
+        .bfPointerHover()
     }
 }
 
