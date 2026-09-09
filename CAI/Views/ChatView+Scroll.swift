@@ -52,20 +52,34 @@ extension ChatView {
     /// this needs the same repeated-pass resilience Android relies on, not none at all. No
     /// animation, matching cai-android's equivalent settle scroll: this establishes where a
     /// freshly-switched-to conversation starts, not a visible transition to watch happen.
-    func scrollToBottom(proxy: ScrollViewProxy) async {
+    /// - Parameter isSettled: Reports whether the "bottom" sentinel (tracked via
+    ///   BottomSentinelYKey) has actually scrolled into view yet. Checked after every pass so the
+    ///   loop can exit the moment it's really done instead of trusting a fixed count — how many
+    ///   passes that takes isn't fixed: a wider/taller window (Mac Catalyst) has more rows visible
+    ///   at once needing measurement than a narrow iPhone screen, so a count tuned for one
+    ///   under-shoots on the other (confirmed via a live repro: existing conversations opened
+    ///   short of their true end specifically on Mac Catalyst, not iOS). Caller resets the tracked
+    ///   position to nil before starting a fresh settle so a stale reading from whatever
+    ///   conversation was open before can't read as "already settled" on the very first pass.
+    func scrollToBottom(proxy: ScrollViewProxy, isSettled: @escaping () -> Bool) async {
         // cai-android's actual pass interval is withFrameNanos {} — one real display frame
         // (~16ms), not an arbitrary timer — so its whole settle loop finishes in a handful of
         // milliseconds and is never perceptible. This used Task.sleep(for: .milliseconds(100))
         // per pass — 6x slower than a frame — which made a plainly visible, sluggish "taking so
         // much time" delay on every single conversation switch, not just long ones. 16ms is the
         // closest plain-SwiftUI approximation (no CADisplayLink/frame-callback API here) to that
-        // same per-frame cadence; more passes (10 vs. 6) keeps the same resilience margin for a
-        // slow-to-lay-out long response while the *total* budget (~160ms) is still far under
-        // what reads as sluggish.
-        for _ in 0..<10 {
+        // same per-frame cadence.
+        //
+        // 60 passes (~1s) is a hard safety cap, not the expected case — both platforms settle
+        // long before that in practice (iOS reliably within the first ~10, same as before this
+        // became dynamic, so this is not expected to change iOS's timing at all); it only exists
+        // so a case isSettled() can never satisfy (e.g. this ran before "bottom" ever laid out)
+        // can't spin forever.
+        for _ in 0..<60 {
             guard !Task.isCancelled else { return }
             proxy.scrollTo("bottom", anchor: .bottom)
             try? await Task.sleep(for: .milliseconds(16))
+            if isSettled() { return }
         }
     }
 

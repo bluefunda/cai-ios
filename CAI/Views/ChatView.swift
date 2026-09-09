@@ -14,6 +14,20 @@ private struct StreamingRowBottomKey: PreferenceKey {
     }
 }
 
+/// Reports the trailing "bottom" sentinel's top edge, in the same "chatScroll" named coordinate
+/// space as StreamingRowBottomKey above (a separate key so the two don't get merged into one
+/// value by PreferenceKey's reduce). Lets scrollToBottom's settle loop confirm it actually
+/// reached the end instead of trusting a fixed pass count — needed because how many passes that
+/// takes isn't a fixed number: a wider/taller window (Mac Catalyst) has more rows visible at once
+/// needing measurement than a narrow iPhone screen, so a count tuned for one under-shoots on the
+/// other. See scrollToBottom's own comment for the repro this was tuned against.
+private struct BottomSentinelYKey: PreferenceKey {
+    static var defaultValue: CGFloat?
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
+    }
+}
+
 /// `@MainActor` so every `Task { ... }` created in this view's methods stays
 /// pinned to the main actor for its whole lifetime — without it, synchronous
 /// calls into `ChatManager` (also `@MainActor`) from a Task resumed after an
@@ -89,6 +103,9 @@ struct ChatView: View {
     /// reflects the current scroll offset, not a fixed on-screen position) — see
     /// StreamingRowBottomKey's attachment point for why this is needed at all.
     @State var streamingRowBottomY: CGFloat?
+    /// The trailing "bottom" sentinel's position — see BottomSentinelYKey's declaration for why
+    /// scrollToBottom's settle loop needs this instead of trusting a fixed pass count.
+    @State var bottomSentinelY: CGFloat?
 
     // Keyboard: focus only fires once per session on first launch
     @State private var hasTriggeredInitialFocus = false
@@ -203,6 +220,14 @@ struct ChatView: View {
         ZStack(alignment: .bottom) {
             GeometryReader { outer in
                 ScrollViewReader { proxy in
+                    // Lets scrollToBottom's settle loop confirm it actually reached the end
+                    // (see BottomSentinelYKey's declaration) instead of trusting a fixed pass
+                    // count that under-shoots on a wider/taller window (Mac Catalyst) needing
+                    // more rows measured than a narrow iPhone screen.
+                    let isNearBottomSentinel: () -> Bool = {
+                        guard let y = bottomSentinelY else { return false }
+                        return y <= outer.size.height + 40
+                    }
                     // List (UITableView/UICollectionView-backed) replaced ScrollView + LazyVStack
                     // here — the latter's scrollTo(id:) is identity-based and can't reliably reach
                     // a row LazyVStack hasn't measured yet (only near the viewport is ever
@@ -294,12 +319,30 @@ struct ChatView: View {
                                 .listRowBackground(Color.clear)
                         } else {
                             EmptyStateView(greeting: greetingText)
-                                .frame(maxWidth: .infinity, minHeight: 300)
+                                // A List row sizes to its own content — unlike a plain
+                                // ScrollView+VStack child, it does NOT stretch to fill the List's
+                                // visible height on its own. A bare minHeight: 300 left this row
+                                // sitting at the top of the List with its own internal Spacers
+                                // centering only within that 300pt, not the real viewport — barely
+                                // visible on a short iPhone screen, but on Mac Catalyst's much
+                                // taller window it left a large dead gap below a clearly
+                                // off-center greeting. Matching the actual viewport height here
+                                // (still floored at 300 for a very short window) lets those
+                                // Spacers center within the real available space.
+                                .frame(maxWidth: .infinity, minHeight: max(outer.size.height, 300))
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
                         }
                         Color.clear.frame(height: 1).id("bottom")
+                            .background {
+                                GeometryReader { geo in
+                                    Color.clear.preference(
+                                        key: BottomSentinelYKey.self,
+                                        value: geo.frame(in: .named("chatScroll")).minY
+                                    )
+                                }
+                            }
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
@@ -342,9 +385,10 @@ struct ChatView: View {
                         // forever. Real content is about to render regardless, so it's always
                         // correct to drop it at this point.
                         chatManager.isSwitchingConversation = false
+                        bottomSentinelY = nil
                         scrollSettleTask?.cancel()
                         scrollSettleTask = Task { @MainActor in
-                            await scrollToBottom(proxy: proxy)
+                            await scrollToBottom(proxy: proxy, isSettled: isNearBottomSentinel)
                         }
                     }
                     // reconcileAfterBackground() re-fetches the conversation from the server and
@@ -402,6 +446,7 @@ struct ChatView: View {
                         }
                     }
                     .onPreferenceChange(StreamingRowBottomKey.self) { streamingRowBottomY = $0 }
+                    .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
                     .onChange(of: chatManager.currentConversation?.id) { _, _ in
                         // Guarded on hasMessages: for a brand-new empty conversation (New Chat),
                         // there's nothing below the EmptyStateView but its "bottom" spacer —
@@ -410,10 +455,11 @@ struct ChatView: View {
                         // as a blank screen until the user manually scrolls up to find it.
                         guard hasMessages else { return }
                         chatManager.isSwitchingConversation = true
+                        bottomSentinelY = nil
                         scrollSettleTask?.cancel()
                         scrollSettleTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
-                            await scrollToBottom(proxy: proxy)
+                            await scrollToBottom(proxy: proxy, isSettled: isNearBottomSentinel)
                             // Guards against a cancelled/superseded task's cooperative-cancellation
                             // remnant (scrollToBottom returns early but this task's own code after
                             // it keeps running) clobbering the *new* task's isSwitchingConversation =
@@ -426,10 +472,11 @@ struct ChatView: View {
                         scrollProxy = proxy
                         guard hasMessages else { return }
                         chatManager.isSwitchingConversation = true
+                        bottomSentinelY = nil
                         scrollSettleTask?.cancel()
                         scrollSettleTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
-                            await scrollToBottom(proxy: proxy)
+                            await scrollToBottom(proxy: proxy, isSettled: isNearBottomSentinel)
                             // Guards against a cancelled/superseded task's cooperative-cancellation
                             // remnant (scrollToBottom returns early but this task's own code after
                             // it keeps running) clobbering the *new* task's isSwitchingConversation =
@@ -1046,8 +1093,14 @@ struct EmptyStateView: View {
             // keyboard that's shown by default on this screen (cai-ios#255)
             // — plain maxHeight:.infinity centering re-centers into whatever
             // shrunk space remains once the keyboard appears, leaving no
-            // real clearance above it.
+            // real clearance above it. Mac Catalyst never shows a software
+            // keyboard, so that same bias just reads as off-center on its
+            // much taller window — equal Spacers there for a true center.
+            #if targetEnvironment(macCatalyst)
+            Spacer()
+            #else
             Spacer(minLength: 24)
+            #endif
             Image(systemName: "sparkles")
                 .font(.system(size: 52))
                 .foregroundStyle(BFColor.primary.gradient)
@@ -1057,7 +1110,11 @@ struct EmptyStateView: View {
             Text("How can I help you today?")
                 .font(BFFont.body)
                 .foregroundStyle(.secondary)
+            #if targetEnvironment(macCatalyst)
+            Spacer()
+            #else
             Spacer(minLength: 64)
+            #endif
         }
         .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

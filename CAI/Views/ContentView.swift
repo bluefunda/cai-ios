@@ -351,8 +351,12 @@ struct SidebarContent: View {
 
             Divider()
 
-            // Upgrade to Pro — individual free users only
-            if authManager.realm == "individual" && !iapManager.hasActiveSubscription {
+            // Upgrade to Pro — individual free users only. Also gated on
+            // hasCheckedSubscriptionStatus so an actual Pro user doesn't see this flash briefly
+            // while hasActiveSubscription still holds its default false, before the real check
+            // (local entitlements + backend sync) completes.
+            if authManager.realm == "individual" && iapManager.hasCheckedSubscriptionStatus
+                && !iapManager.hasActiveSubscription {
                 Button(action: onOpenSubscription) {
                     HStack(spacing: 10) {
                         Image(systemName: "sparkles")
@@ -602,8 +606,12 @@ struct SidebarDrawer: View {
 
             Divider()
 
-            // Upgrade to Pro — individual free users only
-            if authManager.realm == "individual" && !iapManager.hasActiveSubscription {
+            // Upgrade to Pro — individual free users only. Also gated on
+            // hasCheckedSubscriptionStatus so an actual Pro user doesn't see this flash briefly
+            // while hasActiveSubscription still holds its default false, before the real check
+            // (local entitlements + backend sync) completes.
+            if authManager.realm == "individual" && iapManager.hasCheckedSubscriptionStatus
+                && !iapManager.hasActiveSubscription {
                 Button {
                     withAnimation { isOpen = false }
                     onOpenSubscription()

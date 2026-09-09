@@ -35,6 +35,7 @@ struct SettingsView: View {
     @EnvironmentObject var chatManager: ChatManager
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dismiss) private var dismiss
     @State private var showLogoutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
@@ -103,6 +104,33 @@ struct SettingsView: View {
             .id(selectedCategory)
         }
         .navigationSplitViewStyle(.balanced)
+        // This sheet has no OS-provided close chrome to fall back on — iPhone gets away with no
+        // explicit button because swipe-to-dismiss covers it, but Mac Catalyst has no such
+        // gesture, so without this the sheet was stuck open with no way to close it. A manual
+        // overlay instead of .toolbar: a ToolbarItem attached to the sidebar column only pinned to
+        // that column's own (narrower) trailing edge, not the window's; attached to the whole
+        // NavigationSplitView instead, it didn't render at all in this Mac Catalyst sheet context
+        // — NavigationSplitView itself doesn't host a toolbar surface, only its columns do. An
+        // overlay sidesteps both by positioning directly against this view's own frame.
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                // No explicit foregroundStyle — SidebarToggleButton (the "match this" reference)
+                // has none either and just inherits the default accent/tint color; giving this an
+                // explicit BFColor.primary was a close-but-not-quite shade of the same blue.
+                Image(systemName: "xmark")
+                    .font(.system(size: BFFont.toolbarIconPt - 4))
+                    // Widens the actual tappable area well past the small glyph itself, without
+                    // changing how it looks — a plain icon with no background is an easy miss
+                    // otherwise, especially with a mouse cursor rather than a fingertip.
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            // Without this, Mac Catalyst applies its default bordered-button chrome (rounded
+            // box + shadow) since this isn't hosted in a .toolbar the way the chat toolbar's
+            // icon-only buttons are — .plain strips that back down to just the icon.
+            .buttonStyle(.plain)
+            .padding(16)
+        }
         .frame(
             minWidth: sizeClass == .regular ? 640 : nil,
             idealWidth: sizeClass == .regular ? min(max(screenSize.width * 0.55, 640), 960) : nil,

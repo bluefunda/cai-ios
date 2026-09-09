@@ -12,6 +12,12 @@ final class IAPManager: ObservableObject {
     @Published var isPurchasing = false
     @Published var purchaseError: String?
     @Published var isLoadingProducts = false
+    /// False until checkSubscriptionStatus()'s full check (local entitlements + backend sync)
+    /// has completed at least once. hasActiveSubscription defaults to false, so gating "Upgrade
+    /// to Pro" on it alone showed that button to an actual Pro user for the brief window between
+    /// launch and this check completing, before flipping to the correct Pro state — this lets
+    /// callers hide the upgrade prompt entirely until the real status is known instead.
+    @Published var hasCheckedSubscriptionStatus = false
 
     /// Injected after init so IAPManager can register purchases with the backend.
     var bffService: BFFAPIService?
@@ -58,6 +64,13 @@ final class IAPManager: ObservableObject {
     }
 
     func syncWithBackend() async {
+        // bffService is injected later, once auth completes (see CAIApp.swift) — this first
+        // runs from init(), before that injection, so it's still nil here. Deliberately leaves
+        // hasCheckedSubscriptionStatus false in that case rather than setting it regardless: a
+        // Stripe/web-only Pro subscriber has no local StoreKit entitlement, so without a real
+        // backend attempt "checked" would be a lie, and the UI would show "Upgrade to Pro" to an
+        // actual Pro user for the whole window until CAIApp's own post-auth syncWithBackend call
+        // corrects it — which is the flash this flag exists to prevent.
         guard let bffService else { return }
         do {
             let subscription = try await bffService.fetchSubscription()
@@ -65,6 +78,7 @@ final class IAPManager: ObservableObject {
         } catch {
             print("[IAPManager] Backend subscription sync failed: \(error)")
         }
+        hasCheckedSubscriptionStatus = true
     }
 
     func purchase(_ product: Product) async {
