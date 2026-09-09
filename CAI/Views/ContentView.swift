@@ -311,8 +311,17 @@ struct SidebarContent: View {
                                     isSelected: chatManager.currentConversation?.id == convo.id
                                 )
                                 .onTapGesture {
+                                    // Matches the iPhone drawer row's fix (below in this file) —
+                                    // this persistent sidebar (iPad/Mac Catalyst) has no drawer to
+                                    // close, but selectConversation is the same expensive call, so
+                                    // it needs the same "show the loader before binding" sequencing
+                                    // or the loading overlay never appears while a long
+                                    // conversation's messages are fetched/laid out.
                                     currentMode = .chat
-                                    chatManager.selectConversation(convo)
+                                    chatManager.isSwitchingConversation = true
+                                    Task { @MainActor in
+                                        chatManager.selectConversation(convo)
+                                    }
                                 }
                                 .accessibilityIdentifier("conversationRow")
                                 .contextMenu {
