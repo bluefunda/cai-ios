@@ -541,9 +541,27 @@ struct SidebarDrawer: View {
                                     isSelected: chatManager.currentConversation?.id == convo.id
                                 )
                                 .onTapGesture {
+                                    // Order matters, and needs to be *guaranteed*, not just
+                                    // likely: close the drawer, wait for that animation to
+                                    // genuinely finish, only then show the loading spinner and
+                                    // bind the conversation. selectConversation triggers the
+                                    // expensive part (a long conversation's full List row diff);
+                                    // starting it before the drawer's dismiss has actually
+                                    // rendered/completed bundles that heavy work into the same
+                                    // transaction and blocks the drawer from visibly closing on
+                                    // time. An arbitrary sleep (e.g. one frame) is a guess that
+                                    // can still lose the race under load — completionCriteria:
+                                    // .logicallyComplete gives a real callback for exactly when
+                                    // this specific animation finishes, no guessing.
                                     currentMode = .chat
-                                    chatManager.selectConversation(convo)
-                                    withAnimation { isOpen = false }
+                                    withAnimation(.default, completionCriteria: .logicallyComplete) {
+                                        isOpen = false
+                                    } completion: {
+                                        chatManager.isSwitchingConversation = true
+                                        Task { @MainActor in
+                                            chatManager.selectConversation(convo)
+                                        }
+                                    }
                                 }
                                 .accessibilityIdentifier("conversationRow")
                                 .contextMenu {

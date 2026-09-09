@@ -81,6 +81,13 @@ final class ChatManager: ObservableObject {
     /// "still working" (StreamingIndicator, Stop button) rather than an empty response bubble and
     /// a mic button for the several seconds reconciliation can take.
     @Published var isReconciling = false
+    /// True from the moment a conversation is tapped in the drawer until ChatView's scroll-settle
+    /// loop finishes for it. Owned here (not local to ChatView) so the drawer's own tap handler
+    /// (ContentView) can set it immediately — before calling selectConversation, which is what
+    /// actually triggers the expensive part (a long conversation's full List row diff) — so the
+    /// drawer-close animation and the loading spinner both get a real chance to render *first*,
+    /// instead of competing with that heavier work for the same SwiftUI update pass.
+    @Published var isSwitchingConversation = false
     /// Set at the moment the user taps Stop, cleared when the next message starts sending.
     /// Lets PacedMarkdownView tell "the user explicitly stopped this response" (snap the reveal
     /// to whatever has arrived so far) apart from "the network side finished naturally" (keep
