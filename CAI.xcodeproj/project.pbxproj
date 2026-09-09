@@ -78,6 +78,7 @@
 		E900FE782FFC336200881287 /* IAPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E900FE772FFC336200881287 /* IAPManager.swift */; };
 		E900FE7C2FFC3FA200881287 /* SubscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E900FE7B2FFC3FA200881287 /* SubscriptionView.swift */; };
 		EE000001201BCDEF /* Environment.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE000002201BCDEF /* Environment.swift */; };
+		EE2A9CDE00AA8DB357799E52 /* ChatView+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */; };
 		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
 		F7F26EF8687492EF9BC4B158 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22141F06B6EDC35EA631E85A /* FileStore.swift */; };
 		FA0B1791A55829AD870AE5ED /* MarkdownParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D4625865551367AF054908 /* MarkdownParsingTests.swift */; };
@@ -134,6 +135,7 @@
 		57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		5B27AD5F04553CCD0D2AD8B8 /* CAIUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CAIUITests.swift; sourceTree = "<group>"; };
 		5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatToolbarButtons.swift; sourceTree = "<group>"; };
+		680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatView+Scroll.swift"; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
 		73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		73D7DD7C43BBF8C906E50131 /* CAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -314,6 +316,7 @@
 				5478A24929F4E5D406E63882 /* ShareableAnswerCard.swift */,
 				5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */,
 				01905164500684B2385FE524 /* ComposerPickers.swift */,
+				680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -629,6 +632,7 @@
 				97EB1625B38D58E56F0AC278 /* ScreenshotFixtures.swift in Sources */,
 				83BB536B4B990DE7C8A23210 /* ChatToolbarButtons.swift in Sources */,
 				62BC5ECA748BA2907E12AAA2 /* ComposerPickers.swift in Sources */,
+				EE2A9CDE00AA8DB357799E52 /* ChatView+Scroll.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
