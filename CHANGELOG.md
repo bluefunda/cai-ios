@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.6.1](https://github.com/bluefunda/cai-ios/compare/v2.6.0...v2.6.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **chat:** reliable scroll-to-bottom, Stop visibility, and drawer-switch UX ([ea0bb6a](https://github.com/bluefunda/cai-ios/commit/ea0bb6a21552c3ee7af91aaa0653d51306e62f44))
+* **chat:** reliable scroll-to-bottom, Stop visibility, and drawer-switch UX ([3ecc696](https://github.com/bluefunda/cai-ios/commit/3ecc696b1647e62eb6ba3e63a137744cab99034c))
+* **lint:** split ChatView's scroll logic into its own file ([5636027](https://github.com/bluefunda/cai-ios/commit/563602784b689d539f523b1b3ec18235f7211acf))
+
 ## [2.6.0](https://github.com/bluefunda/cai-ios/compare/v2.5.0...v2.6.0) (2026-09-07)
 
 
