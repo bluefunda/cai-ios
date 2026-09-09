@@ -125,6 +125,7 @@ struct SettingsView: View {
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
+            .bfPointerHover()
             // Without this, Mac Catalyst applies its default bordered-button chrome (rounded
             // box + shadow) since this isn't hosted in a .toolbar the way the chat toolbar's
             // icon-only buttons are — .plain strips that back down to just the icon.

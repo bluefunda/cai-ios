@@ -58,3 +58,17 @@ extension ButtonStyle where Self == BlueFundaSecondaryButtonStyle {
 extension ButtonStyle where Self == BlueFundaDangerButtonStyle {
     static var bfDanger: BlueFundaDangerButtonStyle { .init() }
 }
+
+extension View {
+    /// Drives Mac Catalyst's (and a mouse/trackpad-connected iPad's) pointer interaction —
+    /// showing the pointing-hand cursor on hover, plus a subtle highlight — for a custom
+    /// tappable control built from a plain Image or Text. A no-op on touch-only devices.
+    /// SwiftUI's Button isn't backed by a real UIButton, so unlike a native AppKit/UIKit
+    /// control it doesn't get this for free; without it there's nothing on Mac Catalyst to
+    /// indicate "this is clickable" until the actual click. .pointerStyle(_:) is NOT this —
+    /// that modifier only exists on visionOS, not Mac Catalyst, despite the similar name.
+    /// Apply to any button-like control across the app, not just one place.
+    func bfPointerHover() -> some View {
+        hoverEffect(.highlight)
+    }
+}
