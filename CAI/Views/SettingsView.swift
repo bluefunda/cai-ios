@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Settings Category
 
@@ -45,6 +46,7 @@ struct SettingsView: View {
     // falls back to .account for the regular/split-view detail pane, which always needs
     // something to show even with no explicit selection.
     @State private var selectedCategory: SettingsCategory?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     // Internal infra details (Connection, Build) are only shown to the
     // internal/employee realm; end users on `individual` don't see them.
@@ -76,37 +78,85 @@ struct SettingsView: View {
             ?? CGSize(width: 1200, height: 800)
     }
 
-    var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedCategory) {
-                ForEach(categories) { category in
-                    HStack {
-                        Label(category.title, systemImage: category.icon)
-                        Spacer()
-                        // The sidebar list style (automatic here, as the first content of
-                        // NavigationSplitView) doesn't draw a disclosure chevron on its own —
-                        // sidebar rows are selection rows, not NavigationLinks. Added explicitly
-                        // to match cai-android's ChevronRight on each Settings row.
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .bfPointerHover()
-                    .tag(category)
+    private var categoryList: some View {
+        List(selection: $selectedCategory) {
+            ForEach(categories) { category in
+                HStack {
+                    Label(category.title, systemImage: category.icon)
+                    Spacer()
+                    // The sidebar list style (automatic here, as the first content of
+                    // NavigationSplitView) doesn't draw a disclosure chevron on its own —
+                    // sidebar rows are selection rows, not NavigationLinks. Added explicitly
+                    // to match cai-android's ChevronRight on each Settings row.
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .bfPointerHover()
+                .tag(category)
             }
-            .navigationTitle("Settings")
+        }
+    }
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            if sizeClass == .regular {
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        Text("Settings")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        SidebarToggleButton(columnVisibility: $columnVisibility)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 8)
+
+                    categoryList
+                        .listStyle(.sidebar)
+                }
+                .toolbar(.hidden, for: .navigationBar)
+                .toolbar(removing: .sidebarToggle)
+                .background(PreventSplitViewToggle())
+            } else {
+                categoryList
+                    .navigationTitle("Settings")
+            }
         } detail: {
             NavigationStack {
                 detailContent
+                    .toolbar(removing: .sidebarToggle)
+                    .background(PreventSplitViewToggle())
             }
             // Resets any pushed sub-page (e.g. Default Persona) when the
             // user switches categories, matching macOS System Settings.
             .id(selectedCategory)
         }
+        .toolbar(removing: .sidebarToggle)
+        .background(PreventSplitViewToggle())
         .navigationSplitViewStyle(.balanced)
+        .overlay(alignment: .topLeading) {
+            if columnVisibility == .detailOnly {
+                Button {
+                    withAnimation {
+                        columnVisibility = .doubleColumn
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: BFFont.toolbarIconPt))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .bfPointerHover()
+                .buttonStyle(.plain)
+                .padding(16)
+            }
+        }
         // This sheet has no OS-provided close chrome to fall back on — iPhone gets away with no
         // explicit button because swipe-to-dismiss covers it, but Mac Catalyst has no such
         // gesture, so without this the sheet was stuck open with no way to close it. A manual
@@ -609,6 +659,110 @@ struct PersonaSelectionView: View {
         }
         .navigationTitle("SAP Persona")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Split View Configurator (iPad/Mac)
+
+private struct PreventSplitViewToggle: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> SplitConfigViewController {
+        SplitConfigViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: SplitConfigViewController, context: Context) {
+        uiViewController.configureSplit()
+    }
+}
+
+private class SplitConfigViewController: UIViewController {
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        configureSplit()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        configureSplit()
+        for delay in [0.05, 0.1, 0.2, 0.4] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.configureSplit()
+            }
+        }
+    }
+
+    func configureSplit() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            let windows = scenes.flatMap { $0.windows }
+
+            for window in windows {
+                if let root = window.rootViewController {
+                    self.processVC(root)
+                }
+                self.hideSidebarViews(in: window)
+            }
+        }
+    }
+
+    private func processVC(_ vc: UIViewController) {
+        if let split = vc as? UISplitViewController {
+            split.displayModeButtonVisibility = .never
+            split.presentsWithGesture = false
+            split.displayModeButtonItem.isEnabled = false
+            split.displayModeButtonItem.image = nil
+            split.displayModeButtonItem.title = nil
+            hideSidebarViews(in: split.view)
+        }
+        for child in vc.children {
+            processVC(child)
+        }
+        if let presented = vc.presentedViewController {
+            processVC(presented)
+        }
+    }
+
+    private func hideSidebarViews(in view: UIView) {
+        for subview in view.subviews {
+            let className = String(describing: type(of: subview))
+            if className.contains("SidebarButton") ||
+               className.contains("DisplayMode") ||
+               className.contains("SplitButton") ||
+               className.contains("SidebarToggle") {
+                subview.isHidden = true
+                subview.alpha = 0
+            }
+            if let button = subview as? UIButton {
+                let btnClass = String(describing: type(of: button))
+                if btnClass.contains("Sidebar") || btnClass.contains("DisplayMode") {
+                    button.isHidden = true
+                    button.alpha = 0
+                }
+            }
+            if let imgView = subview as? UIImageView,
+               let img = imgView.image,
+               img.description.contains("sidebar") {
+                let rect = subview.convert(subview.bounds, to: nil)
+                if rect.origin.y > 150 {
+                    subview.isHidden = true
+                    subview.alpha = 0
+                    if let parent = subview.superview, !(parent is UIWindow) {
+                        let parentClass = String(describing: type(of: parent))
+                        if !parentClass.contains("Hosting") {
+                            parent.isHidden = true
+                            parent.alpha = 0
+                        }
+                    }
+                }
+            }
+            hideSidebarViews(in: subview)
+        }
     }
 }
 

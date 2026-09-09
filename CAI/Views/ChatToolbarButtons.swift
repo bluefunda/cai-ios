@@ -103,20 +103,87 @@ import UIKit
 // and/or the button may only be removable via NSToolbar-level APIs that
 // aren't reachable from pure UIKit code in a Catalyst target.
 private struct HideNativeSplitViewToggle: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> UIViewController {
-        UIViewController()
+    func makeUIViewController(context: Context) -> SplitViewControllerHost {
+        SplitViewControllerHost()
     }
 
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        DispatchQueue.main.async {
-            var responder: UIResponder? = uiViewController
-            while let current = responder {
-                if let split = current as? UISplitViewController {
-                    split.displayModeButtonVisibility = .never
-                    split.presentsWithGesture = false
-                    return
+    func updateUIViewController(_ uiViewController: SplitViewControllerHost, context: Context) {
+        uiViewController.removeSidebarToggle()
+    }
+}
+
+private class SplitViewControllerHost: UIViewController {
+    private static var hasRegisteredObserver = false
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupObserverIfNeeded()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        removeSidebarToggle()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        removeSidebarToggle()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in self?.removeSidebarToggle() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in self?.removeSidebarToggle() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.removeSidebarToggle() }
+    }
+
+    private func setupObserverIfNeeded() {
+        guard !Self.hasRegisteredObserver else { return }
+        Self.hasRegisteredObserver = true
+
+        let notifNames = [
+            NSNotification.Name("NSToolbarWillAddItemNotification"),
+            NSNotification.Name("NSWindowDidBecomeKeyNotification")
+        ]
+        for name in notifNames {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+                SplitViewControllerHost.stripToggleFromAllToolbars()
+            }
+        }
+    }
+
+    func removeSidebarToggle() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let window = self.view.window {
+                var queue: [UIViewController] = []
+                if let root = window.rootViewController { queue.append(root) }
+                while !queue.isEmpty {
+                    let vc = queue.removeFirst()
+                    if let split = vc as? UISplitViewController {
+                        split.displayModeButtonVisibility = .never
+                        split.presentsWithGesture = false
+                    }
+                    queue.append(contentsOf: vc.children)
                 }
-                responder = (current as? UIViewController)?.parent ?? current.next
+            }
+
+            Self.stripToggleFromAllToolbars()
+        }
+    }
+
+    static func stripToggleFromAllToolbars() {
+        guard let nsAppClass = NSClassFromString("NSApplication") as? NSObject.Type,
+              let app = nsAppClass.perform(NSSelectorFromString("sharedApplication"))?.takeUnretainedValue() as? NSObject else {
+            return
+        }
+
+        if let windows = app.value(forKey: "windows") as? [NSObject] {
+            for win in windows {
+                if let toolbar = win.value(forKey: "toolbar") as? NSToolbar {
+                    for (index, item) in toolbar.items.enumerated().reversed() {
+                        let id = item.itemIdentifier.rawValue
+                        if item.itemIdentifier == .toggleSidebar || id == "NSToolbarToggleSidebarItemIdentifier" || id.contains("ToggleSidebar") {
+                            toolbar.removeItem(at: index)
+                        }
+                    }
+                }
             }
         }
     }

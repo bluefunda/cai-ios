@@ -1,9 +1,38 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Executes an action with CoreAnimation, UIKit, and SwiftUI animations all completely disabled,
+/// preventing any intermediate layout interpolation, sliding, or text clipping when
+/// switching modes/models in a menu.
+@MainActor
+private func performInstantly(_ action: () -> Void) {
+    #if canImport(UIKit)
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    UIView.performWithoutAnimation {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            action()
+        }
+    }
+    CATransaction.commit()
+    #else
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) {
+        action()
+    }
+    #endif
+}
 
 // MARK: - Mode + Model Picker
 
 /// Unified dropdown for thinking mode, LLM, and agent selection — mirrors the
 /// cai web UnifiedModeSelector / AgentMCPSelector.
+@MainActor
 struct ModeModelPicker: View {
     @EnvironmentObject var chatManager: ChatManager
 
@@ -36,18 +65,51 @@ struct ModeModelPicker: View {
     }
 
     var body: some View {
-        // Plain Menu — matches the profile menu's recipe (ContentView.swift's
-        // bottom-left account row), which has correct upward-flip and
-        // mouse-hover behavior on Mac Catalyst. A popover-based rebuild here
-        // regressed mouse-click reliability, so back to Menu (cai-ios#257
-        // follow-up).
+        // Pure SwiftUI chip as the root view so its frame updates atomically
+        // without UIKit UIButton layout lag, intermediate frame clipping, or
+        // alignment sliding. The native Menu lives in an invisible overlay
+        // to handle user taps and menu presentation.
+        chipView
+            .accessibilityHidden(true)
+            .overlay {
+                menuOverlay
+            }
+            .fixedSize()
+            .transaction {
+                $0.animation = nil
+                $0.disablesAnimations = true
+            }
+            .bfPointerHover()
+    }
+
+    private var chipView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.caption)
+            Text(label)
+                .font(BFFont.bodySmall).fontWeight(.medium)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .contentTransition(.identity)
+            Image(systemName: "chevron.down").font(.caption)
+        }
+        .fixedSize()
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(BFColor.primaryTint)
+        .cornerRadius(10)
+        .foregroundStyle(BFColor.primary)
+    }
+
+    private var menuOverlay: some View {
         Menu {
             // Thinking modes
             Section {
                 ForEach(ThinkingMode.allCases) { mode in
                     Button {
-                        chatManager.enabledMCPServers = []
-                        chatManager.selectThinkingMode(mode)
+                        performInstantly {
+                            chatManager.enabledMCPServers = []
+                            chatManager.selectThinkingMode(mode)
+                        }
                     } label: {
                         if modeIsActive(mode) {
                             Label(mode.label, systemImage: "checkmark")
@@ -62,8 +124,10 @@ struct ModeModelPicker: View {
             Section("LLM") {
                 ForEach(chatManager.availableModels) { model in
                     Button {
-                        chatManager.enabledMCPServers = []
-                        chatManager.selectModel(model)
+                        performInstantly {
+                            chatManager.enabledMCPServers = []
+                            chatManager.selectModel(model)
+                        }
                     } label: {
                         if modelIsActive(model) {
                             Label(model.name, systemImage: "checkmark")
@@ -83,7 +147,9 @@ struct ModeModelPicker: View {
                 Section("Assistants") {
                     // "None" option clears all enabled agents
                     Button {
-                        chatManager.enabledMCPServers = []
+                        performInstantly {
+                            chatManager.enabledMCPServers = []
+                        }
                     } label: {
                         if chatManager.enabledMCPServers.isEmpty {
                             Label("None", systemImage: "checkmark")
@@ -94,11 +160,13 @@ struct ModeModelPicker: View {
 
                     ForEach(chatManager.visibleMCPServers) { server in
                         Button {
-                            if chatManager.enabledMCPServers.contains(server.id) {
-                                chatManager.enabledMCPServers.remove(server.id)
-                            } else {
-                                chatManager.enabledMCPServers.insert(server.id)
-                                chatManager.userPickedModel = false
+                            performInstantly {
+                                if chatManager.enabledMCPServers.contains(server.id) {
+                                    chatManager.enabledMCPServers.remove(server.id)
+                                } else {
+                                    chatManager.enabledMCPServers.insert(server.id)
+                                    chatManager.userPickedModel = false
+                                }
                             }
                         } label: {
                             if agentIsActive(server) {
@@ -111,20 +179,14 @@ struct ModeModelPicker: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon).font(.caption)
-                Text(label)
-                    .font(BFFont.bodySmall).fontWeight(.medium)
-                    .lineLimit(1)
-                Image(systemName: "chevron.down").font(.caption)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(BFColor.primaryTint)
-            .cornerRadius(10)
+            Rectangle()
+                .fill(Color.primary.opacity(0.0001))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .bfPointerHover()
+        .accessibilityLabel("Mode and model: \(label)")
+        .accessibilityHint("Select thinking mode, model, or assistant")
     }
 }
 
@@ -136,6 +198,7 @@ struct ModeModelPicker: View {
 /// chat-local selection (Settings default until the user overrides it for
 /// this conversation). Secondary chrome — kept small so the text field stays
 /// the dominant element in `ChatInputView.composerRow`.
+@MainActor
 struct PersonaComposerControl: View {
     @Binding var isOn: Bool
     let currentPersona: Persona
@@ -170,46 +233,57 @@ struct PersonaComposerControl: View {
             .bfPointerHover()
 
             if isOn {
-                // Plain Menu — matches the profile menu's recipe
-                // (ContentView.swift's bottom-left account row), which has
-                // correct upward-flip and mouse-hover behavior on Mac
-                // Catalyst. A popover-based rebuild here regressed
-                // mouse-click reliability, so back to Menu (cai-ios#257
-                // follow-up).
-                Menu {
-                    ForEach(dropdownOptions) { option in
-                        Button {
-                            onSelect(option)
-                        } label: {
-                            if option == currentPersona {
-                                Label(option.label, systemImage: "checkmark")
-                            } else {
-                                Text(option.label)
-                            }
-                        }
+                personaChipView
+                    .accessibilityHidden(true)
+                    .overlay {
+                        personaMenuOverlay
                     }
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(currentPersona.shortLabel)
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .lineLimit(1)
-                            .frame(maxWidth: 70, alignment: .leading)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(BFColor.primaryTint, in: Capsule())
-                    .foregroundStyle(BFColor.primary)
-                }
-                .buttonStyle(.plain)
-                .fixedSize()
-                .accessibilityLabel("SAP Persona: \(currentPersona.label)")
-                .accessibilityHint("Choose a different SAP persona for this chat")
-                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
-                .bfPointerHover()
+                    .fixedSize()
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
+                    .bfPointerHover()
             }
         }
+    }
+
+    private var personaChipView: some View {
+        HStack(spacing: 3) {
+            Text(currentPersona.shortLabel)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .frame(maxWidth: 70, alignment: .leading)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .semibold))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(BFColor.primaryTint, in: Capsule())
+        .foregroundStyle(BFColor.primary)
+    }
+
+    private var personaMenuOverlay: some View {
+        Menu {
+            ForEach(dropdownOptions) { option in
+                Button {
+                    performInstantly {
+                        onSelect(option)
+                    }
+                } label: {
+                    if option == currentPersona {
+                        Label(option.label, systemImage: "checkmark")
+                    } else {
+                        Text(option.label)
+                    }
+                }
+            }
+        } label: {
+            Rectangle()
+                .fill(Color.primary.opacity(0.0001))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("SAP Persona: \(currentPersona.label)")
+        .accessibilityHint("Choose a different SAP persona for this chat")
     }
 }

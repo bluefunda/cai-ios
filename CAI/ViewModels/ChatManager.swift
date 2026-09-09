@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import UIKit
+import SwiftUI
 
 // MARK: - Chat Manager
 // Coordinates between UI, streaming chat service (BFFChatService), and REST API service (BFFAPIService).
@@ -215,15 +216,23 @@ final class ChatManager: ObservableObject {
     /// Select a thinking mode — clears the explicit-model flag so the mode
     /// drives model selection on the backend.
     func selectThinkingMode(_ mode: ThinkingMode) {
-        thinkingMode = mode
-        userPickedModel = false
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            thinkingMode = mode
+            userPickedModel = false
+        }
     }
 
     /// Select a specific LLM — marks the model as explicit so the backend
     /// uses it and ignores the thinking mode.
     func selectModel(_ model: LLMModel) {
-        selectedModel = model
-        userPickedModel = true
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            selectedModel = model
+            userPickedModel = true
+        }
     }
 
     @Published var availableModels: [LLMModel] = LLMModel.defaultModels

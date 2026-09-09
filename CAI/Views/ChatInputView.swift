@@ -191,6 +191,10 @@ struct ChatInputView: View {
                 // than the top bar — right side, directly next to mic/send.
                 ModeModelPicker()
                     .disabled(isStreaming)
+                    .transaction {
+                        $0.animation = nil
+                        $0.disablesAnimations = true
+                    }
 
                 // Mic button — replaced by the send button once there's something to send, and
                 // by the stop button while streaming (canSend alone goes false once the

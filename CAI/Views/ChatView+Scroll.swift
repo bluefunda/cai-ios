@@ -70,7 +70,20 @@ extension ChatView {
     ///   short of their true end specifically on Mac Catalyst, not iOS). Caller resets the tracked
     ///   position to nil before starting a fresh settle so a stale reading from whatever
     ///   conversation was open before can't read as "already settled" on the very first pass.
-    func scrollToBottom(proxy: ScrollViewProxy, isSettled: @escaping () -> Bool) async {
+    /// Unique ID for the trailing bottom sentinel that incorporates both the conversation ID
+    /// and current message count. This guarantees that when switching to a shorter conversation,
+    /// ScrollViewReader / UICollectionView can NEVER resolve "bottom" to a stale, out-of-bounds index
+    /// from the previous conversation (which causes a fatal NSException / SIGABRT crash).
+    private var bottomSentinelID: String {
+        "bottom-\(chatManager.currentConversation?.id ?? "none")-\(chatManager.currentConversation?.messages.count ?? 0)"
+    }
+
+    func scrollToBottom(
+        proxy: ScrollViewProxy,
+        targetID: String,
+        conversationID: String?,
+        isSettled: @escaping () -> Bool
+    ) async {
         // cai-android's actual pass interval is withFrameNanos {} — one real display frame
         // (~16ms), not an arbitrary timer — so its whole settle loop finishes in a handful of
         // milliseconds and is never perceptible. This used Task.sleep(for: .milliseconds(100))
@@ -86,7 +99,8 @@ extension ChatView {
         // can't spin forever.
         for _ in 0..<60 {
             guard !Task.isCancelled else { return }
-            proxy.scrollTo("bottom", anchor: .bottom)
+            guard chatManager.currentConversation?.id == conversationID else { return }
+            proxy.scrollTo(targetID, anchor: .bottom)
             try? await Task.sleep(for: .milliseconds(16))
             if isSettled() { return }
         }
@@ -255,7 +269,7 @@ extension ChatView {
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
                         }
-                        Color.clear.frame(height: 1).id("bottom")
+                        Color.clear.frame(height: 1).id(bottomSentinelID)
                             .background {
                                 GeometryReader { geo in
                                     Color.clear.preference(
@@ -308,8 +322,10 @@ extension ChatView {
                         chatManager.isSwitchingConversation = false
                         bottomSentinelY = nil
                         scrollSettleTask?.cancel()
+                        let target = bottomSentinelID
+                        let convoID = chatManager.currentConversation?.id
                         scrollSettleTask = Task { @MainActor in
-                            await scrollToBottom(proxy: proxy, isSettled: checkNearBottomSentinel)
+                            await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
                         }
                     }
                     // reconcileAfterBackground() re-fetches the conversation from the server and
@@ -378,9 +394,11 @@ extension ChatView {
                         chatManager.isSwitchingConversation = true
                         bottomSentinelY = nil
                         scrollSettleTask?.cancel()
+                        let target = bottomSentinelID
+                        let convoID = chatManager.currentConversation?.id
                         scrollSettleTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
-                            await scrollToBottom(proxy: proxy, isSettled: checkNearBottomSentinel)
+                            await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
                             // Guards against a cancelled/superseded task's cooperative-cancellation
                             // remnant (scrollToBottom returns early but this task's own code after
                             // it keeps running) clobbering the *new* task's isSwitchingConversation =
@@ -395,9 +413,11 @@ extension ChatView {
                         chatManager.isSwitchingConversation = true
                         bottomSentinelY = nil
                         scrollSettleTask?.cancel()
+                        let target = bottomSentinelID
+                        let convoID = chatManager.currentConversation?.id
                         scrollSettleTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
-                            await scrollToBottom(proxy: proxy, isSettled: checkNearBottomSentinel)
+                            await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
                             // Guards against a cancelled/superseded task's cooperative-cancellation
                             // remnant (scrollToBottom returns early but this task's own code after
                             // it keeps running) clobbering the *new* task's isSwitchingConversation =
@@ -407,6 +427,7 @@ extension ChatView {
                         }
                     }
                 }
+                .id(chatManager.currentConversation?.id ?? "none")
             }
             if chatManager.isSwitchingConversation {
                 // Covers the List (still fully mounted and doing its real layout/scroll work
