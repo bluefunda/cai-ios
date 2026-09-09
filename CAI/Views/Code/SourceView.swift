@@ -42,7 +42,10 @@ struct SourceView: View {
                         copy()
                     } label: {
                         Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
+                    .bfPointerHover()
                 }
             }
         }

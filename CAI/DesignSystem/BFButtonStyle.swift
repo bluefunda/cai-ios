@@ -12,6 +12,7 @@ struct BlueFundaPrimaryButtonStyle: ButtonStyle {
             .bfShadow(configuration.isPressed ? BFShadow.md : BFShadow.lg)
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(BFMotion.easingInOut, value: configuration.isPressed)
+            .bfPointerHover()
     }
 }
 
@@ -30,6 +31,7 @@ struct BlueFundaSecondaryButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(BFMotion.easingInOut, value: configuration.isPressed)
+            .bfPointerHover()
     }
 }
 
@@ -44,6 +46,7 @@ struct BlueFundaDangerButtonStyle: ButtonStyle {
             .cornerRadius(BFRadius.lg)
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(BFMotion.easingInOut, value: configuration.isPressed)
+            .bfPointerHover()
     }
 }
 
@@ -59,16 +62,44 @@ extension ButtonStyle where Self == BlueFundaDangerButtonStyle {
     static var bfDanger: BlueFundaDangerButtonStyle { .init() }
 }
 
+#if targetEnvironment(macCatalyst)
+import UIKit
+
+/// ViewModifier that toggles the macOS pointing-hand cursor on hover for Mac Catalyst.
+/// Uses a push/pop stack on NSCursor and resets on disappear so the cursor stack is never leaked.
+private struct BFPointerHoverModifier: ViewModifier {
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                guard hovering != isHovered else { return }
+                isHovered = hovering
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .onDisappear {
+                if isHovered {
+                    isHovered = false
+                    NSCursor.pop()
+                }
+            }
+    }
+}
+#endif
+
 extension View {
-    /// Drives Mac Catalyst's (and a mouse/trackpad-connected iPad's) pointer interaction —
-    /// showing the pointing-hand cursor on hover, plus a subtle highlight — for a custom
-    /// tappable control built from a plain Image or Text. A no-op on touch-only devices.
-    /// SwiftUI's Button isn't backed by a real UIButton, so unlike a native AppKit/UIKit
-    /// control it doesn't get this for free; without it there's nothing on Mac Catalyst to
-    /// indicate "this is clickable" until the actual click. .pointerStyle(_:) is NOT this —
-    /// that modifier only exists on visionOS, not Mac Catalyst, despite the similar name.
-    /// Apply to any button-like control across the app, not just one place.
+    /// Shows the pointing-hand cursor on hover on Mac Catalyst.
+    /// A no-op everywhere else (iOS/iPadOS touch has no mouse cursor).
+    @ViewBuilder
     func bfPointerHover() -> some View {
-        hoverEffect(.highlight)
+        #if targetEnvironment(macCatalyst)
+        modifier(BFPointerHoverModifier())
+        #else
+        self
+        #endif
     }
 }

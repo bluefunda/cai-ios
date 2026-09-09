@@ -55,6 +55,7 @@ struct ConversationFilesView: View {
                 Spacer()
             }
         }
+        .bfPointerHover()
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 Task { await delete(file) }

@@ -91,6 +91,9 @@ struct SettingsView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.secondary)
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                    .bfPointerHover()
                     .tag(category)
                 }
             }
@@ -191,9 +194,15 @@ struct SettingsView: View {
                 Button {
                     openURL(reportContentURL)
                 } label: {
-                    Label("Report Suspicious Content", systemImage: "flag")
-                        .foregroundColor(.primary)
+                    HStack {
+                        Label("Report Suspicious Content", systemImage: "flag")
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .bfPointerHover()
             } footer: {
                 Text("Report content within the app that you believe is suspicious, abusive, or violates our policies. This opens an email to our support team.")
             }
@@ -207,7 +216,10 @@ struct SettingsView: View {
                         Text("Sign Out")
                         Spacer()
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .bfPointerHover()
             }
 
             Section {
@@ -223,8 +235,11 @@ struct SettingsView: View {
                         }
                         Spacer()
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
                 .disabled(isDeleting)
+                .bfPointerHover()
             } footer: {
                 Text("Permanently deletes your account and all associated data. This can't be undone.")
             }
@@ -248,12 +263,16 @@ struct SettingsView: View {
                             Text(assistantsSummary)
                                 .foregroundColor(.secondary)
                         }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
                     }
+                    .bfPointerHover()
                 }
 
                 Toggle(isOn: $chatManager.personaEnabled) {
                     Label("SAP Persona", systemImage: "person.text.rectangle")
                 }
+                .bfPointerHover()
 
                 NavigationLink {
                     PersonaSelectionView()
@@ -264,9 +283,12 @@ struct SettingsView: View {
                         Text(chatManager.persona.label)
                             .foregroundColor(.secondary)
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
                 .disabled(!chatManager.personaEnabled)
                 .opacity(chatManager.personaEnabled ? 1 : 0.4)
+                .bfPointerHover()
             } footer: {
                 Text("Tunes terminology and depth to your SAP specialty. Turn off to use the assistant with no persona.")
             }
@@ -302,16 +324,28 @@ struct SettingsView: View {
                 Button {
                     openURL(privacyPolicyURL)
                 } label: {
-                    Label("Privacy Policy", systemImage: "hand.raised")
-                        .foregroundColor(.primary)
+                    HStack {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .bfPointerHover()
 
                 Button {
                     openURL(termsOfServiceURL)
                 } label: {
-                    Label("Terms of Service", systemImage: "doc.text")
-                        .foregroundColor(.primary)
+                    HStack {
+                        Label("Terms of Service", systemImage: "doc.text")
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
                 }
+                .bfPointerHover()
             }
         }
         .navigationTitle("Legal")
@@ -493,7 +527,10 @@ struct MCPServerSelectionView: View {
                                     .foregroundColor(BFColor.primary)
                             }
                         }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
                     }
+                    .bfPointerHover()
                 }
             } footer: {
                 Text("Enable one or more assistants to make their tools available in chat.")
@@ -561,7 +598,10 @@ struct PersonaSelectionView: View {
                                     .foregroundColor(BFColor.primary)
                             }
                         }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
                     }
+                    .bfPointerHover()
                 }
             } footer: {
                 Text("Used to tune terminology and depth in chat responses.")

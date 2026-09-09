@@ -691,8 +691,10 @@ private struct CodeBlockView: View {
                     }
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .bfPointerHover()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

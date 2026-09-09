@@ -130,6 +130,7 @@ struct AppShell: View {
                                 Image(systemName: "server.rack")
                                     .font(.system(size: BFFont.toolbarIconPt))
                             }
+                            .bfPointerHover()
                         }
                     }
                 }
@@ -323,6 +324,7 @@ struct SidebarContent: View {
                                         chatManager.selectConversation(convo)
                                     }
                                 }
+                                .bfPointerHover()
                                 .accessibilityIdentifier("conversationRow")
                                 .contextMenu {
                                     ShareLink(item: convo.markdownExport) {
@@ -378,6 +380,7 @@ struct SidebarContent: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
                 .accessibilityIdentifier("upgradeToProButton")
+                .bfPointerHover()
             }
 
             // Profile row — bottom left, menu contains Settings + Help
@@ -431,6 +434,8 @@ struct SidebarContent: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profileMenuButton")
+            .bfPointerHover()
+            .bfPointerHover()
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -576,6 +581,7 @@ struct SidebarDrawer: View {
                                         }
                                     }
                                 }
+                                .bfPointerHover()
                                 .accessibilityIdentifier("conversationRow")
                                 .contextMenu {
                                     ShareLink(item: convo.markdownExport) {
@@ -636,6 +642,7 @@ struct SidebarDrawer: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
                 .accessibilityIdentifier("upgradeToProButton")
+                .bfPointerHover()
             }
 
             // Profile row — bottom left, menu contains Settings + Help
@@ -698,6 +705,8 @@ struct SidebarDrawer: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profileMenuButton")
+            .bfPointerHover()
+            .bfPointerHover()
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))
@@ -771,6 +780,7 @@ struct SidebarConversationRow: View {
             in: RoundedRectangle(cornerRadius: 8)
         )
         .contentShape(Rectangle())
+        .bfPointerHover()
     }
 }
 
@@ -795,6 +805,7 @@ struct SidebarNavButton: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+        .bfPointerHover()
     }
 }
 
@@ -977,6 +988,7 @@ private struct SocialSignInButton<Icon: View>: View {
         }
         .buttonStyle(.plain)
         .bfShadow(BFShadow.sm)
+        .bfPointerHover()
     }
 }
 

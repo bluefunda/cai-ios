@@ -13,6 +13,7 @@ struct HamburgerButton: View {
             .foregroundStyle(BFColor.primary)
         }
         .accessibilityIdentifier("hamburgerButton")
+        .bfPointerHover()
     }
 }
 
@@ -56,6 +57,7 @@ struct CodeTopBar: View {
                 Image(systemName: "server.rack")
                     .font(.system(size: BFFont.toolbarIconPt))
             }
+            .bfPointerHover()
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
@@ -80,6 +82,7 @@ struct SidebarToggleButton: View {
             Image(systemName: "sidebar.left")
                 .font(.system(size: BFFont.toolbarIconPt))
         }
+        .bfPointerHover()
     }
 }
 
@@ -135,6 +138,7 @@ struct NewChatButton: View {
                 .font(.system(size: BFFont.toolbarIconPt))
         }
         .foregroundStyle(BFColor.primary)
+        .bfPointerHover()
     }
 }
 
@@ -152,6 +156,7 @@ struct AttachmentButton: View {
         }
         .foregroundStyle(.secondary)
         .disabled(conversationId == nil)
+        .bfPointerHover()
         .sheet(isPresented: $showFiles) {
             if let conversationId {
                 NavigationStack {
@@ -159,6 +164,7 @@ struct AttachmentButton: View {
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
                                 Button("Done") { showFiles = false }
+                                    .bfPointerHover()
                             }
                         }
                 }

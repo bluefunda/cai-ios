@@ -83,8 +83,10 @@ struct ChatInputView: View {
                                 .foregroundStyle(.secondary)
                                 .frame(width: 18, height: 18)
                                 .background(Color(.systemGray4), in: Circle())
+                                .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
+                        .bfPointerHover()
                         .padding(.leading, 2)
                     }
                     .padding(.leading, 8)
@@ -170,6 +172,7 @@ struct ChatInputView: View {
                     .buttonStyle(.plain)
                     .fixedSize()
                     .disabled(isStreaming)
+                    .bfPointerHover()
                 }
 
                 if personaFeatureEnabled {
@@ -202,6 +205,7 @@ struct ChatInputView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isStreaming)
+                    .bfPointerHover()
                 } else {
                     Button {
                         isStreaming ? onStop() : onSend()
@@ -218,6 +222,7 @@ struct ChatInputView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(!isStreaming && !canSend)
+                    .bfPointerHover()
                     // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
                     .keyboardShortcut(.return, modifiers: .command)
                 }
@@ -244,12 +249,18 @@ struct ChatInputView: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .bfPointerHover()
             Button(action: { onConfirmRecording?() }) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 28))
                     .foregroundStyle(BFColor.primary)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .bfPointerHover()
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 10)

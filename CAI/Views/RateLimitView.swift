@@ -38,11 +38,15 @@ struct RateLimitView: View {
                 } label: {
                     if isRefreshing {
                         ProgressView()
+                            .frame(width: 28, height: 28)
                     } else {
                         Image(systemName: "arrow.clockwise")
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
                 }
                 .disabled(isRefreshing)
+                .bfPointerHover()
             }
         }
         .task {

@@ -124,6 +124,7 @@ struct ModeModelPicker: View {
             .cornerRadius(10)
         }
         .buttonStyle(.plain)
+        .bfPointerHover()
     }
 }
 
@@ -166,6 +167,7 @@ struct PersonaComposerControl: View {
             .accessibilityLabel("SAP Persona")
             .accessibilityValue(isOn ? "On" : "Off")
             .accessibilityHint("Toggles a SAP-specific persona for this chat")
+            .bfPointerHover()
 
             if isOn {
                 // Plain Menu — matches the profile menu's recipe
@@ -206,6 +208,7 @@ struct PersonaComposerControl: View {
                 .accessibilityLabel("SAP Persona: \(currentPersona.label)")
                 .accessibilityHint("Choose a different SAP persona for this chat")
                 .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
+                .bfPointerHover()
             }
         }
     }
