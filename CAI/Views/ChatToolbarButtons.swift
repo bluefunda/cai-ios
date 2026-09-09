@@ -169,20 +169,17 @@ private class SplitViewControllerHost: UIViewController {
     }
 
     static func stripToggleFromAllToolbars() {
-        guard let nsAppClass = NSClassFromString("NSApplication") as? NSObject.Type,
-              let app = nsAppClass.perform(NSSelectorFromString("sharedApplication"))?.takeUnretainedValue() as? NSObject else {
-            return
-        }
-
-        if let windows = app.value(forKey: "windows") as? [NSObject] {
-            for win in windows {
-                if let toolbar = win.value(forKey: "toolbar") as? NSToolbar {
-                    for (index, item) in toolbar.items.enumerated().reversed() {
-                        let id = item.itemIdentifier.rawValue
-                        if item.itemIdentifier == .toggleSidebar || id == "NSToolbarToggleSidebarItemIdentifier" || id.contains("ToggleSidebar") {
-                            toolbar.removeItem(at: index)
-                        }
-                    }
+        // UIWindowScene.titlebar.toolbar is UIKit's own supported Catalyst API for
+        // reaching the window's NSToolbar — unlike the NSClassFromString/value(forKey:)
+        // approach this replaced, it can't throw an uncaught NSUnknownKeyException if a
+        // given OS build's NSApplication/NSWindow internals don't answer to those keys.
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene,
+                  let toolbar = windowScene.titlebar?.toolbar else { continue }
+            for (index, item) in toolbar.items.enumerated().reversed() {
+                let id = item.itemIdentifier.rawValue
+                if item.itemIdentifier == .toggleSidebar || id == "NSToolbarToggleSidebarItemIdentifier" || id.contains("ToggleSidebar") {
+                    toolbar.removeItem(at: index)
                 }
             }
         }
