@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.3](https://github.com/bluefunda/cai-ios/compare/v2.6.2...v2.6.3) (2026-09-09)
+
+
+### Bug Fixes
+
+* **macos:** replace private-API toolbar KVC walk with UIWindowScene.titlebar ([#297](https://github.com/bluefunda/cai-ios/issues/297)) ([45b9d7e](https://github.com/bluefunda/cai-ios/commit/45b9d7eece7d0cf3e19ccc670d81a65c4646ee60))
+
 ## [2.6.2](https://github.com/bluefunda/cai-ios/compare/v2.6.1...v2.6.2) (2026-09-09)
 
 
