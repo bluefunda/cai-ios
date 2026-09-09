@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.6.2](https://github.com/bluefunda/cai-ios/compare/v2.6.1...v2.6.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **chat:** apply drawer-switch loader fix to iPad/Mac persistent sidebar ([334e39d](https://github.com/bluefunda/cai-ios/commit/334e39d131a12ba42fbe2280f27b56db12a23153))
+* **macos:** add pointer-hover affordance for custom tappable controls ([49d8f7e](https://github.com/bluefunda/cai-ios/commit/49d8f7e4282cc7049874ae0aa24e71ce79c07053))
+* **macos:** add pointing-hand cursor affordance across all clickable controls ([ad99430](https://github.com/bluefunda/cai-ios/commit/ad99430bdec0a0d0fbb21e027b2be52d8237d691))
+* **macos:** custom dropdown for profile menu, single sidebar toggle, dark-mode composer pill, misc hit-area fixes ([382acf8](https://github.com/bluefunda/cai-ios/commit/382acf8f3ded764a25eea0d95f91609d3e4d8bf4))
+* **macos:** loader, close button, subscription flash, empty-state centering, and cursor hover ([e2cd776](https://github.com/bluefunda/cai-ios/commit/e2cd776e692c4c05bb46c48cc866e39a6b591b10))
+* **macos:** settings close button, subscription-status flash, empty-state centering ([8897f4d](https://github.com/bluefunda/cai-ios/commit/8897f4dd3b1825a3d2f3bab597fa0466c71baab2))
+
 ## [2.6.1](https://github.com/bluefunda/cai-ios/compare/v2.6.0...v2.6.1) (2026-09-09)
 
 
