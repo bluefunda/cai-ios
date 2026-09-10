@@ -29,6 +29,19 @@ final class ChatManager: ObservableObject {
     private var personaEnabledByConversationID: [String: Bool] = [:]
     private var personaOverrideByConversationID: [String: Persona] = [:]
 
+    // MARK: - Tip Engine (bluefunda/cai-ios#155) — see ChatManager+TipEngine.swift
+    // for the behavior; state lives here because Swift extensions can't hold
+    // stored properties. Not `private` (also `fileprivate` wouldn't reach a
+    // different file): accessed from that extension.
+    let tipInterestProfile = InterestProfile()
+    let tipTopicSource: TurnTopicSource = HeuristicTurnTopicSource()
+    var lastTurnPersonaId: String?
+    let tipCatalog = TipCatalog()
+    let tipAntiAnnoyance = AntiAnnoyance()
+    let tipRewardLog = TipRewardLog()
+    @Published var activeTip: TipManifestEntry?
+    weak var iapManager: IAPManager?
+
     @Published var currentConversation: Conversation? {
         didSet {
             // Guard against in-place refreshes of the *same* conversation
@@ -274,7 +287,8 @@ final class ChatManager: ObservableObject {
     /// Not `private`: also cancelled from the `ChatManager+Background.swift`
     /// extension's `reconcileAfterBackground()`.
     var streamingTask: Task<Void, Never>?
-    private var modelContext: ModelContext?
+    /// Not `private`: also used by the `ChatManager+Cache.swift` extension.
+    var modelContext: ModelContext?
     /// iOS background-task assertion covering an in-flight stream, so a
     /// response already generating gets a short grace window (~30s, OS-
     /// controlled) to finish after the app backgrounds rather than being
@@ -302,12 +316,19 @@ final class ChatManager: ObservableObject {
         self.service = service
         self.fileStore = fileStore
         self.urlSession = urlSession
+        tipAntiAnnoyance.startSession()
+        Task { [tipCatalog] in await tipCatalog.refresh() }
     }
 
     // Called once by CAIApp to hand off the AuthManager, the source of truth for
     // token refresh. Without it, ChatManager falls back to the last-known token.
     func bind(authManager: AuthManager) {
         self.authManager = authManager
+    }
+
+    // Called once by CAIApp alongside bind(authManager:) — see ChatManager+TipEngine.swift.
+    func bind(iapManager: IAPManager) {
+        self.iapManager = iapManager
     }
 
     /// Update the stored access token (called from CAIApp on auth state changes).
@@ -750,6 +771,10 @@ final class ChatManager: ObservableObject {
                 updateLastMessage(assistantMessage, in: conversation.id)
             }
 
+            if !Task.isCancelled {
+                recordCompletedTurnForTipEngine(assistantPersona: assistantPersona, wasRateLimited: wasRateLimited)
+            }
+
             isStreaming = false
             // Guarded on identity: if the user stopped this stream and immediately sent another
             // message, streamingMessageId already points at the new turn's placeholder by the time
@@ -866,82 +891,6 @@ final class ChatManager: ObservableObject {
     // updateConversationTitle) live in ChatManager+MessageMutation.swift — split
     // out to stay under SwiftLint's type_body_length limit.
 
-}
-
-// MARK: - SwiftData persistence
-
-extension ChatManager {
-    /// Call once from CAIApp after ModelContainer is ready.
-    func configureStorage(_ context: ModelContext) {
-        modelContext = context
-        loadCachedConversations()
-    }
-
-    /// Pre-populates the sidebar from the local cache before the API responds.
-    private func loadCachedConversations() {
-        guard let ctx = modelContext else { return }
-        var desc = FetchDescriptor<PersistedConversation>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
-        desc.fetchLimit = 200
-        guard let cached = try? ctx.fetch(desc), !cached.isEmpty else { return }
-        conversations = cached.map { Conversation(from: $0) }
-    }
-
-    /// Upserts conversation metadata (title, model) — does not touch messages.
-    private func cacheConversations(_ convs: [Conversation]) {
-        guard let ctx = modelContext else { return }
-        for conv in convs {
-            let id = conv.id
-            let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
-            if let existing = try? ctx.fetch(desc).first {
-                existing.title = conv.title
-                existing.model = conv.model
-            } else {
-                ctx.insert(PersistedConversation(id: conv.id, title: conv.title,
-                                                  model: conv.model, createdAt: conv.createdAt))
-            }
-        }
-        try? ctx.save()
-    }
-
-    /// Upserts messages for a conversation — adds new ones without duplicating.
-    private func cacheMessages(_ messages: [ChatMessage], for conversationId: String) {
-        guard let ctx = modelContext else { return }
-        let convId = conversationId
-        let convDesc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
-        guard let persisted = try? ctx.fetch(convDesc).first else { return }
-        let existingIds = Set(persisted.messages.map(\.id))
-        for msg in messages where !existingIds.contains(msg.id) {
-            let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
-                                      roleRaw: msg.role.rawValue, content: msg.content,
-                                      timestamp: msg.timestamp, persona: msg.persona)
-            pm.conversation = persisted
-            ctx.insert(pm)
-        }
-        try? ctx.save()
-    }
-
-    /// Not `private`: also called from `retryStuckTitles` in `ChatManager+FileHistory.swift`.
-    func cacheUpdateTitle(_ title: String, for conversationId: String) {
-        guard let ctx = modelContext else { return }
-        let id = conversationId
-        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
-        if let existing = try? ctx.fetch(desc).first {
-            existing.title = title
-            try? ctx.save()
-        }
-    }
-
-    private func deleteFromCache(_ conversation: Conversation) {
-        guard let ctx = modelContext else { return }
-        let id = conversation.id
-        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
-        if let existing = try? ctx.fetch(desc).first {
-            ctx.delete(existing)
-            try? ctx.save()
-        }
-    }
 }
 
 // MARK: - Data Loading

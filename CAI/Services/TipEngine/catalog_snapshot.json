@@ -1,0 +1,346 @@
+[
+  {
+    "id": "example-cross-surface",
+    "family": "onboarding",
+    "surfaces": [
+      "cli",
+      "ios"
+    ],
+    "domain_scope": [
+      "onboarding"
+    ],
+    "persona_gate": "new_user",
+    "trigger_conditions": [
+      "first_run"
+    ],
+    "min_tier": "free",
+    "cooldown": "72h",
+    "render": {
+      "cli": {
+        "title": "Tip",
+        "body": "Run bai --help to see every available command."
+      },
+      "ios": {
+        "title": "Getting started",
+        "body": "Tap the command palette to see everything you can do from your phone."
+      }
+    },
+    "deep_link": "bluefunda://help",
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "example-quiet-mode",
+    "family": "cli-basics",
+    "surfaces": [
+      "cli"
+    ],
+    "domain_scope": [
+      "output-format"
+    ],
+    "trigger_conditions": [
+      "command_exit_code_nonzero"
+    ],
+    "min_tier": "free",
+    "cooldown": "24h",
+    "render": {
+      "cli": {
+        "title": "Tip",
+        "body": "Pipe-friendly output: pass -o quiet for one value per line, no headers."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "ios-attachments",
+    "family": "ios-attachments",
+    "surfaces": [
+      "ios"
+    ],
+    "domain_scope": [
+      "onboarding",
+      "output-format"
+    ],
+    "persona_gate": "new_user",
+    "trigger_conditions": [
+      "first_run"
+    ],
+    "min_tier": "free",
+    "cooldown": "24h",
+    "render": {
+      "ios": {
+        "title": "Attach files and photos",
+        "body": "Tap the + next to the message field to attach a photo, document, or camera capture — CAI can read and answer questions about it."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "ios-mcp-web-search",
+    "family": "ios-assistants",
+    "surfaces": [
+      "ios"
+    ],
+    "domain_scope": [
+      "mcp"
+    ],
+    "min_tier": "free",
+    "cooldown": "72h",
+    "render": {
+      "ios": {
+        "title": "Search the web from chat",
+        "body": "Tap the mode picker above the message field and turn on Web Search under Assistants when you need current info the model doesn't already know."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "ios-sap-persona",
+    "family": "ios-persona",
+    "surfaces": [
+      "ios"
+    ],
+    "domain_scope": [
+      "config",
+      "model-selection"
+    ],
+    "min_tier": "free",
+    "cooldown": "72h",
+    "render": {
+      "ios": {
+        "title": "Get SAP-specific answers",
+        "body": "Turn on Persona in the composer and pick your specialty (ABAP, BASIS, FI, and more) so answers use the right terminology and depth for your role."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "ios-st22-dump-decode",
+    "family": "ios-diagnostics",
+    "surfaces": [
+      "ios"
+    ],
+    "domain_scope": [
+      "diagnostics",
+      "errors"
+    ],
+    "min_tier": "free",
+    "cooldown": "24h",
+    "render": {
+      "ios": {
+        "title": "Decode an ABAP dump instantly",
+        "body": "Paste or screenshot an ST22 short dump into the chat — CAI recognizes it and offers to decode it into a clear explanation."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "ios-thinking-modes",
+    "family": "ios-model",
+    "surfaces": [
+      "ios"
+    ],
+    "domain_scope": [
+      "model-selection"
+    ],
+    "min_tier": "free",
+    "cooldown": "72h",
+    "render": {
+      "ios": {
+        "title": "Choose how the AI thinks",
+        "body": "Tap the mode picker to switch between Auto, Quick Response, and Think Deeper. Use Think Deeper for harder questions, Quick Response when you just need a fast answer."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "ios-usage-limits",
+    "family": "ios-usage",
+    "surfaces": [
+      "ios"
+    ],
+    "domain_scope": [
+      "cost-budget"
+    ],
+    "min_tier": "free",
+    "cooldown": "72h",
+    "render": {
+      "ios": {
+        "title": "Keep an eye on your usage",
+        "body": "Check Settings → Usage any time to see how much of your hourly and weekly limit you've used, and when it resets."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "catalog_version": "1"
+  },
+  {
+    "id": "ios-voice-input",
+    "family": "ios-voice",
+    "surfaces": [
+      "ios"
+    ],
+    "domain_scope": [
+      "automation"
+    ],
+    "min_tier": "free",
+    "cooldown": "72h",
+    "render": {
+      "ios": {
+        "title": "Talk instead of type",
+        "body": "Tap the microphone icon to dictate your message — handy when you're away from the keyboard or on the move."
+      }
+    },
+    "embedding": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0
+    ],
+    "catalog_version": "1"
+  }
+]

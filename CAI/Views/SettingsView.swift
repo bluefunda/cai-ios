@@ -437,6 +437,16 @@ struct SettingsView: View {
                     Text("Using cai-gw/cai-bff HTTP SSE endpoints.")
                 }
             }
+
+            #if DEBUG
+            Section {
+                NavigationLink("Tip Engine Debug") {
+                    TipEngineDebugView()
+                }
+            } footer: {
+                Text("Debug-only harness for the Contextual Tip Engine (bluefunda/cai-ios#155). Not present in Release builds.")
+            }
+            #endif
         }
         .navigationTitle("About")
     }
