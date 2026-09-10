@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.7.0](https://github.com/bluefunda/cai-ios/compare/v2.6.3...v2.7.0) (2026-09-10)
+
+
+### Features
+
+* Contextual Tip Engine Phases 1-5 + tip card UI ([#304](https://github.com/bluefunda/cai-ios/issues/304)) ([f1de14a](https://github.com/bluefunda/cai-ios/commit/f1de14a26aff2f48bbfe5f2ac8a4c6f64576f9d8))
+
+
+### Bug Fixes
+
+* **assets:** app icon crop to without white border logo ([a01b013](https://github.com/bluefunda/cai-ios/commit/a01b0139d4c097adb852aad40aa9819568eebcec))
+* **assets:** inset macOS icon content to match Dock icon sizing convention ([7ab55f2](https://github.com/bluefunda/cai-ios/commit/7ab55f2b7b539af4384ddde731fd3168a6f6bd13))
+* **assets:** match app icon crop to cai-android's logo, with proper macOS corner masking ([dac48e2](https://github.com/bluefunda/cai-ios/commit/dac48e254184910e44b5b94e6af950f317fc8bb7))
+
 ## [2.6.3](https://github.com/bluefunda/cai-ios/compare/v2.6.2...v2.6.3) (2026-09-09)
 
 
