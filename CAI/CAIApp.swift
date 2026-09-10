@@ -43,6 +43,7 @@ struct CAIApp: App {
                 }
                 .task {
                     chatManager.bind(authManager: authManager)
+                    chatManager.bind(iapManager: iapManager)
                     #if DEBUG
                     if ScreenshotFixtures.isEnabled {
                         ScreenshotFixtures.bootstrap(

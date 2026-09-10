@@ -232,6 +232,13 @@ struct ChatView: View {
             if showDumpDecodeBanner {
                 ST22DumpBanner(onDecode: decodeDump)
             }
+            if let tip = chatManager.activeTip {
+                TipBannerView(
+                    tip: tip,
+                    onDismiss: { chatManager.dismissActiveTip() },
+                    onTap: { chatManager.tapActiveTip() }
+                )
+            }
             ChatInputView(
                 text: $inputText,
                 // Keeps Stop showing (instead of falling back to mic) through the

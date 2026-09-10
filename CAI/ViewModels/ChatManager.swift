@@ -29,6 +29,26 @@ final class ChatManager: ObservableObject {
     private var personaEnabledByConversationID: [String: Bool] = [:]
     private var personaOverrideByConversationID: [String: Persona] = [:]
 
+    // MARK: - Tip Engine (bluefunda/cai-ios#155)
+
+    /// See `TurnTopicSource` — no domain/intent/sap_confidence signal
+    /// reaches iOS today, so this is a deliberately coarse, provisional
+    /// placeholder derived from what's already observable here.
+    private let tipInterestProfile = InterestProfile()
+    private let tipTopicSource: TurnTopicSource = HeuristicTurnTopicSource()
+    private var lastTurnPersonaId: String?
+    private let tipCatalog = TipCatalog()
+    private let tipAntiAnnoyance = AntiAnnoyance()
+    private let tipRewardLog = TipRewardLog()
+    /// The tip currently shown above the composer, if any — set by
+    /// `maybeShowTip()` after a completed turn, cleared by
+    /// `dismissActiveTip()`/`tapActiveTip()`.
+    @Published var activeTip: TipManifestEntry?
+    /// Bound from `CAIApp` alongside `authManager` (see `bind(authManager:)`
+    /// below) so tip eligibility can see real subscription status without
+    /// ChatManager owning IAPManager itself.
+    weak var iapManager: IAPManager?
+
     @Published var currentConversation: Conversation? {
         didSet {
             // Guard against in-place refreshes of the *same* conversation
@@ -302,12 +322,59 @@ final class ChatManager: ObservableObject {
         self.service = service
         self.fileStore = fileStore
         self.urlSession = urlSession
+        tipAntiAnnoyance.startSession()
+        Task { [tipCatalog] in await tipCatalog.refresh() }
     }
 
     // Called once by CAIApp to hand off the AuthManager, the source of truth for
     // token refresh. Without it, ChatManager falls back to the last-known token.
     func bind(authManager: AuthManager) {
         self.authManager = authManager
+    }
+
+    // Called once by CAIApp alongside bind(authManager:) so Tip Engine
+    // eligibility can see real subscription status.
+    func bind(iapManager: IAPManager) {
+        self.iapManager = iapManager
+    }
+
+    // MARK: - Tip Engine (bluefunda/cai-ios#155)
+
+    /// Runs Phase 3 selection against the current catalog/interest profile
+    /// and, if a tip is eligible, shows it — called after each completed
+    /// turn. No-ops (leaves `activeTip` alone) rather than replacing an
+    /// already-showing tip, since `AntiAnnoyance`'s 1-per-session cap would
+    /// reject a second selection anyway.
+    private func maybeShowTip() {
+        guard activeTip == nil else { return }
+        let context = TipSelectionContext(
+            personaId: (personaEnabled ? persona : .general).id,
+            isGeneralMode: !personaEnabled || persona == .general,
+            hasActiveSubscription: iapManager?.hasActiveSubscription ?? false
+        )
+        guard let selected = TipSelector.select(
+            from: tipCatalog.entries,
+            profile: tipInterestProfile.vector(),
+            antiAnnoyance: tipAntiAnnoyance,
+            context: context
+        ) else { return }
+        activeTip = selected
+        tipAntiAnnoyance.recordShown(tipId: selected.id, family: selected.family)
+        tipRewardLog.log(.shown, tipId: selected.id, catalogVersion: selected.catalogVersion, interestVector: tipInterestProfile.vector())
+    }
+
+    func dismissActiveTip() {
+        guard let tip = activeTip else { return }
+        tipAntiAnnoyance.recordDismissed(family: tip.family)
+        tipRewardLog.log(.dismissed, tipId: tip.id, catalogVersion: tip.catalogVersion, interestVector: tipInterestProfile.vector())
+        activeTip = nil
+    }
+
+    func tapActiveTip() {
+        guard let tip = activeTip else { return }
+        tipAntiAnnoyance.recordTapped(tipId: tip.id)
+        tipRewardLog.log(.tapped, tipId: tip.id, catalogVersion: tip.catalogVersion, interestVector: tipInterestProfile.vector())
+        activeTip = nil
     }
 
     /// Update the stored access token (called from CAIApp on auth state changes).
@@ -748,6 +815,18 @@ final class ChatManager: ObservableObject {
                     persona: assistantMessage.persona
                 )
                 updateLastMessage(assistantMessage, in: conversation.id)
+            }
+
+            if !Task.isCancelled {
+                let outcome = TurnOutcome(
+                    hadError: self.error != nil,
+                    wasRateLimited: wasRateLimited,
+                    personaChanged: lastTurnPersonaId != nil && lastTurnPersonaId != assistantPersona,
+                    isFirstConversation: conversations.count <= 1
+                )
+                lastTurnPersonaId = assistantPersona
+                tipInterestProfile.recordTurn(topics: tipTopicSource.topics(for: outcome))
+                maybeShowTip()
             }
 
             isStreaming = false
