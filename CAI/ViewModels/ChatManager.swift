@@ -29,24 +29,17 @@ final class ChatManager: ObservableObject {
     private var personaEnabledByConversationID: [String: Bool] = [:]
     private var personaOverrideByConversationID: [String: Persona] = [:]
 
-    // MARK: - Tip Engine (bluefunda/cai-ios#155)
-
-    /// See `TurnTopicSource` — no domain/intent/sap_confidence signal
-    /// reaches iOS today, so this is a deliberately coarse, provisional
-    /// placeholder derived from what's already observable here.
-    private let tipInterestProfile = InterestProfile()
-    private let tipTopicSource: TurnTopicSource = HeuristicTurnTopicSource()
-    private var lastTurnPersonaId: String?
-    private let tipCatalog = TipCatalog()
-    private let tipAntiAnnoyance = AntiAnnoyance()
-    private let tipRewardLog = TipRewardLog()
-    /// The tip currently shown above the composer, if any — set by
-    /// `maybeShowTip()` after a completed turn, cleared by
-    /// `dismissActiveTip()`/`tapActiveTip()`.
+    // MARK: - Tip Engine (bluefunda/cai-ios#155) — see ChatManager+TipEngine.swift
+    // for the behavior; state lives here because Swift extensions can't hold
+    // stored properties. Not `private` (also `fileprivate` wouldn't reach a
+    // different file): accessed from that extension.
+    let tipInterestProfile = InterestProfile()
+    let tipTopicSource: TurnTopicSource = HeuristicTurnTopicSource()
+    var lastTurnPersonaId: String?
+    let tipCatalog = TipCatalog()
+    let tipAntiAnnoyance = AntiAnnoyance()
+    let tipRewardLog = TipRewardLog()
     @Published var activeTip: TipManifestEntry?
-    /// Bound from `CAIApp` alongside `authManager` (see `bind(authManager:)`
-    /// below) so tip eligibility can see real subscription status without
-    /// ChatManager owning IAPManager itself.
     weak var iapManager: IAPManager?
 
     @Published var currentConversation: Conversation? {
@@ -294,7 +287,8 @@ final class ChatManager: ObservableObject {
     /// Not `private`: also cancelled from the `ChatManager+Background.swift`
     /// extension's `reconcileAfterBackground()`.
     var streamingTask: Task<Void, Never>?
-    private var modelContext: ModelContext?
+    /// Not `private`: also used by the `ChatManager+Cache.swift` extension.
+    var modelContext: ModelContext?
     /// iOS background-task assertion covering an in-flight stream, so a
     /// response already generating gets a short grace window (~30s, OS-
     /// controlled) to finish after the app backgrounds rather than being
@@ -332,49 +326,9 @@ final class ChatManager: ObservableObject {
         self.authManager = authManager
     }
 
-    // Called once by CAIApp alongside bind(authManager:) so Tip Engine
-    // eligibility can see real subscription status.
+    // Called once by CAIApp alongside bind(authManager:) — see ChatManager+TipEngine.swift.
     func bind(iapManager: IAPManager) {
         self.iapManager = iapManager
-    }
-
-    // MARK: - Tip Engine (bluefunda/cai-ios#155)
-
-    /// Runs Phase 3 selection against the current catalog/interest profile
-    /// and, if a tip is eligible, shows it — called after each completed
-    /// turn. No-ops (leaves `activeTip` alone) rather than replacing an
-    /// already-showing tip, since `AntiAnnoyance`'s 1-per-session cap would
-    /// reject a second selection anyway.
-    private func maybeShowTip() {
-        guard activeTip == nil else { return }
-        let context = TipSelectionContext(
-            personaId: (personaEnabled ? persona : .general).id,
-            isGeneralMode: !personaEnabled || persona == .general,
-            hasActiveSubscription: iapManager?.hasActiveSubscription ?? false
-        )
-        guard let selected = TipSelector.select(
-            from: tipCatalog.entries,
-            profile: tipInterestProfile.vector(),
-            antiAnnoyance: tipAntiAnnoyance,
-            context: context
-        ) else { return }
-        activeTip = selected
-        tipAntiAnnoyance.recordShown(tipId: selected.id, family: selected.family)
-        tipRewardLog.log(.shown, tipId: selected.id, catalogVersion: selected.catalogVersion, interestVector: tipInterestProfile.vector())
-    }
-
-    func dismissActiveTip() {
-        guard let tip = activeTip else { return }
-        tipAntiAnnoyance.recordDismissed(family: tip.family)
-        tipRewardLog.log(.dismissed, tipId: tip.id, catalogVersion: tip.catalogVersion, interestVector: tipInterestProfile.vector())
-        activeTip = nil
-    }
-
-    func tapActiveTip() {
-        guard let tip = activeTip else { return }
-        tipAntiAnnoyance.recordTapped(tipId: tip.id)
-        tipRewardLog.log(.tapped, tipId: tip.id, catalogVersion: tip.catalogVersion, interestVector: tipInterestProfile.vector())
-        activeTip = nil
     }
 
     /// Update the stored access token (called from CAIApp on auth state changes).
@@ -818,15 +772,7 @@ final class ChatManager: ObservableObject {
             }
 
             if !Task.isCancelled {
-                let outcome = TurnOutcome(
-                    hadError: self.error != nil,
-                    wasRateLimited: wasRateLimited,
-                    personaChanged: lastTurnPersonaId != nil && lastTurnPersonaId != assistantPersona,
-                    isFirstConversation: conversations.count <= 1
-                )
-                lastTurnPersonaId = assistantPersona
-                tipInterestProfile.recordTurn(topics: tipTopicSource.topics(for: outcome))
-                maybeShowTip()
+                recordCompletedTurnForTipEngine(assistantPersona: assistantPersona, wasRateLimited: wasRateLimited)
             }
 
             isStreaming = false
@@ -945,82 +891,6 @@ final class ChatManager: ObservableObject {
     // updateConversationTitle) live in ChatManager+MessageMutation.swift — split
     // out to stay under SwiftLint's type_body_length limit.
 
-}
-
-// MARK: - SwiftData persistence
-
-extension ChatManager {
-    /// Call once from CAIApp after ModelContainer is ready.
-    func configureStorage(_ context: ModelContext) {
-        modelContext = context
-        loadCachedConversations()
-    }
-
-    /// Pre-populates the sidebar from the local cache before the API responds.
-    private func loadCachedConversations() {
-        guard let ctx = modelContext else { return }
-        var desc = FetchDescriptor<PersistedConversation>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
-        desc.fetchLimit = 200
-        guard let cached = try? ctx.fetch(desc), !cached.isEmpty else { return }
-        conversations = cached.map { Conversation(from: $0) }
-    }
-
-    /// Upserts conversation metadata (title, model) — does not touch messages.
-    private func cacheConversations(_ convs: [Conversation]) {
-        guard let ctx = modelContext else { return }
-        for conv in convs {
-            let id = conv.id
-            let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
-            if let existing = try? ctx.fetch(desc).first {
-                existing.title = conv.title
-                existing.model = conv.model
-            } else {
-                ctx.insert(PersistedConversation(id: conv.id, title: conv.title,
-                                                  model: conv.model, createdAt: conv.createdAt))
-            }
-        }
-        try? ctx.save()
-    }
-
-    /// Upserts messages for a conversation — adds new ones without duplicating.
-    private func cacheMessages(_ messages: [ChatMessage], for conversationId: String) {
-        guard let ctx = modelContext else { return }
-        let convId = conversationId
-        let convDesc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
-        guard let persisted = try? ctx.fetch(convDesc).first else { return }
-        let existingIds = Set(persisted.messages.map(\.id))
-        for msg in messages where !existingIds.contains(msg.id) {
-            let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
-                                      roleRaw: msg.role.rawValue, content: msg.content,
-                                      timestamp: msg.timestamp, persona: msg.persona)
-            pm.conversation = persisted
-            ctx.insert(pm)
-        }
-        try? ctx.save()
-    }
-
-    /// Not `private`: also called from `retryStuckTitles` in `ChatManager+FileHistory.swift`.
-    func cacheUpdateTitle(_ title: String, for conversationId: String) {
-        guard let ctx = modelContext else { return }
-        let id = conversationId
-        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
-        if let existing = try? ctx.fetch(desc).first {
-            existing.title = title
-            try? ctx.save()
-        }
-    }
-
-    private func deleteFromCache(_ conversation: Conversation) {
-        guard let ctx = modelContext else { return }
-        let id = conversation.id
-        let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == id })
-        if let existing = try? ctx.fetch(desc).first {
-            ctx.delete(existing)
-            try? ctx.save()
-        }
-    }
 }
 
 // MARK: - Data Loading
