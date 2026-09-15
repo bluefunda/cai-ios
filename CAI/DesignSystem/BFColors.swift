@@ -139,6 +139,32 @@ enum BFColor {
     static let infoBg = Color(hex: "#DBEFF5")
     static let infoBorder = Color(hex: "#92D0E2")
 
+    // MARK: Adaptive App Chrome
+    //
+    // The surfaces the chat shell is built from — sidebar, canvas, composer,
+    // message cards, hairline rules. All declared with lightHex/darkHex (never
+    // a bare Color(hex:)) so they track the device appearance instead of
+    // freezing to their light-mode value; see the note on `primaryTint` above
+    // for the bug that pattern exists to prevent.
+    //
+    // Values are tuned so the three layers read as distinct depths in both
+    // themes: canvas (furthest back) < sidebar < raised/sunken (cards, fields).
+
+    /// Main chat background — the page the messages sit on.
+    static let surfaceCanvas = Color(lightHex: "#FFFFFF", darkHex: "#131314")
+    /// Sidebar / navigation column, one step off the canvas.
+    static let surfaceSidebar = Color(lightHex: "#F7F8FA", darkHex: "#1B1C1E")
+    /// Lifted elements that should read as floating above the canvas (composer).
+    static let surfaceRaised = Color(lightHex: "#FFFFFF", darkHex: "#1E1F22")
+    /// Recessed fills: search fields, attachment chips, inactive controls.
+    static let surfaceSunken = Color(lightHex: "#EEF0F3", darkHex: "#26282C")
+    /// Assistant response card.
+    static let surfaceCard = Color(lightHex: "#F6F7F9", darkHex: "#1D1E21")
+    /// 1px rules and control borders — replaces hard `Divider()` lines.
+    static let hairline = Color(lightHex: "#E4E6EA", darkHex: "#303236")
+    /// Pointer-hover fill for sidebar rows and icon buttons.
+    static let rowHover = Color(lightHex: "#E9ECF1", darkHex: "#26282C")
+
     // MARK: Text
 
     static let textPrimary = Color(hex: "#1F252D")
@@ -152,4 +178,18 @@ enum BFColor {
     static let textInverse = Color(hex: "#FFFFFF")
     static let textLink = Color(hex: "#1E64E7")
     static let textChat = Color(hex: "#242424")
+}
+
+// MARK: - Hairline Rule
+
+/// A 0.5-pt rule in `BFColor.hairline`. Used instead of `Divider()` wherever a
+/// separator should read as a quiet boundary rather than a hard line — SwiftUI's
+/// `Divider` renders at the system separator colour and full opacity, which is
+/// noticeably heavier than the rules Gemini / Copilot's desktop apps use.
+struct BFHairline: View {
+    var body: some View {
+        Rectangle()
+            .fill(BFColor.hairline)
+            .frame(height: 0.5)
+    }
 }

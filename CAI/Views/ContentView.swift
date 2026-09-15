@@ -275,7 +275,7 @@ struct SidebarContent: View {
         HStack(spacing: 10) {
             Circle()
                 .fill(BFColor.primary.gradient)
-                .frame(width: 34, height: 34)
+                .frame(width: 30, height: 30)
                 .overlay {
                     Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
                         .font(BFFont.sidebarItemMed).foregroundStyle(.white)
@@ -299,9 +299,11 @@ struct SidebarContent: View {
                 }
             }
             Spacer()
-            Image(systemName: "ellipsis").foregroundStyle(.secondary)
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(Color.primary.opacity(0.0001))
@@ -337,28 +339,32 @@ struct SidebarContent: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
 
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
                 TextField("Search conversations", text: $searchText)
                     .font(BFFont.sidebarItem)
+                    .textFieldStyle(.plain)
             }
-            .padding(8)
-            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.vertical, 8)
+            .background(BFColor.surfaceSunken, in: Capsule())
+            .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
 
             if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filteredConversations.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.secondary.opacity(0.4))
+                VStack(spacing: 10) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 26, weight: .light))
+                        .foregroundStyle(.tertiary)
                     Text(searchText.isEmpty ? "No conversations yet" : "No results")
                         .font(BFFont.sidebarItem)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -367,11 +373,13 @@ struct SidebarContent: View {
                         ForEach(groupedConversations) { group in
                             Text(group.title)
                                 .font(BFFont.sidebarSection)
-                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .kerning(0.6)
+                                .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 12)
-                                .padding(.bottom, 2)
+                                .padding(.horizontal, 14)
+                                .padding(.top, 16)
+                                .padding(.bottom, 4)
 
                             ForEach(group.conversations) { convo in
                                 SidebarConversationRow(
@@ -410,7 +418,7 @@ struct SidebarContent: View {
                 }
             }
 
-            Divider()
+            BFHairline()
 
             VStack(spacing: 0) {
                 SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
@@ -418,7 +426,7 @@ struct SidebarContent: View {
                 }
             }
 
-            Divider()
+            BFHairline()
 
             // Upgrade to Pro — individual free users only. Also gated on
             // hasCheckedSubscriptionStatus so an actual Pro user doesn't see this flash briefly
@@ -438,11 +446,11 @@ struct SidebarContent: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(BFColor.primaryTint, in: RoundedRectangle(cornerRadius: 8))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .background(BFColor.primaryTint, in: Capsule())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
@@ -463,6 +471,7 @@ struct SidebarContent: View {
             BFDropdownMenu(rows: profileMenuRows) { profileTriggerLabel }
                 .accessibilityIdentifier("profileMenuButton")
         }
+        .background(BFColor.surfaceSidebar)
         .toolbar(.hidden, for: .navigationBar)
         #if targetEnvironment(macCatalyst)
         .toolbar(removing: .sidebarToggle)
@@ -541,7 +550,7 @@ struct SidebarDrawer: View {
         HStack(spacing: 10) {
             Circle()
                 .fill(BFColor.primary.gradient)
-                .frame(width: 34, height: 34)
+                .frame(width: 30, height: 30)
                 .overlay {
                     Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
                         .font(BFFont.sidebarItemMed).foregroundStyle(.white)
@@ -565,9 +574,11 @@ struct SidebarDrawer: View {
                 }
             }
             Spacer()
-            Image(systemName: "ellipsis").foregroundStyle(.secondary)
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(Color.primary.opacity(0.0001))
@@ -605,29 +616,33 @@ struct SidebarDrawer: View {
             .padding(.bottom, 12)
 
             // Search
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
                 TextField("Search conversations", text: $searchText)
                     .font(BFFont.sidebarItem)
+                    .textFieldStyle(.plain)
             }
-            .padding(8)
-            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.vertical, 8)
+            .background(BFColor.surfaceSunken, in: Capsule())
+            .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
 
             // ── Conversation list ─────────────────────────
             if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if filteredConversations.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.secondary.opacity(0.4))
+                VStack(spacing: 10) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 26, weight: .light))
+                        .foregroundStyle(.tertiary)
                     Text(searchText.isEmpty ? "No conversations yet" : "No results")
                         .font(BFFont.sidebarItem)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -636,11 +651,13 @@ struct SidebarDrawer: View {
                         ForEach(groupedConversations) { group in
                             Text(group.title)
                                 .font(BFFont.sidebarSection)
-                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .kerning(0.6)
+                                .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 12)
-                                .padding(.bottom, 2)
+                                .padding(.horizontal, 14)
+                                .padding(.top, 16)
+                                .padding(.bottom, 4)
 
                             ForEach(group.conversations) { convo in
                                 SidebarConversationRow(
@@ -689,7 +706,7 @@ struct SidebarDrawer: View {
                 }
             }
 
-            Divider()
+            BFHairline()
 
             // ── Bottom nav ────────────────────────────────
             VStack(spacing: 0) {
@@ -699,7 +716,7 @@ struct SidebarDrawer: View {
                 }
             }
 
-            Divider()
+            BFHairline()
 
             // Upgrade to Pro — individual free users only. Also gated on
             // hasCheckedSubscriptionStatus so an actual Pro user doesn't see this flash briefly
@@ -722,11 +739,11 @@ struct SidebarDrawer: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(BFColor.primaryTint, in: RoundedRectangle(cornerRadius: 8))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .background(BFColor.primaryTint, in: Capsule())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(BFColor.primary)
@@ -770,8 +787,8 @@ struct SidebarDrawer: View {
             .accessibilityIdentifier("profileMenuButton")
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(.systemBackground))
-        .shadow(color: .black.opacity(0.15), radius: 12, x: 4, y: 0)
+        .background(BFColor.surfaceSidebar)
+        .shadow(color: .black.opacity(0.10), radius: 18, x: 2, y: 0)
     }
 
     // Group conversations by recency
@@ -798,80 +815,6 @@ struct SidebarDrawer: View {
         if !thisWeek.isEmpty  { result.append(.init(title: "This Week", conversations: thisWeek)) }
         if !older.isEmpty     { result.append(.init(title: "Older",     conversations: older)) }
         return result
-    }
-}
-
-struct ConversationGroup: Identifiable {
-    let id: String      // == title, always unique within a list
-    let title: String
-    let conversations: [Conversation]
-
-    init(title: String, conversations: [Conversation]) {
-        self.id = title
-        self.title = title
-        self.conversations = conversations
-    }
-}
-
-// MARK: - Sidebar Row
-
-struct SidebarConversationRow: View {
-    let conversation: Conversation
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "bubble.left")
-                .font(BFFont.sidebarSection)
-                .foregroundStyle(.secondary)
-
-            Text(conversation.title)
-                .font(BFFont.sidebarItem)
-                .lineLimit(1)
-                .foregroundStyle(.primary)
-
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(
-            isSelected
-                ? BFColor.primary.opacity(0.15)
-                : Color.clear,
-            in: RoundedRectangle(cornerRadius: 8)
-        )
-        .contentShape(Rectangle())
-        .bfPointerHover()
-    }
-}
-
-// MARK: - Sidebar Nav Button
-
-struct SidebarNavButton: View {
-    let icon: String
-    let label: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .frame(width: 20)
-                Text(label)
-                    .font(BFFont.sidebarItem)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            .background(Color.primary.opacity(0.0001))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .foregroundStyle(.primary)
-        .bfPointerHover()
     }
 }
 
