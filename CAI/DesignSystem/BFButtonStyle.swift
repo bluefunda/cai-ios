@@ -103,3 +103,24 @@ extension View {
         #endif
     }
 }
+
+// MARK: - Message Action Glyph
+
+/// Icon-only, circular-hit-area treatment for the Copy / Share / Share-as-Card
+/// row under an assistant response (MessageView). `.iconOnly` drops the visible
+/// string but keeps it as the accessibility label, so VoiceOver still says "Copy".
+struct MessageActionGlyph: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .labelStyle(.iconOnly)
+            .font(.system(size: 14, weight: .medium))
+            .frame(width: 30, height: 30)
+            .contentShape(Circle())
+    }
+}
+
+extension View {
+    func messageActionGlyph() -> some View {
+        modifier(MessageActionGlyph())
+    }
+}

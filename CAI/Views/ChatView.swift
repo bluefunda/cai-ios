@@ -124,11 +124,14 @@ struct ChatView: View {
                 ConnectionBanner(status: chatManager.connectionStatus)
             }
             messageScrollArea
-            Divider()
             inputArea
                 .frame(maxWidth: maxChatWidth)
                 .frame(maxWidth: .infinity)
         }
+        // The List above draws with .scrollContentBackground(.hidden), so the
+        // whole chat column reads off this one canvas token in both themes
+        // rather than the default systemBackground.
+        .background(BFColor.surfaceCanvas)
         // Dismiss keyboard the moment the response starts rendering
         .onChange(of: chatManager.isStreaming) { _, streaming in
             guard streaming else { return }
@@ -277,8 +280,8 @@ struct ChatView: View {
             }
             Text("AI responses may be inaccurate. Verify important information.")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 4)
+                .foregroundStyle(.tertiary)
+                .padding(.bottom, 6)
         }
     }
 
@@ -679,11 +682,11 @@ struct MessageView: View {
                         .font(BFFont.body)
                         .foregroundStyle(.primary)
                         .textSelection(.enabled)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
                         .background(
-                            BFColor.primary.opacity(0.13),
-                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            BFColor.primary.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
                         )
                         .contextMenu { messageActions }
                 }
@@ -722,9 +725,13 @@ struct MessageView: View {
                 )
                 .font(BFFont.body)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(BFColor.surfaceCard, in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
+                        .strokeBorder(BFColor.hairline, lineWidth: 0.5)
+                )
                 .contextMenu { if !message.content.isEmpty { messageActions } }
             }
 
@@ -737,7 +744,7 @@ struct MessageView: View {
             }
 
             if !message.content.isEmpty {
-                HStack(spacing: 20) {
+                HStack(spacing: 2) {
                     Button {
                         UIPasteboard.general.string = message.content
                         didCopy = true
@@ -748,16 +755,14 @@ struct MessageView: View {
                     } label: {
                         Label(didCopy ? "Copied" : "Copy",
                               systemImage: didCopy ? "checkmark" : "doc.on.doc")
-                            .font(.caption)
-                            .contentShape(Rectangle())
+                            .messageActionGlyph()
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(didCopy ? BFColor.primary : .secondary)
                     .bfPointerHover()
 
                     ShareLink(item: message.content) {
                         Label("Share", systemImage: "square.and.arrow.up")
-                            .font(.caption)
-                            .contentShape(Rectangle())
+                            .messageActionGlyph()
                     }
                     .foregroundStyle(.secondary)
                     .bfPointerHover()
@@ -768,14 +773,15 @@ struct MessageView: View {
                             preview: SharePreview("BlueFunda AI Answer", image: Image(uiImage: cardImage))
                         ) {
                             Label("Share as Card", systemImage: "photo.badge.arrow.down.fill")
-                                .font(.caption)
-                                .contentShape(Rectangle())
+                                .messageActionGlyph()
                         }
                         .foregroundStyle(.secondary)
                         .bfPointerHover()
                     }
                 }
                 .buttonStyle(.plain)
+                .animation(BFMotion.easingDefault, value: didCopy)
+                .padding(.leading, 2)
             }
 
             HStack(spacing: 6) {
@@ -804,9 +810,10 @@ struct AttachmentChip: View {
             Text(filename).font(.caption).lineLimit(1)
         }
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Color(.systemGray6), in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(BFColor.surfaceSunken, in: Capsule())
+        .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
     }
 }
 
@@ -830,15 +837,22 @@ struct EmptyStateView: View {
             #else
             Spacer(minLength: 24)
             #endif
-            Image(systemName: "sparkles")
-                .font(.system(size: 52))
-                .foregroundStyle(BFColor.primary.gradient)
+            // The greeting carries the brand gradient itself — Gemini's
+            // signature empty state — so the 52-pt sparkles mark that used to
+            // sit above it is gone rather than competing with it for weight.
             Text(greeting)
-                .font(BFFont.h4)
+                .font(BFFont.h3)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [BFColor.primary, BFColor.accentGradientTo],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
                 .multilineTextAlignment(.center)
             Text("How can I help you today?")
-                .font(BFFont.body)
-                .foregroundStyle(.secondary)
+                .font(BFFont.bodyLarge)
+                .foregroundStyle(.tertiary)
             #if targetEnvironment(macCatalyst)
             Spacer()
             #else
@@ -876,119 +890,6 @@ struct ST22DumpBanner: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(BFColor.warning.opacity(0.1))
-    }
-}
-
-// MARK: - Rate Limit Banner
-
-struct RateLimitBanner: View {
-    let status: RateLimitStatus
-    let percent: Double
-    let resetLabel: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: status == .warning ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
-                .foregroundColor(bannerColor)
-            Text(message)
-                .font(.caption)
-                .foregroundColor(bannerColor)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(bannerColor.opacity(0.1))
-    }
-
-    private var bannerColor: Color {
-        status == .warning ? BFColor.warning : BFColor.error
-    }
-
-    private var message: String {
-        switch status {
-        case .warning:
-            return "You've used \(Int(percent * 100))% of your usage limit"
-        case .exceeded:
-            return "Usage limit reached — renews in \(resetLabel)"
-        case .blocked:
-            return "Your account has been temporarily blocked."
-        case .normal:
-            return ""
-        }
-    }
-}
-
-// MARK: - Rate Limit Modal
-
-struct RateLimitModal: View {
-    let info: RateLimitInfo?
-    let period: String
-    let resetLabel: String
-    let onClose: () -> Void
-    let onUpgrade: () -> Void
-
-    private var planName: String { info?.planName ?? "current" }
-
-    private var isWeekly: Bool {
-        if let info, info.weeklyPercent >= 1.0 && info.hourlyPercent < 1.0 { return true }
-        return period == "weekly"
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Badge-icon header — mirrors the "You're on Pro" treatment in
-            // SubscriptionView (tinted circle + SF Symbol) instead of a solid
-            // color banner, so this reads as an in-brand alert rather than a
-            // raw system-red warning.
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(BFColor.error.opacity(0.12))
-                        .frame(width: 64, height: 64)
-                    Image(systemName: "xmark.octagon.fill")
-                        .font(.system(size: 26))
-                        .foregroundStyle(BFColor.error)
-                }
-                Text("Usage Limit Reached")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(BFColor.textHeading)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, BFSpacing._6)
-            .padding(.bottom, BFSpacing._3)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("You've reached your **\(planName)** plan's usage limit for now.")
-                    .font(.body)
-                    .foregroundStyle(BFColor.textBody)
-                Text("Your \(isWeekly ? "weekly" : "session") limit renews in **\(resetLabel)** — you can continue chatting once it resets.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-
-            Divider()
-
-            HStack(spacing: 12) {
-                Spacer()
-                Button("Close", action: onClose)
-                    .buttonStyle(.bordered)
-                    .bfPointerHover()
-                Button("Upgrade to Premium", action: onUpgrade)
-                    .buttonStyle(.borderedProminent)
-                    .tint(BFColor.primary)
-                    .bfPointerHover()
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-        }
-        .background(Color(uiColor: .systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: BFRadius.xl))
-        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
-        .padding(.horizontal, 24)
     }
 }
 

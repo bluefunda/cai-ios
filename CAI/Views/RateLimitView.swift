@@ -293,3 +293,125 @@ struct ErrorRateLimitView: View {
             return m
         }())
 }
+
+// The composer's inline usage banner and its blocking modal — moved here
+// from ChatView.swift (SwiftLint file_length), next to the rest of the
+// rate-limit UI they belong with. Previews live in
+// RateLimitBannerPreviews.swift.
+
+// MARK: - Rate Limit Banner
+
+struct RateLimitBanner: View {
+    let status: RateLimitStatus
+    let percent: Double
+    let resetLabel: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: status == .warning ? "exclamationmark.triangle.fill" : "xmark.octagon.fill")
+                .foregroundColor(bannerColor)
+            Text(message)
+                .font(.caption)
+                .foregroundColor(bannerColor)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(bannerColor.opacity(0.1))
+    }
+
+    private var bannerColor: Color {
+        status == .warning ? BFColor.warning : BFColor.error
+    }
+
+    private var message: String {
+        switch status {
+        case .warning:
+            return "You've used \(Int(percent * 100))% of your usage limit"
+        case .exceeded:
+            return "Usage limit reached — renews in \(resetLabel)"
+        case .blocked:
+            return "Your account has been temporarily blocked."
+        case .normal:
+            return ""
+        }
+    }
+}
+
+// MARK: - Rate Limit Modal
+
+struct RateLimitModal: View {
+    let info: RateLimitInfo?
+    let period: String
+    let resetLabel: String
+    let onClose: () -> Void
+    let onUpgrade: () -> Void
+
+    private var planName: String { info?.planName ?? "current" }
+
+    private var isWeekly: Bool {
+        if let info, info.weeklyPercent >= 1.0 && info.hourlyPercent < 1.0 { return true }
+        return period == "weekly"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Badge-icon header — mirrors the "You're on Pro" treatment in
+            // SubscriptionView (tinted circle + SF Symbol) instead of a solid
+            // color banner, so this reads as an in-brand alert rather than a
+            // raw system-red warning.
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(BFColor.error.opacity(0.12))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "xmark.octagon.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(BFColor.error)
+                }
+                Text("Usage Limit Reached")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(BFColor.textHeading)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, BFSpacing._6)
+            .padding(.bottom, BFSpacing._3)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("You've reached your **\(planName)** plan's usage limit for now.")
+                    .font(.body)
+                    .foregroundStyle(BFColor.textBody)
+                Text("Your \(isWeekly ? "weekly" : "session") limit renews in **\(resetLabel)** — you can continue chatting once it resets.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+
+            BFHairline()
+
+            HStack(spacing: 12) {
+                Spacer()
+                Button("Close", action: onClose)
+                    .buttonStyle(.bordered)
+                    .bfPointerHover()
+                Button("Upgrade to Premium", action: onUpgrade)
+                    .buttonStyle(.borderedProminent)
+                    .tint(BFColor.primary)
+                    .bfPointerHover()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .background(BFColor.surfaceRaised)
+        .clipShape(RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
+                .strokeBorder(BFColor.hairline, lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.22), radius: 30, x: 0, y: 12)
+        .padding(.horizontal, 24)
+    }
+}

@@ -101,6 +101,7 @@
 		EC51EAB6E4566222FAFA5B22 /* TipEngineFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B5EF4E3C69FDBD241CECEA6 /* TipEngineFileStore.swift */; };
 		EE000001201BCDEF /* Environment.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE000002201BCDEF /* Environment.swift */; };
 		EE2A9CDE00AA8DB357799E52 /* ChatView+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */; };
+		EE2A9CDE00AA8DB357799E53 /* SidebarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137727 /* SidebarComponents.swift */; };
 		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
 		F7F26EF8687492EF9BC4B158 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22141F06B6EDC35EA631E85A /* FileStore.swift */; };
 		FA0B1791A55829AD870AE5ED /* MarkdownParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D4625865551367AF054908 /* MarkdownParsingTests.swift */; };
@@ -166,6 +167,7 @@
 		66D25207F0955D5AA6B1E43A /* TipCatalogTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipCatalogTypes.swift; sourceTree = "<group>"; };
 		66E2438BC35D422DCD40A54A /* TipRanker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipRanker.swift; sourceTree = "<group>"; };
 		680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatView+Scroll.swift"; sourceTree = "<group>"; };
+		680ADF4E9FABCB5B4E137727 /* SidebarComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SidebarComponents.swift; sourceTree = "<group>"; };
 		6A69D9A5D34028405D4D197E /* TipRewardLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipRewardLog.swift; sourceTree = "<group>"; };
 		6D3820BBB6AB9DA66D3F57CC /* BFDropdownMenu.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BFDropdownMenu.swift; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
@@ -380,6 +382,7 @@
 				5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */,
 				01905164500684B2385FE524 /* ComposerPickers.swift */,
 				680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */,
+				680ADF4E9FABCB5B4E137727 /* SidebarComponents.swift */,
 				F8CC8C2B2FDCBC989964DC80 /* TipEngineDebugView.swift */,
 				F53BD50B8AB15877ACFB6D02 /* TipBannerView.swift */,
 				FF212460265BF42360D8A67A /* TipBannerPreviews.swift */,
@@ -709,6 +712,7 @@
 				83BB536B4B990DE7C8A23210 /* ChatToolbarButtons.swift in Sources */,
 				62BC5ECA748BA2907E12AAA2 /* ComposerPickers.swift in Sources */,
 				EE2A9CDE00AA8DB357799E52 /* ChatView+Scroll.swift in Sources */,
+				EE2A9CDE00AA8DB357799E53 /* SidebarComponents.swift in Sources */,
 				EA78334D03BF4C4A780B2BE4 /* BFDropdownMenu.swift in Sources */,
 				970C9E9EB5920E0ECD27B356 /* TipTopic.swift in Sources */,
 				EC51EAB6E4566222FAFA5B22 /* TipEngineFileStore.swift in Sources */,

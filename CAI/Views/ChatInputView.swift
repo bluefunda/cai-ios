@@ -82,21 +82,18 @@ struct ChatInputView: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 18, height: 18)
-                                .background(Color(.systemGray4), in: Circle())
+                                .background(BFColor.hairline, in: Circle())
                                 .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
                         .bfPointerHover()
                         .padding(.leading, 2)
                     }
-                    .padding(.leading, 8)
-                    .padding(.trailing, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous)
-                            .strokeBorder(Color(.separator).opacity(0.5), lineWidth: 0.5)
-                    )
+                    .padding(.leading, 6)
+                    .padding(.trailing, 12)
+                    .padding(.vertical, 5)
+                    .background(BFColor.surfaceSunken, in: Capsule())
+                    .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, BFSpacing._4)
@@ -216,13 +213,16 @@ struct ChatInputView: View {
                     } label: {
                         let active = isStreaming || canSend
                         Circle()
-                            .fill(active ? BFColor.primary : Color(.systemGray4))
-                            .frame(width: 30, height: 30)
+                            .fill(active
+                                  ? AnyShapeStyle(BFColor.primary.gradient)
+                                  : AnyShapeStyle(BFColor.surfaceSunken))
+                            .frame(width: 32, height: 32)
                             .overlay {
                                 Image(systemName: isStreaming ? "stop.fill" : "arrow.up")
-                                    .font(.system(size: isStreaming ? 12 : 14, weight: .bold))
-                                    .foregroundStyle(active ? .white : .secondary)
+                                    .font(.system(size: isStreaming ? 12 : 15, weight: .bold))
+                                    .foregroundStyle(active ? Color.white : Color.secondary)
                             }
+                            .animation(BFMotion.easingDefault, value: active)
                     }
                     .buttonStyle(.plain)
                     .disabled(!isStreaming && !canSend)
@@ -232,12 +232,18 @@ struct ChatInputView: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .padding(.horizontal, BFSpacing._4)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color(.systemBackground))
+        .background(BFColor.surfaceRaised, in: RoundedRectangle(cornerRadius: BFRadius.composer, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BFRadius.composer, style: .continuous)
+                .strokeBorder(BFColor.hairline, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 4)
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+        .background(BFColor.surfaceCanvas)
     }
 
     private var recordingRow: some View {
@@ -268,7 +274,7 @@ struct ChatInputView: View {
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 10)
-        .background(Color(.systemBackground))
+        .background(BFColor.surfaceCanvas)
     }
 
     private var formattedElapsed: String {
