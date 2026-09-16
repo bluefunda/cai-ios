@@ -27,10 +27,17 @@ extension ChatManager {
     /// in a way that will never fill it in (a server error, or a rate limit hit before any text
     /// arrived). Left in place, an empty placeholder renders as a permanently blank response
     /// bubble: no spinner, since isStreaming is about to end, and no text, since none ever came.
+    ///
+    /// Also requires steps to be empty: stopping mid-thinking (before any answer text has
+    /// streamed yet) left content empty but steps non-empty, and this used to delete the whole
+    /// message — wiping out the thinking card the user was watching. claude.ai keeps its
+    /// thought process visible after Stop; a message with real steps is never "nothing worth
+    /// keeping" even if content hasn't started yet.
     func removeTrailingEmptyAssistantPlaceholder(in conversationId: String) {
         guard var conversation = conversations.first(where: { $0.id == conversationId }),
               conversation.messages.last?.role == .assistant,
-              conversation.messages.last?.content.isEmpty == true else { return }
+              conversation.messages.last?.content.isEmpty == true,
+              conversation.messages.last?.steps?.isEmpty ?? true else { return }
 
         conversation.messages.removeLast()
 

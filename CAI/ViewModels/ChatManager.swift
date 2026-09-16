@@ -417,16 +417,35 @@ final class ChatManager: ObservableObject {
 
         do {
             let dtos = try await api.fetchChatMessages(chatId: conversationId)
+            // cai-mcp-go now persists steps/thinkingDurationSeconds itself, so the server is
+            // authoritative and syncs across devices/reinstalls — but only for messages
+            // persisted AFTER that support was added. The local SwiftData cache is the fallback
+            // for anything the server doesn't have yet (older history, or a persist call that
+            // failed), by message id. Mirrors cai-android's ChatRepository.loadMessages.
+            let convId = conversationId
+            let cachedById: [String: PersistedMessage] = {
+                let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
+                guard let persisted = try? modelContext?.fetch(desc).first else { return [:] }
+                return Dictionary(uniqueKeysWithValues: persisted.messages.map { ($0.id, $0) })
+            }()
             let messages = dtos.map { dto -> ChatMessage in
-                ChatMessage(
+                var message = ChatMessage(
                     id: dto.id ?? UUID().uuidString,
                     role: MessageRole(rawValue: dto.normalizedRoleString) ?? .user,
                     content: dto.content,
                     timestamp: dto.createdAt.flatMap(Date.fromISO8601) ?? Date(),
                     fileUrl: dto.fileUrl,
                     fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:)),
-                    persona: dto.persona
+                    persona: dto.persona,
+                    steps: dto.steps,
+                    thinkingDurationSeconds: dto.thinkingDurationSeconds
                 )
+                if message.steps?.isEmpty ?? true,
+                   let cached = cachedById[message.id], let cachedMessage = ChatMessage(from: cached) {
+                    message.steps = cachedMessage.steps
+                    message.thinkingDurationSeconds = message.thinkingDurationSeconds ?? cachedMessage.thinkingDurationSeconds
+                }
+                return message
             }
             conversations[idx].messages = messages
             if currentConversation?.id == conversationId {
@@ -645,6 +664,18 @@ final class ChatManager: ObservableObject {
             let assistantTimestamp = assistantMessage.timestamp
             let assistantPersona = assistantMessage.persona
 
+            // Live tool-use status steps (bluefunda/cai-ios#310), upserted by
+            // `stepId` as `.status` events arrive. `nil` (not just empty) so a
+            // turn with no backend tool activity threads `nil` through every
+            // `ChatMessage` below and `ThinkingStepsView` never renders for it.
+            var currentSteps: [MessageStep]?
+            // When the first step appeared — lets us compute a real, persistable
+            // "Thought for Ns" duration instead of relying on the view's own
+            // local wall-clock timer, which has nothing to measure from once a
+            // message is reloaded from history (bluefunda/cai-ios#310 follow-up).
+            var stepsStartedAt: Date?
+            var thinkingDurationSeconds: Int?
+
             var lastPublishAt = Date.distantPast
 
             do {
@@ -669,32 +700,81 @@ final class ChatManager: ObservableObject {
                                 role: .assistant,
                                 content: finalContent,
                                 timestamp: assistantTimestamp,
-                                persona: assistantPersona
+                                persona: assistantPersona,
+                                steps: currentSteps
                             )
                             updateLastMessage(interimMessage, in: conversation.id)
                         }
 
+                    case .status(let stepEvent):
+                        if stepsStartedAt == nil { stepsStartedAt = Date() }
+                        var steps = currentSteps ?? []
+                        if let index = steps.firstIndex(where: { $0.stepId == stepEvent.stepId }) {
+                            steps[index].title = stepEvent.title
+                            steps[index].detail = stepEvent.detail
+                            steps[index].isActive = (stepEvent.state == .active)
+                        } else {
+                            steps.append(
+                                MessageStep(
+                                    stepId: stepEvent.stepId,
+                                    title: stepEvent.title,
+                                    detail: stepEvent.detail,
+                                    isActive: stepEvent.state == .active
+                                )
+                            )
+                        }
+                        // Only one step reads as "in progress" at a time — mirrors
+                        // claude.ai's single-expanded-row behavior.
+                        if stepEvent.state == .active {
+                            for index in steps.indices where steps[index].stepId != stepEvent.stepId {
+                                steps[index].isActive = false
+                            }
+                        }
+                        currentSteps = steps
+                        let interimMessage = ChatMessage(
+                            id: assistantId,
+                            role: .assistant,
+                            content: finalContent,
+                            timestamp: assistantTimestamp,
+                            persona: assistantPersona,
+                            steps: currentSteps
+                        )
+                        updateLastMessage(interimMessage, in: conversation.id)
+
                     case .streamEnd(_, let full, _):
                         if !full.isEmpty {
                             finalContent = full
+                        }
+                        // Finalize: no step reads as "in progress" once the answer is done.
+                        if currentSteps != nil {
+                            for index in currentSteps!.indices { currentSteps![index].isActive = false }
+                        }
+                        if let stepsStartedAt, thinkingDurationSeconds == nil {
+                            thinkingDurationSeconds = max(1, Int(Date().timeIntervalSince(stepsStartedAt).rounded()))
                         }
                         let interimMessage = ChatMessage(
                             id: assistantId,
                             role: .assistant,
                             content: finalContent,
                             timestamp: assistantTimestamp,
-                            persona: assistantPersona
+                            persona: assistantPersona,
+                            steps: currentSteps,
+                            thinkingDurationSeconds: thinkingDurationSeconds
                         )
                         updateLastMessage(interimMessage, in: conversation.id)
                         Haptic.impact(.light)   // response complete
 
-                        // Persist AI message (best-effort)
+                        // Persist AI message (best-effort) — steps/thinkingDurationSeconds
+                        // included so cai-mcp-go stores them server-side, not just in this
+                        // device's SwiftData cache (see BFFAPIService.persistMessage).
                         if let api = apiService, !finalContent.isEmpty {
                             Task {
                                 try? await api.persistMessage(
                                     chatId: conversation.id,
                                     role: "AI",
-                                    content: finalContent
+                                    content: finalContent,
+                                    steps: currentSteps,
+                                    thinkingDurationSeconds: thinkingDurationSeconds
                                 )
                             }
                         }
@@ -742,12 +822,17 @@ final class ChatManager: ObservableObject {
             }
 
             if !wasRateLimited, !Task.isCancelled, !finalContent.isEmpty {
+                if let stepsStartedAt, thinkingDurationSeconds == nil {
+                    thinkingDurationSeconds = max(1, Int(Date().timeIntervalSince(stepsStartedAt).rounded()))
+                }
                 assistantMessage = ChatMessage(
                     id: assistantId,
                     role: .assistant,
                     content: finalContent,
                     timestamp: assistantTimestamp,
-                    persona: assistantPersona
+                    persona: assistantPersona,
+                    steps: currentSteps,
+                    thinkingDurationSeconds: thinkingDurationSeconds
                 )
                 updateLastMessage(assistantMessage, in: conversation.id)
             }
@@ -766,7 +851,14 @@ final class ChatManager: ObservableObject {
                     role: .assistant,
                     content: "I couldn't generate a response for that. Please try rephrasing or send it again.",
                     timestamp: assistantMessage.timestamp,
-                    persona: assistantMessage.persona
+                    persona: assistantMessage.persona,
+                    // A turn can stream real reasoning steps and still end with no answer text
+                    // (e.g. the backend's final completion came back empty) — omitting these would
+                    // silently default them to nil via ChatMessage's memberwise init, wiping out a
+                    // thinking card the user was actually watching. Mirrors cai-android's equivalent
+                    // fix to ChatViewModel's blank-completion branch.
+                    steps: currentSteps,
+                    thinkingDurationSeconds: thinkingDurationSeconds
                 )
                 updateLastMessage(assistantMessage, in: conversation.id)
             }

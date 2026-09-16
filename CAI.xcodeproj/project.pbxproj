@@ -105,6 +105,7 @@
 		F7F26EF8687492EF9BC4B158 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22141F06B6EDC35EA631E85A /* FileStore.swift */; };
 		FA0B1791A55829AD870AE5ED /* MarkdownParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D4625865551367AF054908 /* MarkdownParsingTests.swift */; };
 		FA0B3BA61B98A6B1BC46EA78 /* StreamingIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D69D52F22A156FF25FCBF0B /* StreamingIndicator.swift */; };
+		6C69061F871E577CC0E5D531 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B04EAE44E32DAE993B7D9993 /* ThinkingStepsView.swift */; };
 		FF000002201BCDEF /* PersistedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000002100BCDEF /* PersistedModels.swift */; };
 		FF000011201BCDEF /* BFFeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000001201BCDEF /* BFFeatureFlags.swift */; };
 		G1000020201BCDEF /* CodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000010201BCDEF /* CodeView.swift */; };
@@ -146,6 +147,7 @@
 		01905164500684B2385FE524 /* ComposerPickers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComposerPickers.swift; sourceTree = "<group>"; };
 		0B5EF4E3C69FDBD241CECEA6 /* TipEngineFileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipEngineFileStore.swift; sourceTree = "<group>"; };
 		0D69D52F22A156FF25FCBF0B /* StreamingIndicator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StreamingIndicator.swift; sourceTree = "<group>"; };
+		B04EAE44E32DAE993B7D9993 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
 		0DD25B2EDDEE6F061535B8E3 /* AuthTokenRefreshTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthTokenRefreshTests.swift; sourceTree = "<group>"; };
 		101611A0C609A0F4E0447A0C /* AntiAnnoyance.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntiAnnoyance.swift; sourceTree = "<group>"; };
 		14355763E51D404C2C5F155E /* SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
@@ -371,6 +373,7 @@
 				J1000004201BCDEF /* SourceView.swift */,
 				E7D8A4C36DFA61C4C19035A7 /* ConversationFilesView.swift */,
 				0D69D52F22A156FF25FCBF0B /* StreamingIndicator.swift */,
+				B04EAE44E32DAE993B7D9993 /* ThinkingStepsView.swift */,
 				C8B661515D5D03652EC63D67 /* SyntaxHighlighting.swift */,
 				77BF10443BA56D0CFA142022 /* RateLimitBannerPreviews.swift */,
 				71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */,
@@ -700,6 +703,7 @@
 				78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */,
 				4A09CB10AB3C974C8A9DF529 /* ConversationFilesView.swift in Sources */,
 				FA0B3BA61B98A6B1BC46EA78 /* StreamingIndicator.swift in Sources */,
+				6C69061F871E577CC0E5D531 /* ThinkingStepsView.swift in Sources */,
 				D474F392E6033487FEA57F04 /* SyntaxHighlighting.swift in Sources */,
 				1DC4A13684F2854777BCF877 /* RateLimitBannerPreviews.swift in Sources */,
 				30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */,

@@ -189,6 +189,10 @@ enum ChatEvent {
     case heartbeat(sessionId: String, chunks: Int, contentLength: Int)
     case error(message: String, details: String?)
     case rateLimited(period: String, resetLabel: String)
+    /// Real-time status of a backend tool-use step (bluefunda/cai-ios#310),
+    /// e.g. "Searching the knowledge base…" — only emitted when the backend
+    /// actually runs a tool for this turn, never fabricated client-side.
+    case status(StepEvent)
 
     var isTerminal: Bool {
         switch self {
@@ -198,6 +202,21 @@ enum ChatEvent {
             return false
         }
     }
+}
+
+// MARK: - Step Event (live status, bluefunda/cai-ios#310)
+
+/// One `stream_status` SSE frame from cai-llm-router (bluefunda/cai-llm-router#324).
+struct StepEvent: Equatable {
+    let stepId: String
+    let title: String
+    let detail: String
+    let state: StepState
+}
+
+enum StepState: String, Equatable {
+    case active
+    case done
 }
 
 // MARK: - Chat Message
@@ -217,6 +236,19 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     /// changes. `nil` when the feature was disabled for that send, or when
     /// loaded from history that predates this field.
     var persona: String? = nil
+    /// Live tool-use status steps accumulated while this message streamed
+    /// (bluefunda/cai-ios#310). `nil`/empty for turns with no backend tool
+    /// activity, and for any message loaded from history/cache predating
+    /// this field — `Optional` so the synthesized `Codable` conformance
+    /// decodes a missing key as `nil` instead of throwing, same as
+    /// `fileUrl`/`fileMetadata`/`persona` above.
+    var steps: [MessageStep]? = nil
+    /// Wall-clock seconds from the first step appearing to the stream ending
+    /// (bluefunda/cai-ios#310 follow-up) — computed once in `ChatManager` and
+    /// persisted alongside `steps`, so `ThinkingStepsView`'s "Thought for Ns"
+    /// header has real data to show after a reload, instead of only being
+    /// derivable while the view itself was live for the whole stream.
+    var thinkingDurationSeconds: Int? = nil
 
     init(
         id: String = UUID().uuidString,
@@ -225,7 +257,9 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         timestamp: Date = Date(),
         fileUrl: String? = nil,
         fileMetadata: [MessageFileMetadata]? = nil,
-        persona: String? = nil
+        persona: String? = nil,
+        steps: [MessageStep]? = nil,
+        thinkingDurationSeconds: Int? = nil
     ) {
         self.id = id
         self.role = role
@@ -234,8 +268,40 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.fileUrl = fileUrl
         self.fileMetadata = fileMetadata
         self.persona = persona
+        self.steps = steps
+        self.thinkingDurationSeconds = thinkingDurationSeconds
     }
 
+}
+
+/// One live status row shown in `ThinkingStepsView` while/after a message
+/// streams (bluefunda/cai-ios#310). Mirrors `StepEvent` but persists on the
+/// message itself so history/cache round-trips it like any other field.
+struct MessageStep: Codable, Equatable, Identifiable {
+    var id: String { stepId }
+    let stepId: String
+    var title: String
+    var detail: String
+    var isActive: Bool
+
+    init(stepId: String, title: String, detail: String, isActive: Bool) {
+        self.stepId = stepId
+        self.title = title
+        self.detail = detail
+        self.isActive = isActive
+    }
+
+    // Custom decoding: `isActive` is absent from the server's persisted history (cai-mcp-go
+    // never stores it — a step read back from history is, by definition, no longer "in
+    // progress"), so the synthesized Decodable (which would require the key) is replaced with
+    // one that defaults it to false when missing.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        stepId = try container.decode(String.self, forKey: .stepId)
+        title = try container.decode(String.self, forKey: .title)
+        detail = try container.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive) ?? false
+    }
 }
 
 /// App-level mirror of `FileMetadataDTO` — the structured reference for an
@@ -268,6 +334,10 @@ extension ChatMessage {
         self.content = persisted.content
         self.timestamp = persisted.timestamp
         self.persona = persisted.persona
+        self.steps = persisted.stepsJSON
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? JSONDecoder().decode([MessageStep].self, from: $0) }
+        self.thinkingDurationSeconds = persisted.thinkingDurationSeconds
     }
 }
 

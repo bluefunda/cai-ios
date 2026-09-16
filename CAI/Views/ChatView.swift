@@ -704,12 +704,32 @@ struct MessageView: View {
     // matches cai-android's MessageBubble (assistantBg + animateContentSize()).
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Live tool-use status (bluefunda/cai-ios#310) — only present when the backend
+            // actually ran a tool for this turn, so most turns render nothing extra here.
+            // Unlike StreamingIndicator below, this deliberately coexists with partial/finished
+            // answer text (matches claude.ai's "Thought for Ns" box staying visible above the
+            // answer), so it's not gated on `message.content.isEmpty`.
+            if let steps = message.steps, !steps.isEmpty {
+                ThinkingStepsView(
+                    steps: steps,
+                    isActive: isThisMessageStreaming,
+                    persistedDurationSeconds: message.thinkingDurationSeconds
+                )
+            }
+
             // Mutually exclusive with the boxed content below — matches cai-android's
             // MessageBubble (`if (content.isEmpty && isStreaming) StreamingIndicator() else
             // Column(background) { ... }`). Showing both at once put an empty rounded box on
-            // screen before any real text existed.
-            if isThisMessageStreaming, message.content.isEmpty {
+            // screen before any real text existed. Also suppressed once real steps exist above —
+            // otherwise this generic cycling caption renders on top of/behind the steps card
+            // while a tool call is still in flight and content hasn't started yet.
+            if isThisMessageStreaming, message.content.isEmpty, (message.steps ?? []).isEmpty {
                 StreamingIndicator()
+            } else if message.content.isEmpty, !(message.steps ?? []).isEmpty {
+                // Real steps are shown above and content hasn't started streaming yet (still
+                // mid-tool-call) — render nothing here rather than an empty rounded box with no
+                // text in it.
+                EmptyView()
             } else {
                 // PacedMarkdownView reveals streamed text at a readable pace instead of
                 // repainting the full markdown tree on every token.

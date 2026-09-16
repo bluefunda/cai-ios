@@ -328,6 +328,17 @@ final class BFFChatService: ChatServiceProtocol {
                 ?? RateLimitInfo.formatResetLabel(seconds: resetInSeconds)
             return .rateLimited(period: period, resetLabel: resetLabel)
 
+        // Real-time tool-use status (bluefunda/cai-llm-router#324, bluefunda/cai-ios#310) —
+        // e.g. "Searching the knowledge base…" — only emitted when the backend actually runs
+        // a tool for this turn.
+        case "stream_status":
+            let stepId = json["step_id"] as? String ?? json["stepId"] as? String ?? ""
+            let title = json["title"] as? String ?? ""
+            let detail = json["detail"] as? String ?? ""
+            let state = StepState(rawValue: json["state"] as? String ?? "") ?? .done
+            guard !stepId.isEmpty else { return nil }
+            return .status(StepEvent(stepId: stepId, title: title, detail: detail, state: state))
+
         // Sidebar/telemetry events that happen to carry a non-empty "content" field in a
         // different encoding (e.g. live_usage_pct's content is "pct|period", not chat text).
         // These must be explicitly ignored rather than falling through to `default` — the old
