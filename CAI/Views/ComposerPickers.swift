@@ -30,36 +30,26 @@ private func performInstantly(_ action: () -> Void) {
 
 // MARK: - Mode + Model Picker
 
-/// Unified dropdown for thinking mode, LLM, and agent selection — mirrors the
-/// cai web UnifiedModeSelector / AgentMCPSelector.
+/// Unified dropdown for thinking mode and LLM selection — mirrors the cai
+/// web UnifiedModeSelector. Every connected MCP server's tools are always
+/// available automatically (see ChatManager.allVisibleMCPServerIDs), so
+/// there is no separate agent-selection control to coordinate with here
+/// anymore — mode/model choice is independent of which tools are available.
 @MainActor
 struct ModeModelPicker: View {
     @EnvironmentObject var chatManager: ChatManager
 
     private func modeIsActive(_ mode: ThinkingMode) -> Bool {
-        chatManager.enabledMCPServers.isEmpty && !chatManager.userPickedModel
-            && chatManager.thinkingMode == mode
+        !chatManager.userPickedModel && chatManager.thinkingMode == mode
     }
     private func modelIsActive(_ model: LLMModel) -> Bool {
-        chatManager.enabledMCPServers.isEmpty
-            && chatManager.userPickedModel && chatManager.selectedModel.id == model.id
+        chatManager.userPickedModel && chatManager.selectedModel.id == model.id
     }
-    private func agentIsActive(_ server: MCPServer) -> Bool {
-        chatManager.enabledMCPServers.contains(server.id)
-    }
-
-    private var enabledAgents: [MCPServer] {
-        chatManager.visibleMCPServers.filter { chatManager.enabledMCPServers.contains($0.id) }
-    }
-
     private var label: String {
-        if enabledAgents.count == 1 { return enabledAgents[0].displayName }
-        if enabledAgents.count > 1 { return "\(enabledAgents.count) Assistants" }
         if chatManager.userPickedModel { return chatManager.selectedModel.name }
         return chatManager.thinkingMode.label
     }
     private var icon: String {
-        if !enabledAgents.isEmpty { return "cpu.fill" }
         if chatManager.userPickedModel { return "cpu" }
         return chatManager.thinkingMode.icon
     }
@@ -107,7 +97,6 @@ struct ModeModelPicker: View {
                 ForEach(ThinkingMode.allCases) { mode in
                     Button {
                         performInstantly {
-                            chatManager.enabledMCPServers = []
                             chatManager.selectThinkingMode(mode)
                         }
                     } label: {
@@ -125,7 +114,6 @@ struct ModeModelPicker: View {
                 ForEach(chatManager.availableModels) { model in
                     Button {
                         performInstantly {
-                            chatManager.enabledMCPServers = []
                             chatManager.selectModel(model)
                         }
                     } label: {
@@ -138,46 +126,6 @@ struct ModeModelPicker: View {
                 }
             }
 
-            // Assistants (MCP servers) — multi-select: tapping toggles a
-            // server's membership without closing this dropdown's overall
-            // selection state (SwiftUI Menu still dismisses per-tap; reopen
-            // to toggle another). Full checkbox UX lives in Settings ›
-            // Assistants (MCPServerSelectionView).
-            if !chatManager.visibleMCPServers.isEmpty {
-                Section("Assistants") {
-                    // "None" option clears all enabled agents
-                    Button {
-                        performInstantly {
-                            chatManager.enabledMCPServers = []
-                        }
-                    } label: {
-                        if chatManager.enabledMCPServers.isEmpty {
-                            Label("None", systemImage: "checkmark")
-                        } else {
-                            Text("None")
-                        }
-                    }
-
-                    ForEach(chatManager.visibleMCPServers) { server in
-                        Button {
-                            performInstantly {
-                                if chatManager.enabledMCPServers.contains(server.id) {
-                                    chatManager.enabledMCPServers.remove(server.id)
-                                } else {
-                                    chatManager.enabledMCPServers.insert(server.id)
-                                    chatManager.userPickedModel = false
-                                }
-                            }
-                        } label: {
-                            if agentIsActive(server) {
-                                Label(server.displayName, systemImage: "checkmark")
-                            } else {
-                                Text(server.displayName)
-                            }
-                        }
-                    }
-                }
-            }
         } label: {
             Rectangle()
                 .fill(Color.primary.opacity(0.0001))
@@ -187,6 +135,201 @@ struct ModeModelPicker: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Mode and model: \(label)")
         .accessibilityHint("Select thinking mode, model, or assistant")
+    }
+}
+
+// MARK: - Attach + Connectors Popup (composer "+" button)
+
+/// Sheet presented by the composer's "+" button — the Attach tab keeps the
+/// exact options the old plain `Menu` offered; the Connectors tab lets the
+/// user toggle which of their connected MCP servers are enabled for THIS
+/// conversation (mirrors Claude's own "+" popup). Connector state lives on
+/// `ChatManager.enabledMCPServers` already — this sheet only ever toggles it,
+/// defaulting per-conversation to every connected connector (see
+/// `ChatManager.defaultConnectedMCPServerIDs`).
+@MainActor
+struct ComposerAttachSheet: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @Environment(\.dismiss) private var dismiss
+
+    let onPickCamera: (() -> Void)?
+    let onPickPhoto: (() -> Void)?
+    let onPickFile: (() -> Void)?
+    let onPickDumpScreenshot: (() -> Void)?
+    /// Called instead of presenting Settings as a *nested* sheet from within
+    /// this one — sheet-on-sheet was unreliable (reported: tapping through
+    /// it left the whole app stuck in a loading state). The caller dismisses
+    /// this sheet and presents Settings itself, as a sibling, once this one
+    /// has actually finished dismissing.
+    let onManageAgents: () -> Void
+
+    private enum Tab: String, CaseIterable, Identifiable {
+        case attach = "Attach"
+        case connectors = "Agents"
+        var id: String { rawValue }
+    }
+
+    @State private var tab: Tab = .attach
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("", selection: $tab) {
+                    ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+
+                switch tab {
+                case .attach: attachList
+                case .connectors: connectorsList
+                }
+            }
+            // One uniform background for the whole sheet (picker area +
+            // list), instead of two mismatched backgrounds meeting at a
+            // visible seam.
+            .background(Color(uiColor: .systemBackground))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #endif
+                        .bfPointerHover()
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    @ViewBuilder
+    private var attachList: some View {
+        List {
+            if let pickCamera = onPickCamera {
+                attachRow("Take Photo", icon: "camera", action: pickCamera)
+            }
+            if let pickPhoto = onPickPhoto {
+                attachRow("Photo Library", icon: "photo", action: pickPhoto)
+            }
+            if let pickFile = onPickFile {
+                attachRow("Browse Files", icon: "folder", action: pickFile)
+            }
+            if let pickDump = onPickDumpScreenshot {
+                attachRow("Decode ST22 Dump", icon: "exclamationmark.triangle", action: pickDump)
+            }
+        }
+    }
+
+    private func attachRow(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button {
+            dismiss()
+            action()
+        } label: {
+            Label(label, systemImage: icon)
+                #if targetEnvironment(macCatalyst)
+                .font(MacSettingsFont.row)
+                #endif
+        }
+        .bfPointerHover()
+    }
+
+    @ViewBuilder
+    private var connectorsList: some View {
+        List {
+            Section {
+                if chatManager.connectedMCPServers.isEmpty {
+                    Text("No connectors are connected yet.")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.secondary)
+                        #endif
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(chatManager.connectedMCPServers) { server in
+                        Toggle(isOn: enabledBinding(for: server)) {
+                            HStack(spacing: 14) {
+                                if server.isGitHub {
+                                    Image("GitHubMark")
+                                        .renderingMode(.template)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        // .foregroundStyle(.primary) alone
+                                        // doesn't stick on Mac Catalyst inside
+                                        // these List rows — .foregroundColor
+                                        // overrides the row's own tint.
+                                        .foregroundColor(.primary)
+                                        .frame(width: 22)
+                                } else {
+                                    Image(systemName: server.connectorIconName)
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.primary)
+                                        .frame(width: 22)
+                                }
+                                Text(server.displayName)
+                                    #if targetEnvironment(macCatalyst)
+                                    .font(MacSettingsFont.row)
+                                    #else
+                                    .font(BFFont.body)
+                                    #endif
+                            }
+                            .padding(.vertical, 6)
+                        }
+                        .toggleStyle(.switch)
+                        .bfPointerHover()
+                    }
+                }
+            } footer: {
+                Text("Toggles which connected tools the assistant can use in this conversation.")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #endif
+            }
+
+            Section {
+                Button {
+                    dismiss()
+                    onManageAgents()
+                } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                            .frame(width: 22)
+                        Text("Manage Agents")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #else
+                            .font(BFFont.body)
+                            #endif
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .bfPointerHover()
+            }
+        }
+    }
+
+    private func enabledBinding(for server: MCPServer) -> Binding<Bool> {
+        Binding(
+            get: { chatManager.enabledMCPServers.contains(server.id) },
+            set: { isOn in
+                if isOn {
+                    chatManager.enabledMCPServers.insert(server.id)
+                } else {
+                    chatManager.enabledMCPServers.remove(server.id)
+                }
+            }
+        )
     }
 }
 

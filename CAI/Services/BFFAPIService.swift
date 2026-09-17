@@ -84,6 +84,24 @@ final class BFFAPIService {
         try await client.postIgnoringResponse("/mcp/select", body: ["server_id": serverId])
     }
 
+    // MARK: - GitHub OAuth (bluefunda/cai-llm-router#345 Phase 2)
+
+    func fetchGitHubOAuthStatus() async throws -> GitHubOAuthStatusDTO {
+        try await client.get("/oauth/github/status")
+    }
+
+    func fetchGitHubAuthorizeURL() async throws -> URL {
+        let response: GitHubOAuthAuthorizeDTO = try await client.get("/oauth/github/authorize")
+        guard let url = URL(string: response.authorizeUrl) else {
+            throw ChatServiceError.invalidResponse
+        }
+        return url
+    }
+
+    func disconnectGitHub() async throws {
+        try await client.postIgnoringResponse("/oauth/github/disconnect", body: [:])
+    }
+
     // MARK: - Personas
 
     func fetchPersonas() async throws -> [Persona] {

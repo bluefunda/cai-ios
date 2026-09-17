@@ -6,6 +6,11 @@ import SwiftUI
 // MARK: - Chat Manager
 // Coordinates between UI, streaming chat service (BFFChatService), and REST API service (BFFAPIService).
 
+/// UserDefaults key backing ChatManager.locallyConnectedServerIDs — top-level
+/// (not a `static let` on the class) since a stored property initializer
+/// can't reference `Self`.
+private let locallyConnectedServerIDsKey = "locallyConnectedMCPServerIDs"
+
 @MainActor
 final class ChatManager: ObservableObject {
 
@@ -13,19 +18,19 @@ final class ChatManager: ObservableObject {
 
     @Published var conversations: [Conversation] = []
 
-    /// Which MCP servers were enabled the last time each conversation was
-    /// active (bluefunda/cai-ios#172). Keyed by conversation id, in-memory
-    /// only for now (not persisted across relaunches). A conversation with no
-    /// entry — including every brand-new chat — defaults to no tools enabled,
-    /// rather than inheriting whatever was active elsewhere.
+    /// Which MCP servers ("Connectors") were enabled the last time each
+    /// conversation was active (bluefunda/cai-ios#172). Keyed by conversation
+    /// id, in-memory only for now (not persisted across relaunches). A
+    /// conversation with no entry — including every brand-new chat — defaults
+    /// to `defaultConnectedMCPServerIDs` (every connected connector), rather
+    /// than inheriting whatever was active elsewhere.
     private var enabledMCPServersByConversationID: [String: Set<String>] = [:]
 
     /// Per-conversation SAP Persona toggle/override state (bluefunda/cai-ios#217),
-    /// keyed by conversation id exactly like `enabledMCPServersByConversationID`
-    /// above — in-memory only, not persisted across relaunches. A conversation
-    /// with no entry — including every brand-new chat — defaults to the toggle
-    /// off (General), never inheriting another conversation's selection or the
-    /// Settings default persona.
+    /// keyed by conversation id — in-memory only, not persisted across
+    /// relaunches. A conversation with no entry — including every brand-new
+    /// chat — defaults to the toggle off (General), never inheriting another
+    /// conversation's selection or the Settings default persona.
     private var personaEnabledByConversationID: [String: Bool] = [:]
     private var personaOverrideByConversationID: [String: Persona] = [:]
 
@@ -46,14 +51,15 @@ final class ChatManager: ObservableObject {
         didSet {
             // Guard against in-place refreshes of the *same* conversation
             // (e.g. loadMessages replacing it with an updated copy) — only
-            // save/restore the tool selection on an actual conversation switch.
+            // save/restore the tool/persona selection on an actual conversation switch.
             guard oldValue?.id != currentConversation?.id else { return }
             if let previous = oldValue {
                 // A real switch between two conversations — persist the
                 // outgoing one's selection and restore the incoming one's
-                // (defaulting to none for a conversation never seen before).
+                // (defaulting to every connected connector for one never
+                // seen before, not to none).
                 enabledMCPServersByConversationID[previous.id] = enabledMCPServers
-                enabledMCPServers = currentConversation.flatMap { enabledMCPServersByConversationID[$0.id] } ?? []
+                enabledMCPServers = currentConversation.flatMap { enabledMCPServersByConversationID[$0.id] } ?? defaultConnectedMCPServerIDs
 
                 personaEnabledByConversationID[previous.id] = chatPersonaEnabled
                 personaOverrideByConversationID[previous.id] = chatPersonaOverride
@@ -62,10 +68,11 @@ final class ChatManager: ObservableObject {
             } else if let new = currentConversation {
                 // No prior "current" conversation — this is the first one
                 // established this session, e.g. a lazily-created draft from
-                // sendMessage(), possibly after the user already picked tools
-                // via the composer before any conversation existed. Keep the
-                // active selection as-is rather than resetting it; just start
-                // tracking it under this conversation's id going forward.
+                // sendMessage(), possibly after the user already toggled
+                // connectors via the composer before any conversation existed.
+                // Keep the active selection as-is rather than resetting it;
+                // just start tracking it under this conversation's id going
+                // forward.
                 enabledMCPServersByConversationID[new.id] = enabledMCPServers
                 personaEnabledByConversationID[new.id] = chatPersonaEnabled
                 personaOverrideByConversationID[new.id] = chatPersonaOverride
@@ -252,6 +259,28 @@ final class ChatManager: ObservableObject {
     @Published var availableMCPServers: [MCPServer] = []
     @Published var subscribedMCPServerIds: Set<String> = []
 
+    /// GitHub's connect status (Settings → Connectors), see
+    /// `refreshGitHubConnectionStatus()`. `nil` username means connected but
+    /// the display name hasn't resolved (or was never set) — mirrors
+    /// GitHubOAuthStatusDTO exactly.
+    @Published var connectedGitHub = false
+    @Published var githubUsername: String?
+
+    /// Server ids "connected" via a simple local flip — no OAuth, no
+    /// credentials, just a Connect tap (e.g. Sales Tracker today; reusable
+    /// for any future connector needing the same lightweight treatment,
+    /// rather than a dedicated flag per connector). No backend to fetch this
+    /// from, so it's persisted in UserDefaults instead (device-local only,
+    /// unlike GitHub's real server-side connection) so it survives
+    /// relaunches/rebuilds.
+    @Published var locallyConnectedServerIDs: Set<String> = Set(
+        UserDefaults.standard.stringArray(forKey: locallyConnectedServerIDsKey) ?? []
+    ) {
+        didSet {
+            UserDefaults.standard.set(Array(locallyConnectedServerIDs), forKey: locallyConnectedServerIDsKey)
+        }
+    }
+
     /// SAP assistants (ABAPer, SAP Analytics) hidden from all selection UI —
     /// use this instead of `availableMCPServers` in every picker/list view.
     private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
@@ -260,6 +289,27 @@ final class ChatManager: ObservableObject {
         availableMCPServers.filter { server in
             let name = server.displayName.lowercased()
             return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
+        }
+    }
+
+    /// Every *connected* server's tools, enabled by default for a new
+    /// conversation (Settings → Connectors' composer-popup toggle can still
+    /// turn individual ones off per-chat — see `enabledMCPServersByConversationID`).
+    /// Only GitHub has a real connect flow so far — every other connector has
+    /// no backing mechanism yet (Settings → Connectors shows them but their
+    /// "Connect" does nothing), so it can never count as connected until its
+    /// own flow exists. Re-evaluate this gate as each connector's real
+    /// connect flow lands.
+    var defaultConnectedMCPServerIDs: Set<String> {
+        Set(connectedMCPServers.map(\.id))
+    }
+
+    /// Same connected-gate as `defaultConnectedMCPServerIDs`, as server objects
+    /// rather than ids — what the composer's per-chat Connectors toggle lists.
+    var connectedMCPServers: [MCPServer] {
+        visibleMCPServers.filter { server in
+            if server.isGitHub { return connectedGitHub }
+            return locallyConnectedServerIDs.contains(server.id)
         }
     }
 
@@ -399,6 +449,9 @@ final class ChatManager: ObservableObject {
         subscribedMCPServerIds = []
         enabledMCPServers = []
         enabledMCPServersByConversationID = [:]
+        connectedGitHub = false
+        githubUsername = nil
+        locallyConnectedServerIDs = []
         personaEnabledByConversationID = [:]
         personaOverrideByConversationID = [:]
         rateLimit = nil
@@ -905,6 +958,23 @@ extension ChatManager {
             group.addTask { await self.loadMCPServers() }
             group.addTask { await self.loadGreeting() }
             group.addTask { await self.loadPersonas() }
+            group.addTask { await self.refreshGitHubConnectionStatus() }
+        }
+    }
+
+    /// GitHub's connect/disconnect status (Settings → Connectors), fetched once at
+    /// startup and refreshed by GitHubConnectionView after a connect/disconnect
+    /// action — kept here rather than screen-local state so the Connectors list
+    /// row and the composer's per-chat Connectors toggle can both read it without
+    /// each independently re-fetching.
+    func refreshGitHubConnectionStatus() async {
+        guard let api = apiService else { return }
+        do {
+            let status = try await api.fetchGitHubOAuthStatus()
+            connectedGitHub = status.connected
+            githubUsername = status.username
+        } catch {
+            print("[ChatManager] refreshGitHubConnectionStatus error: \(error)")
         }
     }
 
@@ -1011,7 +1081,19 @@ extension ChatManager {
             subscribedMCPServerIds = subscribedIds
 
             availableMCPServers = all.map { dto in
-                MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description)
+                MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description, label: dto.label)
+            }
+            // Seed the active selection from what's connected, but only when
+            // nothing has explicitly tracked one yet for this conversation
+            // (cold start, or a conversation never visited before) — a user's
+            // own per-chat toggle in the composer's Connectors tab must never
+            // be silently reset by a later background refresh of the catalog.
+            if let id = currentConversation?.id {
+                if enabledMCPServersByConversationID[id] == nil {
+                    enabledMCPServers = defaultConnectedMCPServerIDs
+                }
+            } else {
+                enabledMCPServers = defaultConnectedMCPServerIDs
             }
         } catch {
             print("[ChatManager] loadMCPServers error: \(error)")
@@ -1173,16 +1255,43 @@ struct MCPServer: Identifiable, Hashable {
     let name: String        // technical ID sent to backend (e.g. "abaper-mcp")
     let url: String
     let description: String?
+    /// Clean short display name (bluefunda/cai-mcp-go#262) — preferred over
+    /// `description`, which may be more verbose ("GitHub MCP Server").
+    let label: String?
 
-    /// User-facing label: shortDescription from BFF when set, otherwise the
-    /// technical name cleaned up (strip "-mcp", title-case each word).
+    /// User-facing label: `label` from BFF when set, else `description`,
+    /// else the technical name cleaned up (strip "-mcp", title-case each word).
     var displayName: String {
+        if let l = label, !l.isEmpty { return l }
         if let d = description, !d.isEmpty { return d }
         return name
             .replacingOccurrences(of: "-mcp", with: "")
             .split(separator: "-")
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }
             .joined(separator: " ")
+    }
+
+    /// Matches cai-llm-router's `isGitHubMCP` exact-hostname check
+    /// (internal/mcp/principal.go) — the only connector with a real,
+    /// working OAuth connect flow so far (Settings → Connectors).
+    var isGitHub: Bool { name == "github-mcp" }
+
+    /// No OAuth or credential form for this one — "Connect" just adds this
+    /// server's id to `ChatManager.locallyConnectedServerIDs`, no backend call.
+    var isSalesTracker: Bool { displayName.lowercased() == "sales tracker" }
+
+    var isABAPer: Bool { displayName.lowercased() == "abaper" }
+    var isSAPAnalytics: Bool { displayName.lowercased() == "sap analytics" }
+
+    /// SF Symbol for connector rows (Settings → Agents, composer's Agents
+    /// tab) — every connector except GitHub, which uses a real brand mark
+    /// ("GitHubMark" asset) instead of a generic symbol; callers branch on
+    /// `isGitHub` separately since that's a different Image initializer.
+    var connectorIconName: String {
+        if isABAPer { return "curlybraces" }
+        if isSAPAnalytics { return "chart.bar.xaxis" }
+        if isSalesTracker { return "chart.line.uptrend.xyaxis" }
+        return "brain.head.profile"
     }
 }
 

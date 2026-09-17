@@ -159,6 +159,19 @@ extension ChatView {
     var messageScrollArea: some View {
         ZStack(alignment: .bottom) {
             GeometryReader { outer in
+                #if targetEnvironment(macCatalyst)
+                if !hasMessages {
+                    if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        EmptyStateView(greeting: greetingText)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                } else {
+                    macMessageScrollView(outer: outer)
+                }
+                #else
                 ScrollViewReader { proxy in
                     // Lets scrollToBottom's settle loop confirm it actually reached the end —
                     // see isNearBottomSentinel's own declaration (ChatView+Scroll.swift) for why.
@@ -281,9 +294,20 @@ extension ChatView {
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
+                            #if targetEnvironment(macCatalyst)
+                            // .scrollIndicators(.hidden) below has no effect on this List's
+                            // native scroll indicator on Mac Catalyst (a persistent full-height
+                            // track shown even with nothing to scroll, unlike iOS/iPadOS's own
+                            // transient-while-scrolling indicator) — reaching into the actual
+                            // backing UIScrollView directly is what's needed here instead.
+                            .background(HidesScrollIndicator())
+                            #endif
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    #if targetEnvironment(macCatalyst)
+                    .scrollIndicators(.hidden)
+                    #endif
                     .frame(maxWidth: maxChatWidth)
                     .frame(maxWidth: .infinity)
                     .coordinateSpace(name: "chatScroll")
@@ -428,6 +452,7 @@ extension ChatView {
                     }
                 }
                 .id(chatManager.currentConversation?.id ?? "none")
+                #endif
             }
             if chatManager.isSwitchingConversation {
                 // Covers the List (still fully mounted and doing its real layout/scroll work
@@ -444,4 +469,175 @@ extension ChatView {
             }
         }
     }
+
+    #if targetEnvironment(macCatalyst)
+    @ViewBuilder
+    private func macMessageScrollView(outer: GeometryProxy) -> some View {
+        ScrollViewReader { proxy in
+            let checkNearBottomSentinel: () -> Bool = { isNearBottomSentinel(viewportHeight: outer.size.height) }
+            List {
+                if let conversation = chatManager.currentConversation {
+                    ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
+                        let precedingQuestion = index > 0 ? conversation.messages[index - 1].content : nil
+                        let isThisMessageStreaming = (chatManager.isStreaming && message.id == chatManager.streamingMessageId)
+                            || (chatManager.isReconciling && index == conversation.messages.count - 1)
+                        let wasThisMessageStopped = chatManager.didStopCurrentMessage
+                            && message.id == chatManager.stoppedMessageId
+                        let isLastMessage = index == conversation.messages.count - 1
+                        MessageView(
+                            message: message,
+                            precedingQuestion: precedingQuestion,
+                            isThisMessageStreaming: isThisMessageStreaming,
+                            wasStopped: wasThisMessageStopped,
+                            onRevealingChanged: isLastMessage
+                                ? { chatManager.isRevealingLastMessage = $0 }
+                                : { _ in }
+                        )
+                        .frame(maxWidth: maxChatWidth)
+                        .frame(maxWidth: .infinity)
+                        .id(message.id)
+                        .background {
+                            if isThisMessageStreaming {
+                                GeometryReader { rowGeo in
+                                    Color.clear.preference(
+                                        key: StreamingRowBottomKey.self,
+                                        value: rowGeo.frame(in: .named("chatScroll")).maxY
+                                    )
+                                }
+                            }
+                        }
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                    }
+                    if chatManager.isStreaming {
+                        Color.clear.frame(height: outer.size.height * 0.65)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                    }
+                }
+                Color.clear.frame(height: 1).id(bottomSentinelID)
+                    .background {
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: BottomSentinelYKey.self,
+                                value: geo.frame(in: .named("chatScroll")).minY
+                            )
+                        }
+                    }
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity)
+            .coordinateSpace(name: "chatScroll")
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: hasMessages) { _, isNonEmpty in
+                guard isNonEmpty else { return }
+                chatManager.isSwitchingConversation = false
+                bottomSentinelY = nil
+                scrollSettleTask?.cancel()
+                let target = bottomSentinelID
+                let convoID = chatManager.currentConversation?.id
+                scrollSettleTask = Task { @MainActor in
+                    await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                }
+            }
+            .onChange(of: chatManager.isReconciling) { wasReconciling, isReconciling in
+                guard wasReconciling, !isReconciling,
+                       let lastID = chatManager.currentConversation?.messages.last?.id else { return }
+                proxy.scrollTo(lastID, anchor: .bottom)
+            }
+            .onChange(of: latestUserMessageID) { _, newID in
+                guard let newID else { return }
+                scheduleNewPromptPositioning(id: newID, proxy: proxy)
+            }
+            .onChange(of: streamingContentBucket) { _, _ in
+                guard chatManager.isStreaming,
+                      let id = chatManager.streamingMessageId,
+                      hasSettledInitialScrollFor == id
+                else { return }
+                let viewportBottom = outer.size.height
+                let scrollAwayTolerance: CGFloat = 80
+                if let rowBottomY = streamingRowBottomY,
+                   rowBottomY > viewportBottom + scrollAwayTolerance {
+                    return
+                }
+                withAnimation(.easeOut(duration: 0.15)) {
+                    proxy.scrollTo(id, anchor: .bottom)
+                }
+            }
+            .onPreferenceChange(StreamingRowBottomKey.self) { streamingRowBottomY = $0 }
+            .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
+            .onChange(of: chatManager.currentConversation?.id) { _, _ in
+                guard hasMessages else { return }
+                chatManager.isSwitchingConversation = true
+                bottomSentinelY = nil
+                scrollSettleTask?.cancel()
+                let target = bottomSentinelID
+                let convoID = chatManager.currentConversation?.id
+                scrollSettleTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                    guard !Task.isCancelled else { return }
+                    chatManager.isSwitchingConversation = false
+                }
+            }
+            .onAppear {
+                scrollProxy = proxy
+                guard hasMessages else { return }
+                chatManager.isSwitchingConversation = true
+                bottomSentinelY = nil
+                scrollSettleTask?.cancel()
+                let target = bottomSentinelID
+                let convoID = chatManager.currentConversation?.id
+                scrollSettleTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                    guard !Task.isCancelled else { return }
+                    chatManager.isSwitchingConversation = false
+                }
+            }
+        }
+        .id(chatManager.currentConversation?.id ?? "none")
+    }
+    #endif
 }
+
+#if targetEnvironment(macCatalyst)
+/// Forces the enclosing List's backing UIScrollView to stop showing its scroll indicator on Mac
+/// Catalyst — `.scrollIndicators(.hidden)` alone has no effect on this List's native scroll
+/// indicator here (a persistent full-height track shown even with nothing to scroll), so this
+/// walks the real UIKit view hierarchy directly instead. Zero-size and invisible; only exists to
+/// get a UIView reference into that hierarchy via `.background`.
+private struct HidesScrollIndicator: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        DispatchQueue.main.async {
+            view.enclosingScrollView?.showsVerticalScrollIndicator = false
+            view.enclosingScrollView?.showsHorizontalScrollIndicator = false
+        }
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        uiView.enclosingScrollView?.showsVerticalScrollIndicator = false
+        uiView.enclosingScrollView?.showsHorizontalScrollIndicator = false
+    }
+}
+
+private extension UIView {
+    var enclosingScrollView: UIScrollView? {
+        var current = superview
+        while let view = current {
+            if let scrollView = view as? UIScrollView { return scrollView }
+            current = view.superview
+        }
+        return nil
+    }
+}
+#endif

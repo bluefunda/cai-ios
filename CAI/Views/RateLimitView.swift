@@ -30,7 +30,11 @@ struct RateLimitView: View {
             }
         }
         .navigationTitle("Usage & Limits")
+        #if targetEnvironment(macCatalyst)
+        .navigationBarTitleDisplayMode(.inline)
+        #else
         .navigationBarTitleDisplayMode(.large)
+        #endif
         .task {
             isRefreshing = true
             await chatManager.loadRateLimit()
@@ -45,18 +49,33 @@ struct RateLimitView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundColor(.green)
+                        #if targetEnvironment(macCatalyst)
+                        .font(.system(size: 20))
+                        #else
                         .font(.title2)
+                        #endif
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Unlimited Access")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.rowSemibold)
+                            #else
                             .font(.headline)
+                            #endif
                         Text("No token limits apply to your account.")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.secondary)
+                            #else
                             .font(.subheadline)
+                            #endif
                             .foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 4)
             } header: {
                 Text("Status")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.sectionHeader)
+                    #endif
             }
 
             Section {
@@ -76,9 +95,16 @@ struct RateLimitView: View {
             Section {
                 HStack {
                     Label("Account", systemImage: "person.circle")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #endif
                     Spacer()
                     Text(info.planName.capitalized)
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.caption)
+                        #else
                         .font(.caption)
+                        #endif
                         .foregroundColor(.secondary)
                 }
 
@@ -88,11 +114,18 @@ struct RateLimitView: View {
                             .foregroundColor(.red)
                         Text(info.blockReason ?? "Account is blocked")
                             .foregroundColor(.red)
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.secondary)
+                            #else
                             .font(.subheadline)
+                            #endif
                     }
                 }
             } header: {
                 Text("Plan")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.sectionHeader)
+                    #endif
             }
 
             // Hourly Usage (5-hour rolling session window)
@@ -101,6 +134,9 @@ struct RateLimitView: View {
                     UsageRow(resetLabel: Self.resetPhrase(info.hourlyResetLabel), percent: info.hourlyPercent)
                 } header: {
                     Text("Current Session")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.sectionHeader)
+                        #endif
                 }
             }
 
@@ -110,6 +146,9 @@ struct RateLimitView: View {
                     UsageRow(resetLabel: Self.resetPhrase(info.resetLabel), percent: info.weeklyPercent)
                 } header: {
                     Text("Weekly Limits")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.sectionHeader)
+                        #endif
                 }
             }
 

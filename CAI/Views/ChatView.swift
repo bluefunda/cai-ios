@@ -694,7 +694,11 @@ struct MessageView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             }
-            .frame(maxWidth: 280, alignment: .trailing)
+            #if targetEnvironment(macCatalyst)
+            .frame(maxWidth: 620, alignment: .trailing)
+            #else
+            .frame(maxWidth: 600, alignment: .trailing)
+            #endif
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 6)
@@ -722,9 +726,7 @@ struct MessageView: View {
                 )
                 .font(BFFont.body)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.vertical, 4)
                 .contextMenu { if !message.content.isEmpty { messageActions } }
             }
 

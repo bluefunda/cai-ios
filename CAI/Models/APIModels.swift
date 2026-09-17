@@ -376,6 +376,17 @@ struct RateLimitDTO: Codable {
 // MARK: - MCP Servers (/mcp, /mcp/user)
 
 /// Backend returns {"mcpInfo": [{server_id, name, mcp_server_url, ...}]}
+// MARK: - GitHub OAuth (bluefunda/cai-llm-router#345 Phase 2)
+
+struct GitHubOAuthStatusDTO: Codable {
+    let connected: Bool
+    let username: String?
+}
+
+struct GitHubOAuthAuthorizeDTO: Codable {
+    let authorizeUrl: String
+}
+
 struct MCPListResponse: Codable {
     let servers: [MCPServerDTO]
 
@@ -427,10 +438,14 @@ struct SubscriptionDTO: Codable {
     }
 }
 
-/// Backend MCPInfo: {server_id (int), name, mcp_server_url, shortDescription, isAvailable}
+/// Backend MCPInfo: {server_id (int), name, label, mcp_server_url, shortDescription, isAvailable}
 struct MCPServerDTO: Codable, Identifiable {
     let id: String           // derived from server_id (int → string)
     let name: String
+    /// Clean short display name (bluefunda/cai-mcp-go#262) — separate from
+    /// `description`, which is shortDescription/longDescription and may be
+    /// more verbose ("GitHub MCP Server" vs. label "GitHub").
+    let label: String?
     let url: String?
     let description: String?
     let enabled: Bool?
@@ -446,6 +461,7 @@ struct MCPServerDTO: Codable, Identifiable {
             self.id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
         }
         self.name        = (try? c.decode(String.self, forKey: .name)) ?? ""
+        self.label       = try? c.decode(String.self, forKey: .label)
         // mcp_server_url is the canonical URL field; fall back to "url"
         self.url         = (try? c.decode(String.self, forKey: .mcpServerUrl))
                         ?? (try? c.decode(String.self, forKey: .url))
@@ -460,13 +476,14 @@ struct MCPServerDTO: Codable, Identifiable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id,   forKey: .id)
         try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(label,       forKey: .label)
         try c.encodeIfPresent(url,         forKey: .url)
         try c.encodeIfPresent(description, forKey: .description)
         try c.encodeIfPresent(enabled,     forKey: .enabled)
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, url, description, enabled
+        case id, name, label, url, description, enabled
         case serverId        = "server_id"
         case mcpServerUrl    = "mcp_server_url"
         case shortDescription = "shortDescription"
