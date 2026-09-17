@@ -48,8 +48,10 @@
 		A1000003201BCDEF /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013201BCDEF /* ChatView.swift */; };
 		A1000004201BCDEF /* ConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014201BCDEF /* ConversationsView.swift */; };
 		A1000005201BCDEF /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000015201BCDEF /* SettingsView.swift */; };
+		FF8BF569B8A240BDA8EA5CC1 /* SettingsView+Agents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A53A66E259419989BB3945 /* SettingsView+Agents.swift */; };
 		A1000006201BCDEF /* ChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDEF /* ChatManager.swift */; };
 		A1000006201BCDF1 /* ChatManager+Background.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF1 /* ChatManager+Background.swift */; };
+		CB8824F65A514FDBAC90E9E4 /* ChatManager+Connectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3491614DA9F8408BB6DD5B54 /* ChatManager+Connectors.swift */; };
 		A1000006201BCDF2 /* ChatManager+FileHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF2 /* ChatManager+FileHistory.swift */; };
 		A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017201BCDEF /* ChatServiceProtocol.swift */; };
 		A1000008201BCDEF /* NATSChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018201BCDEF /* NATSChatService.swift */; };
@@ -190,8 +192,10 @@
 		A1000013201BCDEF /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A1000014201BCDEF /* ConversationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationsView.swift; sourceTree = "<group>"; };
 		A1000015201BCDEF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		67A53A66E259419989BB3945 /* SettingsView+Agents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView+Agents.swift"; sourceTree = "<group>"; };
 		A1000016201BCDEF /* ChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatManager.swift; sourceTree = "<group>"; };
 		A1000016201BCDF1 /* ChatManager+Background.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+Background.swift"; sourceTree = "<group>"; };
+		3491614DA9F8408BB6DD5B54 /* ChatManager+Connectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+Connectors.swift"; sourceTree = "<group>"; };
 		A1000016201BCDF2 /* ChatManager+FileHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+FileHistory.swift"; sourceTree = "<group>"; };
 		A1000017201BCDEF /* ChatServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatServiceProtocol.swift; sourceTree = "<group>"; };
 		A1000018201BCDEF /* NATSChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NATSChatService.swift; sourceTree = "<group>"; };
@@ -367,6 +371,7 @@
 				A1000013201BCDEF /* ChatView.swift */,
 				A1000014201BCDEF /* ConversationsView.swift */,
 				A1000015201BCDEF /* SettingsView.swift */,
+				67A53A66E259419989BB3945 /* SettingsView+Agents.swift */,
 				B1000005201BCDEF /* RateLimitView.swift */,
 				B1000006201BCDEF /* StorageView.swift */,
 				C1000007201BCDEF /* MarkdownView.swift */,
@@ -404,6 +409,7 @@
 			children = (
 				A1000016201BCDEF /* ChatManager.swift */,
 				A1000016201BCDF1 /* ChatManager+Background.swift */,
+				3491614DA9F8408BB6DD5B54 /* ChatManager+Connectors.swift */,
 				A1000016201BCDF2 /* ChatManager+FileHistory.swift */,
 				CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */,
 				D1000008201BCDEF /* StorageViewModel.swift */,
@@ -656,8 +662,10 @@
 				A1000003201BCDEF /* ChatView.swift in Sources */,
 				A1000004201BCDEF /* ConversationsView.swift in Sources */,
 				A1000005201BCDEF /* SettingsView.swift in Sources */,
+				FF8BF569B8A240BDA8EA5CC1 /* SettingsView+Agents.swift in Sources */,
 				A1000006201BCDEF /* ChatManager.swift in Sources */,
 				A1000006201BCDF1 /* ChatManager+Background.swift in Sources */,
+				CB8824F65A514FDBAC90E9E4 /* ChatManager+Connectors.swift in Sources */,
 				A1000006201BCDF2 /* ChatManager+FileHistory.swift in Sources */,
 				46F1EB0C991F26F90A9898DD /* ChatManager+MessageMutation.swift in Sources */,
 				A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */,
