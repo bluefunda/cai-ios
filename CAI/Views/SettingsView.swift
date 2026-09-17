@@ -1,10 +1,11 @@
 import SwiftUI
 import UIKit
+import AuthenticationServices
 
 // MARK: - Settings Category
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case account, aiSettings, usage, subscription, legal, about
+    case account, aiSettings, connectors, usage, subscription, legal, about
 
     var id: String { rawValue }
 
@@ -12,6 +13,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .account: return "Account"
         case .aiSettings: return "AI Settings"
+        case .connectors: return "Agents"
         case .usage: return "Usage"
         case .subscription: return "Subscription"
         case .legal: return "Legal"
@@ -23,6 +25,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .account: return "person.crop.circle"
         case .aiSettings: return "sparkles"
+        case .connectors: return "brain.head.profile"
         case .usage: return "chart.bar"
         case .subscription: return "star.circle"
         case .legal: return "doc.text"
@@ -37,16 +40,26 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
+    // Not private — SettingsView+Agents.swift (a separate extension file, split out to stay
+    // under SwiftLint's file_length/type_body_length limits) reads/writes these.
+    @Environment(\.webAuthenticationSession) var webAuthenticationSession
     @State private var showLogoutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var deleteError: String?
+    @State var isConnectingGitHub = false
+    @State var githubConnectError: String?
     // nil (not .account) so opening Settings on a compact/iPhone layout shows the category
     // list first instead of auto-navigating straight into Account — detailContent below still
     // falls back to .account for the regular/split-view detail pane, which always needs
-    // something to show even with no explicit selection.
+    // something to show even with no explicit selection. Overridable via `init(initialCategory:)`
+    // — used by the composer's Connectors tab to jump straight to Settings → Connectors.
     @State private var selectedCategory: SettingsCategory?
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
+
+    init(initialCategory: SettingsCategory? = nil) {
+        _selectedCategory = State(initialValue: initialCategory)
+    }
 
     // Internal infra details (Connection, Build) are only shown to the
     // internal/employee realm; end users on `individual` don't see them.
@@ -83,21 +96,34 @@ struct SettingsView: View {
             ForEach(categories) { category in
                 HStack {
                     Label(category.title, systemImage: category.icon)
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #endif
                     Spacer()
                     // The sidebar list style (automatic here, as the first content of
                     // NavigationSplitView) doesn't draw a disclosure chevron on its own —
                     // sidebar rows are selection rows, not NavigationLinks. Added explicitly
                     // to match cai-android's ChevronRight on each Settings row.
                     Image(systemName: "chevron.right")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.caption.weight(.semibold))
+                        #else
                         .font(.caption.weight(.semibold))
+                        #endif
                         .foregroundColor(.secondary)
                 }
+                #if targetEnvironment(macCatalyst)
+                .padding(.vertical, 4)
+                #endif
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .bfPointerHover()
                 .tag(category)
             }
         }
+        #if targetEnvironment(macCatalyst)
+        .listRowSpacing(5)
+        #endif
     }
 
     var body: some View {
@@ -106,7 +132,11 @@ struct SettingsView: View {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         Text("Settings")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.rowSemibold)
+                            #else
                             .font(.title3.weight(.bold))
+                            #endif
                             .foregroundStyle(.primary)
                         Spacer()
                         SidebarToggleButton(columnVisibility: $columnVisibility)
@@ -222,6 +252,7 @@ struct SettingsView: View {
         switch selectedCategory ?? .account {
         case .account: accountDetail
         case .aiSettings: aiSettingsDetail
+        case .connectors: connectorsDetail
         case .usage: usageDetail
         case .subscription: subscriptionDetail
         case .legal: legalDetail
@@ -246,6 +277,9 @@ struct SettingsView: View {
                 } label: {
                     HStack {
                         Label("Report Suspicious Content", systemImage: "flag")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                             .foregroundColor(.primary)
                         Spacer()
                     }
@@ -255,6 +289,9 @@ struct SettingsView: View {
                 .bfPointerHover()
             } footer: {
                 Text("Report content within the app that you believe is suspicious, abusive, or violates our policies. This opens an email to our support team.")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #endif
             }
 
             Section {
@@ -264,6 +301,9 @@ struct SettingsView: View {
                     HStack {
                         Spacer()
                         Text("Sign Out")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.rowMedium)
+                            #endif
                         Spacer()
                     }
                     .frame(maxWidth: .infinity)
@@ -282,6 +322,9 @@ struct SettingsView: View {
                             ProgressView()
                         } else {
                             Text("Delete Account")
+                                #if targetEnvironment(macCatalyst)
+                                .font(MacSettingsFont.rowMedium)
+                                #endif
                         }
                         Spacer()
                     }
@@ -292,9 +335,13 @@ struct SettingsView: View {
                 .bfPointerHover()
             } footer: {
                 Text("Permanently deletes your account and all associated data. This can't be undone.")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #endif
             }
         }
         .navigationTitle("Account")
+        .settingsInlineTitle()
     }
 
     // MARK: - AI Settings
@@ -309,8 +356,14 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Label("Assistant", systemImage: "sparkles")
+                                #if targetEnvironment(macCatalyst)
+                                .font(MacSettingsFont.row)
+                                #endif
                             Spacer()
                             Text(assistantsSummary)
+                                #if targetEnvironment(macCatalyst)
+                                .font(MacSettingsFont.row)
+                                #endif
                                 .foregroundColor(.secondary)
                         }
                         .frame(maxWidth: .infinity)
@@ -321,6 +374,9 @@ struct SettingsView: View {
 
                 Toggle(isOn: $chatManager.personaEnabled) {
                     Label("SAP Persona", systemImage: "person.text.rectangle")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #endif
                 }
                 .bfPointerHover()
 
@@ -329,8 +385,14 @@ struct SettingsView: View {
                 } label: {
                     HStack {
                         Label("Default Persona", systemImage: chatManager.persona.icon)
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                         Spacer()
                         Text(chatManager.persona.label)
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                             .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity)
@@ -341,10 +403,19 @@ struct SettingsView: View {
                 .bfPointerHover()
             } footer: {
                 Text("Tunes terminology and depth to your SAP specialty. Turn off to use the assistant with no persona.")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #endif
             }
         }
         .navigationTitle("AI Settings")
+        .settingsInlineTitle()
     }
+
+    // MARK: - Connectors
+    // connectorsDetail, connectorRow, connectGitHub moved to SettingsView+Agents.swift
+    // (bluefunda/cai-ios#261 precedent) to stay under SwiftLint's file_length/type_body_length
+    // limits — no behavior change, purely a structural split.
 
     // MARK: - Usage
 
@@ -376,6 +447,9 @@ struct SettingsView: View {
                 } label: {
                     HStack {
                         Label("Privacy Policy", systemImage: "hand.raised")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                             .foregroundColor(.primary)
                         Spacer()
                     }
@@ -389,6 +463,9 @@ struct SettingsView: View {
                 } label: {
                     HStack {
                         Label("Terms of Service", systemImage: "doc.text")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                             .foregroundColor(.primary)
                         Spacer()
                     }
@@ -399,6 +476,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Legal")
+        .settingsInlineTitle()
     }
 
     // MARK: - About
@@ -409,8 +487,14 @@ struct SettingsView: View {
             Section {
                 HStack {
                     Label("Version", systemImage: "info.circle")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #endif
                     Spacer()
                     Text("\(appVersion) (\(buildNumber))")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #endif
                         .foregroundColor(.secondary)
                 }
             }
@@ -420,21 +504,39 @@ struct SettingsView: View {
                 Section {
                     HStack {
                         Label("Status", systemImage: statusIcon)
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                         Spacer()
                         Text(chatManager.connectionStatus.description)
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                             .foregroundColor(statusColor)
                     }
 
                     HStack {
                         Label("Service", systemImage: "network")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                         Spacer()
                         Text("BFF (api.bluefunda.com/ai)")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
                             .foregroundColor(.secondary)
                     }
                 } header: {
                     Text("Connection")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.sectionHeader)
+                        #endif
                 } footer: {
                     Text("Using cai-gw/cai-bff HTTP SSE endpoints.")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.secondary)
+                        #endif
                 }
             }
 
@@ -443,12 +545,19 @@ struct SettingsView: View {
                 NavigationLink("Tip Engine Debug") {
                     TipEngineDebugView()
                 }
+                #if targetEnvironment(macCatalyst)
+                .font(MacSettingsFont.row)
+                #endif
             } footer: {
                 Text("Debug-only harness for the Contextual Tip Engine (bluefunda/cai-ios#155). Not present in Release builds.")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #endif
             }
             #endif
         }
         .navigationTitle("About")
+        .settingsInlineTitle()
     }
 
     private var appVersion: String {
@@ -525,30 +634,54 @@ struct SettingsView: View {
 struct UserInfoRow: View {
     let user: User
 
+    private var avatarSize: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 38
+        #else
+        return 50
+        #endif
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Circle()
                 .fill(BFColor.primary.gradient)
-                .frame(width: 50, height: 50)
+                .frame(width: avatarSize, height: avatarSize)
                 .overlay {
                     Text(user.name.prefix(1).uppercased())
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.navTitle)
+                        #else
                         .font(.title2)
+                        #endif
                         .fontWeight(.semibold)
                         .foregroundColor(BFColor.textInverse)
                 }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.name)
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.rowSemibold)
+                    #else
                     .font(.headline)
+                    #endif
 
                 Text(user.email)
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #else
                     .font(.subheadline)
+                    #endif
                     .foregroundColor(.secondary)
 
                 if user.isAdmin {
                     Text("ADMIN")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.caption.weight(.medium))
+                        #else
                         .font(.caption2)
                         .fontWeight(.medium)
+                        #endif
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(BFColor.warningBg)
@@ -576,6 +709,9 @@ struct MCPServerSelectionView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(server.displayName)
+                                    #if targetEnvironment(macCatalyst)
+                                    .font(MacSettingsFont.row)
+                                    #endif
                                     .foregroundColor(.primary)
                                     .fontWeight(isSelected(server) ? .semibold : .regular)
                             }
@@ -594,6 +730,9 @@ struct MCPServerSelectionView: View {
                 }
             } footer: {
                 Text("Enable one or more assistants to make their tools available in chat.")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #endif
             }
         }
         .navigationTitle("Assistants")
@@ -641,10 +780,17 @@ struct PersonaSelectionView: View {
                             Label {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(persona.label)
+                                        #if targetEnvironment(macCatalyst)
+                                        .font(MacSettingsFont.row)
+                                        #endif
                                         .foregroundColor(.primary)
                                         .fontWeight(chatManager.persona == persona ? .semibold : .regular)
                                     Text(persona.detail)
+                                        #if targetEnvironment(macCatalyst)
+                                        .font(MacSettingsFont.caption)
+                                        #else
                                         .font(.caption)
+                                        #endif
                                         .foregroundColor(.secondary)
                                 }
                             } icon: {
@@ -665,6 +811,9 @@ struct PersonaSelectionView: View {
                 }
             } footer: {
                 Text("Used to tune terminology and depth in chat responses.")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #endif
             }
         }
         .navigationTitle("SAP Persona")

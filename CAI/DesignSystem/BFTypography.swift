@@ -138,4 +138,30 @@ extension View {
     func bfFormLabel() -> some View {
         modifier(BFFormLabel())
     }
+
+    /// Applies inline navigation title display mode on macOS Catalyst so that split-view detail
+    /// pages avoid iOS's giant 34pt large titles, keeping them uniform with Claude for Mac.
+    @ViewBuilder
+    func settingsInlineTitle() -> some View {
+        #if targetEnvironment(macCatalyst)
+        self.navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
+    }
 }
+
+// MARK: - Mac Settings Typography (macOS Catalyst desktop scale matching Claude)
+
+#if targetEnvironment(macCatalyst)
+enum MacSettingsFont {
+    static let navTitle = Font.system(size: 15, weight: .semibold)
+    static let pageHeader = Font.system(size: 16, weight: .bold)
+    static let sectionHeader = Font.system(size: 11, weight: .semibold)
+    static let row = Font.system(size: 13, weight: .regular)
+    static let rowMedium = Font.system(size: 13, weight: .medium)
+    static let rowSemibold = Font.system(size: 13, weight: .semibold)
+    static let secondary = Font.system(size: 12, weight: .regular)
+    static let caption = Font.system(size: 11, weight: .regular)
+}
+#endif

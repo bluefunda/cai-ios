@@ -4,6 +4,9 @@ import SwiftUI
 // (bluefunda/cai-ios#261 precedent — see ChatManager+Background.swift).
 
 struct ChatInputView: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var iapManager: IAPManager
     @Binding var text: String
     let isStreaming: Bool
     let attachmentFilename: String?
@@ -33,9 +36,13 @@ struct ChatInputView: View {
     var currentPersona: Persona = .general
     var personaOptions: [Persona] = Persona.fallbackCatalog
     var onSelectPersona: (Persona) -> Void = { _ in }
-    // Mac Catalyst only — see ModeModelPicker.showMenu for why the attach
-    // Menu needs a popover instead (cai-ios#257 follow-up).
-    @State private var showAttachMenu = false
+    @State private var showAttachSheet = false
+    // "Manage Agents" inside the attach sheet needs to present Settings —
+    // NOT as a sheet nested inside the attach sheet (that combination left
+    // the whole app stuck in a loading state), but as a sibling presented
+    // only after the attach sheet has actually finished dismissing.
+    @State private var pendingManageAgents = false
+    @State private var showManageAgentsSettings = false
 
     private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
     private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
@@ -133,35 +140,11 @@ struct ChatInputView: View {
                 .contentShape(Rectangle())
 
             HStack(alignment: .center, spacing: 6) {
-                // Attach button — only rendered when the feature flag is on
-                if attachEnabled {
-                    // Plain Menu — matches the profile menu's recipe
-                    // (ContentView.swift's bottom-left account row), which
-                    // has correct upward-flip and mouse-hover behavior on
-                    // Mac Catalyst. A popover-based rebuild here regressed
-                    // mouse-click reliability, so back to Menu (cai-ios#257
-                    // follow-up).
-                    Menu {
-                        if let pickCamera = onPickCamera {
-                            Button { pickCamera() } label: {
-                                Label("Take Photo", systemImage: "camera")
-                            }
-                        }
-                        if let pickPhoto = onPickPhoto {
-                            Button { pickPhoto() } label: {
-                                Label("Photo Library", systemImage: "photo")
-                            }
-                        }
-                        if let pickFile = onPickFile {
-                            Button { pickFile() } label: {
-                                Label("Browse Files", systemImage: "folder")
-                            }
-                        }
-                        if let pickDumpScreenshot = onPickDumpScreenshot {
-                            Button { pickDumpScreenshot() } label: {
-                                Label("Decode ST22 Dump", systemImage: "exclamationmark.triangle")
-                            }
-                        }
+                // "+" button — attach options and/or per-chat Connectors
+                // toggles, shown whenever either has something to offer.
+                if attachEnabled || !chatManager.visibleMCPServers.isEmpty {
+                    Button {
+                        showAttachSheet = true
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 16, weight: .semibold))
@@ -173,6 +156,31 @@ struct ChatInputView: View {
                     .fixedSize()
                     .disabled(isStreaming)
                     .bfPointerHover()
+                    .sheet(isPresented: $showAttachSheet, onDismiss: {
+                        if pendingManageAgents {
+                            pendingManageAgents = false
+                            showManageAgentsSettings = true
+                        }
+                    }) {
+                        ComposerAttachSheet(
+                            onPickCamera: onPickCamera,
+                            onPickPhoto: onPickPhoto,
+                            onPickFile: onPickFile,
+                            onPickDumpScreenshot: onPickDumpScreenshot,
+                            onManageAgents: { pendingManageAgents = true }
+                        )
+                    }
+                    .sheet(isPresented: $showManageAgentsSettings) {
+                        // Explicit re-injection, same as ContentView's own SettingsView
+                        // sheet (cai-ios#254) — its NavigationSplitView sidebar doesn't
+                        // reliably inherit environment objects on Mac Catalyst, which
+                        // crashed the app ("No ObservableObject of type AuthManager
+                        // found") the moment this sheet's sidebar column appeared.
+                        SettingsView(initialCategory: .connectors)
+                            .environmentObject(authManager)
+                            .environmentObject(chatManager)
+                            .environmentObject(iapManager)
+                    }
                 }
 
                 if personaFeatureEnabled {

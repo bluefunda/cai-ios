@@ -30,6 +30,7 @@ struct ConversationFilesView: View {
             }
         }
         .navigationTitle("Files")
+        .settingsInlineTitle()
         .task { await reload() }
         .quickLookPreview($previewURL)
     }
@@ -45,11 +46,19 @@ struct ConversationFilesView: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.filename)
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #else
                         .font(BFFont.body)
+                        #endif
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Text("\(file.formattedSize) · \(file.createdAt.relativeDescription)")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.caption)
+                        #else
                         .font(.caption)
+                        #endif
                         .foregroundStyle(.secondary)
                 }
                 Spacer()

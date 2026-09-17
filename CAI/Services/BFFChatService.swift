@@ -63,8 +63,8 @@ final class BFFChatService: ChatServiceProtocol {
                     "thinkingMode": request.thinkingMode,
                     "modelExplicit": request.modelExplicit
                 ]
-                if let mcpName = request.mcpServerName { payload["mcp_server_name"] = mcpName }
-                if let mcpURL  = request.mcpServerURL  { payload["mcp_server_url"]  = mcpURL  }
+                if let mcpName = request.mcpServerName { payload["mcpServerName"] = mcpName }
+                if let mcpURL  = request.mcpServerURL  { payload["mcpServerUrl"]  = mcpURL  }
                 if let servers = request.mcpServers, !servers.isEmpty {
                     payload["mcpServers"] = servers.map { $0.toJSON() }
                 }
