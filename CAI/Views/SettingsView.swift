@@ -477,11 +477,43 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                             .bfPointerHover()
                         }
+                    } else if server.isABAPer {
+                        if chatManager.connectedSAP {
+                            // Already connected — push straight to the
+                            // Disconnect detail screen, mirroring GitHub.
+                            NavigationLink {
+                                ABAPerConnectionView()
+                            } label: {
+                                connectorRow(server, connected: true)
+                            }
+                            .bfPointerHover()
+                        } else {
+                            // Needs host/client/username/password — push to
+                            // the connect form instead of connecting directly
+                            // (unlike GitHub's OAuth redirect or Sales
+                            // Tracker's no-credential flip). A push, not a
+                            // sheet: this List already lives inside a sheet
+                            // (Settings itself) — sheet-on-sheet has caused a
+                            // full app hang here before (see ChatInputView's
+                            // "Manage Agents" fix), so every connect/detail
+                            // screen off Agents pushes onto Settings' own
+                            // NavigationStack instead.
+                            // ZStack + a hidden NavigationLink: a List's NavigationLink
+                            // auto-draws its own trailing chevron, which made this row look
+                            // different from GitHub/Sales Tracker's plain-Button "Connect"
+                            // rows (no chevron) right next to it. This keeps the push
+                            // behavior without that visual inconsistency.
+                            ZStack {
+                                NavigationLink(destination: ABAPerConnectFormView()) { EmptyView() }
+                                    .opacity(0)
+                                connectorRow(server, connected: false)
+                            }
+                            .bfPointerHover()
+                        }
                     } else {
-                        // No connect flow yet for this one — shown so every
-                        // connector is visible, but not tappable until its
-                        // own flow (e.g. a custom credentials form for
-                        // ABAPer) exists.
+                        // No connect flow yet for this one (e.g. SAP
+                        // Analytics) — shown so every connector is visible,
+                        // but not tappable until its own flow exists.
                         connectorRow(server, connected: false)
                     }
                 }
@@ -537,6 +569,13 @@ struct SettingsView: View {
                 .font(BFFont.body)
                 #endif
                 .foregroundColor(.primary)
+                // A longer-than-expected displayName (e.g. a backend not yet
+                // returning the short `label` field) must not wrap to a
+                // second line — that made this row taller than every other
+                // row in the list, breaking the uniform row height/alignment
+                // the whole Agents list otherwise has.
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer()
             if isBusy {
                 ProgressView()

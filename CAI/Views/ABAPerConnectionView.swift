@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// GitHub connector detail screen (Settings → Connectors) — reached only once
-/// already connected; shows a Disconnect action. Connecting itself happens
-/// directly from the Connectors list row (SettingsView.connectGitHub()),
-/// skipping any intermediate "Connect GitHub" screen, so this view never
-/// shows a Connect button.
-struct GitHubConnectionView: View {
+/// ABAPer connector detail screen (Settings → Agents) — reached only once
+/// already connected; shows the connected SAP host and a Disconnect action.
+/// Connecting itself happens via ABAPerConnectFormView (host/client/username/
+/// password), presented as a sheet from the Agents list row — mirrors
+/// GitHubConnectionView/SalesTrackerConnectionView's split between "list row
+/// starts the connect flow" and "this screen only ever disconnects."
+struct ABAPerConnectionView: View {
     @EnvironmentObject var chatManager: ChatManager
     @Environment(\.dismiss) private var dismiss
     @State private var isDisconnecting = false
@@ -16,16 +17,13 @@ struct GitHubConnectionView: View {
             Section {
                 HStack {
                     Label {
-                        Text("GitHub")
+                        Text("ABAPer")
                             #if targetEnvironment(macCatalyst)
                             .font(MacSettingsFont.row)
                             #endif
                     } icon: {
-                        Image("GitHubMark")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 20, height: 20)
+                        Image(systemName: "curlybraces")
+                            .font(.system(size: 16))
                             .foregroundStyle(.primary)
                     }
                     Spacer()
@@ -43,8 +41,17 @@ struct GitHubConnectionView: View {
                     }
                     .disabled(isDisconnecting)
                 }
+                if let host = chatManager.sapHost, !host.isEmpty {
+                    LabeledContent("Host") {
+                        Text(host)
+                            .foregroundStyle(.secondary)
+                    }
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.row)
+                    #endif
+                }
             } footer: {
-                Text("Connecting lets the GitHub assistant act as you — reading and writing your own repositories, issues and pull requests — instead of a shared account.")
+                Text("Connecting lets the ABAPer assistant act against your own SAP system — reading and writing your own ABAP objects — instead of a shared backend.")
                     #if targetEnvironment(macCatalyst)
                     .font(MacSettingsFont.caption)
                     #endif
@@ -58,7 +65,7 @@ struct GitHubConnectionView: View {
                 }
             }
         }
-        .navigationTitle("GitHub")
+        .navigationTitle("ABAPer")
         .settingsInlineTitle()
     }
 
@@ -67,14 +74,14 @@ struct GitHubConnectionView: View {
         isDisconnecting = true
         defer { isDisconnecting = false }
         do {
-            try await api.disconnectGitHub()
-            chatManager.connectedGitHub = false
-            chatManager.githubUsername = nil
+            try await api.disconnectSAP()
+            chatManager.connectedSAP = false
+            chatManager.sapHost = nil
             // Take effect in the conversation you're already in too — mirrors
-            // the insert() done on connect (SettingsView.connectGitHub's
-            // caller); a disconnected server shouldn't stay toggled on here.
-            if let github = chatManager.availableMCPServers.first(where: { $0.isGitHub }) {
-                chatManager.enabledMCPServers.remove(github.id)
+            // GitHubConnectionView's disconnect: a disconnected server
+            // shouldn't stay toggled on here.
+            if let abaper = chatManager.availableMCPServers.first(where: { $0.isABAPer }) {
+                chatManager.enabledMCPServers.remove(abaper.id)
             }
             dismiss()
         } catch {

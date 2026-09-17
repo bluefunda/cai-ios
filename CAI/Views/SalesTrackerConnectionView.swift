@@ -6,6 +6,7 @@ import SwiftUI
 /// — Disconnect just removes this server's id, no backend call.
 struct SalesTrackerConnectionView: View {
     @EnvironmentObject var chatManager: ChatManager
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         List {
@@ -46,5 +47,6 @@ struct SalesTrackerConnectionView: View {
             chatManager.locallyConnectedServerIDs.remove(server.id)
             chatManager.enabledMCPServers.remove(server.id)
         }
+        dismiss()
     }
 }

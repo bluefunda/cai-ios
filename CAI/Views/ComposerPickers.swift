@@ -273,6 +273,8 @@ struct ComposerAttachSheet: View {
                                     #else
                                     .font(BFFont.body)
                                     #endif
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                             }
                             .padding(.vertical, 6)
                         }

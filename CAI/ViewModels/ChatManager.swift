@@ -266,6 +266,13 @@ final class ChatManager: ObservableObject {
     @Published var connectedGitHub = false
     @Published var githubUsername: String?
 
+    /// ABAPer's connect status (Settings → Agents), see
+    /// `refreshSAPConnectionStatus()` — same real, server-verified pattern as
+    /// GitHub (cai-bff#160's /sap/status), not the local-only flip
+    /// `locallyConnectedServerIDs` below uses for connectors with no backend.
+    @Published var connectedSAP = false
+    @Published var sapHost: String?
+
     /// Server ids "connected" via a simple local flip — no OAuth, no
     /// credentials, just a Connect tap (e.g. Sales Tracker today; reusable
     /// for any future connector needing the same lightweight treatment,
@@ -281,15 +288,12 @@ final class ChatManager: ObservableObject {
         }
     }
 
-    /// SAP assistants (ABAPer, SAP Analytics) hidden from all selection UI —
-    /// use this instead of `availableMCPServers` in every picker/list view.
-    private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
-
+    /// Every MCP server the backend returns is now shown — nothing is hidden by name
+    /// anymore. A connector without a real Connect flow yet (e.g. SAP Analytics) still
+    /// shows up; its "Connect" is just inert until that flow lands, same as it already
+    /// reads in Settings → Agents.
     var visibleMCPServers: [MCPServer] {
-        availableMCPServers.filter { server in
-            let name = server.displayName.lowercased()
-            return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
-        }
+        availableMCPServers
     }
 
     /// Every *connected* server's tools, enabled by default for a new
@@ -309,6 +313,7 @@ final class ChatManager: ObservableObject {
     var connectedMCPServers: [MCPServer] {
         visibleMCPServers.filter { server in
             if server.isGitHub { return connectedGitHub }
+            if server.isABAPer { return connectedSAP }
             return locallyConnectedServerIDs.contains(server.id)
         }
     }
@@ -451,6 +456,8 @@ final class ChatManager: ObservableObject {
         enabledMCPServersByConversationID = [:]
         connectedGitHub = false
         githubUsername = nil
+        connectedSAP = false
+        sapHost = nil
         locallyConnectedServerIDs = []
         personaEnabledByConversationID = [:]
         personaOverrideByConversationID = [:]
@@ -878,9 +885,21 @@ final class ChatManager: ObservableObject {
     }
 
     /// Maps the selected MCP server to a backend agent name.
-    /// Convention: strip the "-mcp" suffix (e.g. "abaper-mcp" → "abaper").
+    /// Convention: strip the "-mcp" suffix (e.g. "research-tools-mcp" → "research-tools").
+    ///
+    /// ABAPer is deliberately excluded: cai-llm-router's agents.yaml already has an
+    /// "abaper" agent profile, but for a different, narrower workflow ("implement
+    /// this GitHub issue in ABAP") that hardcodes github-mcp as a required co-server.
+    /// Sending agentName: "abaper" here for ordinary ABAPer chat hits that same
+    /// highest-priority routing rule by name collision, silently pulling in a
+    /// github-mcp requirement the user never asked for — confirmed live: with only
+    /// ABAPer connected (GitHub disconnected), every message failed with an MCP
+    /// connection error, even though ABAPer's own connection was fine. Returning nil
+    /// here instead lets it fall through to the general has_mcp/mcp-default routing
+    /// rule, which only ever includes the servers actually connected+enabled for
+    /// this conversation.
     private var agentNameForSelectedServer: String? {
-        guard let server = selectedMCPServer else { return nil }
+        guard let server = selectedMCPServer, !server.isABAPer else { return nil }
         if server.name.hasSuffix("-mcp") {
             return String(server.name.dropLast(4))
         }
@@ -959,6 +978,7 @@ extension ChatManager {
             group.addTask { await self.loadGreeting() }
             group.addTask { await self.loadPersonas() }
             group.addTask { await self.refreshGitHubConnectionStatus() }
+            group.addTask { await self.refreshSAPConnectionStatus() }
         }
     }
 
@@ -975,6 +995,20 @@ extension ChatManager {
             githubUsername = status.username
         } catch {
             print("[ChatManager] refreshGitHubConnectionStatus error: \(error)")
+        }
+    }
+
+    /// ABAPer's connect/disconnect status (Settings → Agents), same pattern
+    /// as refreshGitHubConnectionStatus — fetched once at startup and
+    /// refreshed by ABAPerConnectionView after a connect/disconnect action.
+    func refreshSAPConnectionStatus() async {
+        guard let api = apiService else { return }
+        do {
+            let status = try await api.fetchSAPCredentialsStatus()
+            connectedSAP = status.connected
+            sapHost = status.host
+        } catch {
+            print("[ChatManager] refreshSAPConnectionStatus error: \(error)")
         }
     }
 
