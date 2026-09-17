@@ -387,6 +387,28 @@ struct GitHubOAuthAuthorizeDTO: Codable {
     let authorizeUrl: String
 }
 
+// MARK: - SAP Credentials (ABAPer connector, bluefunda/cai-bff#160)
+
+struct SAPCredentialsStatusDTO: Codable {
+    let connected: Bool
+    let host: String?
+    let client: String?
+    let username: String?
+}
+
+struct SAPCredentialsConnectRequest: Encodable {
+    let host: String
+    let client: String
+    let username: String
+    let password: String
+}
+
+/// Decodes cai-bff's plain `{"status": "..."}` acknowledgment — connect and
+/// disconnect both return this shape, with nothing else worth modeling.
+struct StatusAckDTO: Decodable {
+    let status: String
+}
+
 struct MCPListResponse: Codable {
     let servers: [MCPServerDTO]
 

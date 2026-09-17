@@ -102,6 +102,23 @@ final class BFFAPIService {
         try await client.postIgnoringResponse("/oauth/github/disconnect", body: [:])
     }
 
+    // MARK: - SAP Credentials (ABAPer connector, bluefunda/cai-bff#160)
+
+    func fetchSAPCredentialsStatus() async throws -> SAPCredentialsStatusDTO {
+        try await client.get("/sap/status")
+    }
+
+    func connectSAP(host: String, client sapClient: String, username: String, password: String) async throws {
+        let _: StatusAckDTO = try await client.post(
+            "/sap/connect",
+            body: SAPCredentialsConnectRequest(host: host, client: sapClient, username: username, password: password)
+        )
+    }
+
+    func disconnectSAP() async throws {
+        try await client.postIgnoringResponse("/sap/disconnect", body: [:])
+    }
+
     // MARK: - Personas
 
     func fetchPersonas() async throws -> [Persona] {
