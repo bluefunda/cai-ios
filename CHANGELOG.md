@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.8.0](https://github.com/bluefunda/cai-ios/compare/v2.7.0...v2.8.0) (2026-09-17)
+
+
+### Features
+
+* add ABAPer Connect form (SAP host/client/user/password) ([ddb3b42](https://github.com/bluefunda/cai-ios/commit/ddb3b428bb1c257feac8ed91e6df0d947ed3e295))
+* add ABAPer Connect form (SAP host/client/user/password) ([5fa20d8](https://github.com/bluefunda/cai-ios/commit/5fa20d88d0e74057ef65c8f93fefc8dc0f81c5ff))
+* unify GitHub/MCP connectors into an Agents system ([ef1c7a4](https://github.com/bluefunda/cai-ios/commit/ef1c7a471a2e3c05f25e8a9e5c61d2aad69548ca))
+* unify GitHub/MCP connectors into an Agents system, add ABAPer ([56c3c95](https://github.com/bluefunda/cai-ios/commit/56c3c95ecf0ea0e374bff669ad73d9c97b9b2700))
+
+
+### Bug Fixes
+
+* **lint:** split SettingsView and ChatManager to pass SwiftLint file/type length ([8111a6a](https://github.com/bluefunda/cai-ios/commit/8111a6a8b9759d350714ebc02ca9e5f78466008f))
+* **tests:** update MCPServer call site for the new label parameter ([c991a94](https://github.com/bluefunda/cai-ios/commit/c991a94c074912591894010825d856c30756a9f5))
+
 ## [2.7.0](https://github.com/bluefunda/cai-ios/compare/v2.6.3...v2.7.0) (2026-09-10)
 
 
