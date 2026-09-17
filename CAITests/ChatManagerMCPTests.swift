@@ -10,7 +10,7 @@ import XCTest
 final class ChatManagerMCPTests: XCTestCase {
 
     private func makeServer(_ id: String, name: String? = nil, url: String = "http://example/mcp") -> MCPServer {
-        MCPServer(id: id, name: name ?? id, url: url, description: nil)
+        MCPServer(id: id, name: name ?? id, url: url, description: nil, label: nil)
     }
 
     /// sendMessage() kicks off streaming in a detached `Task` and returns as
