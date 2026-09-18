@@ -114,6 +114,35 @@ struct ChatView: View {
     // Keyboard: focus only fires once per session on first launch
     @State private var hasTriggeredInitialFocus = false
 
+    // Mac Catalyst mirror of isInputFocused, kept in lockstep by setInputFocused(_:) below.
+    // MacComposerTextView (the composer's real UITextView on Mac Catalyst) needs this instead
+    // of $isInputFocused directly — confirmed live with debug logging that reading a
+    // FocusState<Bool>.Binding's wrappedValue from outside the view that actually attaches it
+    // via .focused(_:) never observes updates at all (stayed false for 10+ seconds after this
+    // view set isInputFocused = true, with or without an intermediate plain-Binding proxy
+    // wrapping the read). A genuine @State-backed Binding<Bool>, not routed through FocusState,
+    // does not have that problem. iOS/iPadOS keep using $isInputFocused with .focused(_:)
+    // directly, unaffected by any of this.
+    @State private var isInputFocusedMac = false
+
+    private func setInputFocused(_ value: Bool) {
+        isInputFocused = value
+        isInputFocusedMac = value
+    }
+
+    // Mac-only: MacComposerTextView keeps first responder through send now (see
+    // sendMessage/isStreaming's #if !macCatalyst guards), so it can no longer rely on
+    // "the field lost focus" to know an `inputText` change came from outside the user's own
+    // typing — that was how it safely told a real post-send clear apart from a stale
+    // pre-typing snapshot before. Bumping this alongside every programmatic inputText write
+    // gives it an explicit, unambiguous signal instead of an inferred one.
+    @State private var composerExternalUpdateToken = 0
+
+    private func clearComposerText() {
+        inputText = ""
+        composerExternalUpdateToken += 1
+    }
+
     // Max readable width, centred — matches ChatGPT / Claude desktop.
     // On iPhone the screen is narrower so the constraint never triggers.
     let maxChatWidth: CGFloat = 800
@@ -132,11 +161,16 @@ struct ChatView: View {
         // Dismiss keyboard the moment the response starts rendering
         .onChange(of: chatManager.isStreaming) { _, streaming in
             guard streaming else { return }
-            isInputFocused = false
+            #if !targetEnvironment(macCatalyst)
+            // Mac Catalyst has no soft keyboard to reclaim screen space from by dismissing
+            // here — unlike iOS, there's no upside, only the downside of the composer
+            // going unfocused while a reply streams in. Keep it focused there instead.
+            setInputFocused(false)
             // FocusState alone doesn't always force UIKit to resign; do it explicitly
             UIApplication.shared.sendAction(
                 #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
             )
+            #endif
             // Re-run the new-prompt top positioning once more, right as real content starts
             // rendering. A genuinely cold app launch's first-ever List layout pass can be slow
             // enough that the same positioning fired from .onChange(of: latestUserMessageID) —
@@ -248,6 +282,8 @@ struct ChatView: View {
                 isStreaming: chatManager.isStreaming || chatManager.isReconciling || chatManager.isRevealingLastMessage,
                 attachmentFilename: attachmentFilename,
                 isFocused: $isInputFocused,
+                isFocusedMac: $isInputFocusedMac,
+                externalUpdateToken: composerExternalUpdateToken,
                 rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
                 isRecording: voiceInput.isRecording,
                 recordingElapsed: voiceInput.elapsed,
@@ -298,13 +334,18 @@ struct ChatView: View {
 
     private func sendMessage() {
         guard !inputText.isEmpty || attachmentData != nil else { return }
-        // Dismiss keyboard immediately — don't wait for isStreaming to flip
-        isInputFocused = false
+        #if !targetEnvironment(macCatalyst)
+        // Dismiss keyboard immediately — don't wait for isStreaming to flip. Mac Catalyst
+        // has no soft keyboard to reclaim space from by dismissing (see the matching guard
+        // on .onChange(of: chatManager.isStreaming) below) — keep the composer focused
+        // there so the next message can be typed right away without re-clicking it.
+        setInputFocused(false)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
+        #endif
         let text = inputText
-        inputText = ""
+        clearComposerText()
         let personaForThisSend = personaForActiveChat
 
         // Scrolling to the new prompt happens reactively via
@@ -364,12 +405,12 @@ struct ChatView: View {
     /// "Decode" banner shown when the text looks like an ST22 short dump.
     private func decodeDump() {
         guard !inputText.isEmpty else { return }
-        isInputFocused = false
+        setInputFocused(false)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
         let text = inputText
-        inputText = ""
+        clearComposerText()
         let personaForThisSend = personaForActiveChat
         Task {
             await chatManager.sendMessage(
@@ -414,7 +455,7 @@ struct ChatView: View {
     /// and giving the keyboard a moment to actually finish dismissing before
     /// presenting avoids the corrupted transition.
     private func presentCamera() {
-        isInputFocused = false
+        setInputFocused(false)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
@@ -553,7 +594,17 @@ struct ChatView: View {
     private func triggerFocus(delay milliseconds: Int) {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(milliseconds))
-            isInputFocused = true
+            setInputFocused(true)
+            // A single delayed assignment can lose a timing race against another
+            // view's own focus-affecting transition running at the same moment —
+            // e.g. the sidebar drawer's "New Chat" button both starts a new
+            // conversation (which schedules this) AND animates the sidebar closed
+            // in the same tap, while a separate handler elsewhere resigns first
+            // responder on sidebar-open transitions. Re-asserting once more a beat
+            // later self-heals from a lost race without needing to chase down every
+            // possible interleaving; harmless no-op if the first assignment stuck.
+            try? await Task.sleep(for: .milliseconds(200))
+            setInputFocused(true)
         }
     }
 
