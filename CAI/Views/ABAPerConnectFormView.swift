@@ -26,7 +26,7 @@ struct ABAPerConnectFormView: View {
         !host.isBlank && !client.isBlank && !username.isBlank && !password.isBlank
     }
 
-    var body: some View {
+    private var form: some View {
         Form {
             Section("SAP System") {
                 TextField("Host (https://host:port)", text: $host)
@@ -52,15 +52,46 @@ struct ABAPerConnectFormView: View {
         }
         .navigationTitle("Connect ABAPer")
         .settingsInlineTitle()
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
+    }
+
+    // Bottom-aligned (right below the Credentials section), on every platform and size
+    // class: a top-right toolbar "Connect" button sits right under SettingsView's own
+    // topTrailing close "X" overlay — the two collide and render on top of each other,
+    // on iPhone just as much as Mac/iPad. This also matches the standard macOS
+    // sheet/form convention.
+    var body: some View {
+        form.safeAreaInset(edge: .bottom) {
+            HStack {
+                Spacer()
                 if isConnecting {
                     ProgressView()
                 } else {
-                    Button("Connect") { Task { await connect() } }
-                        .disabled(!isValid)
+                    // Not .buttonStyle(.borderedProminent): iOS/iPadOS forcibly overrides a
+                    // bordered-prominent button's fill to its own fixed pale gray whenever
+                    // .disabled(true) is set, ignoring any .tint — confirmed live, the explicit
+                    // BFColor.secondary tint had zero visible effect while disabled. Drawing the
+                    // background ourselves on a .plain button sidesteps that override entirely,
+                    // so the same solid dark-navy fill shows on every platform.
+                    Button {
+                        Task { await connect() }
+                    } label: {
+                        Text("Connect")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                isValid ? BFColor.primary : BFColor.secondary,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isValid)
+                    .bfPointerHover()
                 }
             }
+            .padding()
+            .background(.bar)
         }
     }
 

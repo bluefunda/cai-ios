@@ -97,9 +97,16 @@ extension ChatManager {
             let subscribedIds = Set(user.map(\.id))
             subscribedMCPServerIds = subscribedIds
 
-            availableMCPServers = all.map { dto in
-                MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description, label: dto.label)
-            }
+            // isAvailable: false (backend kill switch for a specific MCP server) must not
+            // show anywhere — Settings → Agents or the composer's Agents toggle both derive
+            // from availableMCPServers, so filtering it out here is the single point that
+            // covers both. nil (the field genuinely absent) still means available — only an
+            // explicit false excludes.
+            availableMCPServers = all
+                .filter { $0.enabled != false }
+                .map { dto in
+                    MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description, label: dto.label)
+                }
             // Seed the active selection from what's connected, but only when
             // nothing has explicitly tracked one yet for this conversation
             // (cold start, or a conversation never visited before) — a user's

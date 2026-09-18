@@ -11,6 +11,15 @@ struct ChatInputView: View {
     let isStreaming: Bool
     let attachmentFilename: String?
     var isFocused: FocusState<Bool>.Binding
+    // Mac Catalyst-only mirror of `isFocused`, as a plain (non-FocusState) Binding<Bool> —
+    // see MacComposerTextView.swift and ChatView's isInputFocusedMac for why. Defaults to a
+    // fresh, unused constant since only the Mac branch below ever reads/writes it.
+    var isFocusedMac: Binding<Bool> = .constant(false)
+    // Mac-only: bumped by ChatView whenever `text` is changed programmatically (e.g. cleared
+    // after sending) rather than by the user typing. See MacComposerTextView.swift and
+    // ChatView's composerExternalUpdateToken for why this replaced inferring that from
+    // "focus was lost" once the composer started staying focused through send on Mac.
+    var externalUpdateToken: Int = 0
     var rateLimitExceeded: Bool = false
     var isRecording: Bool = false
     var recordingElapsed: TimeInterval = 0
@@ -126,6 +135,43 @@ struct ChatInputView: View {
     // narrow screens, which is exactly what a single-row layout couldn't do.
     private var composerRow: some View {
         VStack(alignment: .leading, spacing: 8) {
+            #if targetEnvironment(macCatalyst)
+            // MacComposerTextView (see that file): a vertical-axis TextField's underlying
+            // UITextView claims a bare Return for its own "insert newline" handling before
+            // SwiftUI's .onKeyPress ever sees it — confirmed live, that approach had zero
+            // effect — so Mac Catalyst gets a real UITextView wrapper that intercepts Return
+            // at the UIKit level instead. Shift+Return still inserts a newline.
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(rateLimitExceeded ? "Usage limit reached" : "Message...")
+                        .font(BFFont.body)
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                }
+                // isFocusedMac, not `isFocused` (a FocusState<Bool>.Binding) or even a plain
+                // Binding<Bool> that proxies through to isFocused.wrappedValue — confirmed
+                // live with debug logging that BOTH still never observed ChatView's
+                // `isInputFocused = true` from inside MacComposerTextView's updateUIView, no
+                // matter how long after. FocusState<Bool>.Binding is built to feed a
+                // `.focused(_:)` modifier on an actual SwiftUI-native focusable view; read
+                // anywhere else — directly, or through a plain Binding's closures that
+                // ultimately still call its .wrappedValue — it doesn't propagate. isFocusedMac
+                // is backed by a genuine @State in ChatView (isInputFocusedMac), kept in
+                // lockstep with isInputFocused by ChatView's setInputFocused(_:) helper, with
+                // no FocusState in this read path at all.
+                MacComposerTextView(
+                    text: $text,
+                    isFocused: isFocusedMac,
+                    externalUpdateToken: externalUpdateToken
+                ) {
+                    guard canSend, !isStreaming else { return }
+                    onSend()
+                }
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            #else
             TextField(rateLimitExceeded ? "Usage limit reached" : "Message...", text: $text, axis: .vertical)
                 .font(BFFont.body)
                 .textFieldStyle(.plain)
@@ -138,6 +184,7 @@ struct ChatInputView: View {
                 // like part of the composer but silently doesn't respond to taps.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
+            #endif
 
             HStack(alignment: .center, spacing: 6) {
                 // "+" button — attach options and/or per-chat Connectors
