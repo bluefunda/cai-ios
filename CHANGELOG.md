@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.1](https://github.com/bluefunda/cai-ios/compare/v2.8.0...v2.8.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* Mac Catalyst composer — Return sends, keystrokes no longer dropped, auto-focus works ([80ae57c](https://github.com/bluefunda/cai-ios/commit/80ae57c91d2447ce310d23881cdfab6cfd5d67c2))
+* Mac Catalyst composer — Return sends, no dropped keystrokes, auto-focus works ([c3f199e](https://github.com/bluefunda/cai-ios/commit/c3f199eb3a35c576643d98aaffff5a08d594868e))
+
 ## [2.8.0](https://github.com/bluefunda/cai-ios/compare/v2.7.0...v2.8.0) (2026-09-17)
 
 
