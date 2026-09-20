@@ -15,7 +15,11 @@ enum AppConfig {
     // ── Auth (Keycloak IDP) ──────────────────────────────────────────────────
     // Change this one string to redirect ALL auth flows (login, token, logout)
     // to a different IDP host. Client ID and realm are unchanged.
-    static let authBaseURL = "https://auth.bluefunda.com"
+    // TEMP: pointed at the local on-prem test Keycloak (terraform-test,
+    // config/keycloak-realm-test.json in gitops) — NOT the shared PRD
+    // instance. Revert to "https://auth.bluefunda.com" before merging.
+    // Port only, same host as bffBaseURL below — see devServerTrustedHost.
+    static let authBaseURL = "https://192.168.4.171:8543"
 
     // ── BFF API ─────────────────────────────────────────────────────────────
     // TEMP: pointed at the local on-prem test server (cai-gw) for local
@@ -24,7 +28,14 @@ enum AppConfig {
 
     /// Host allowed to bypass TLS certificate validation, DEBUG builds only
     /// (see `AppConfig.session` in APIClient.swift) — the on-prem test
-    /// server's cai-gw serves a self-signed cert on this host. nil in a
-    /// normal build; only set while testing locally.
+    /// server's cai-gw AND its local Keycloak both serve self-signed certs
+    /// on this same host (different ports; the trust check matches by host
+    /// only). nil in a normal build; only set while testing locally.
+    ///
+    /// Does NOT cover Keycloak's own login page: that renders inside
+    /// ASWebAuthenticationSession, a system browser process outside this
+    /// app's network stack, so this delegate-based bypass can't reach it —
+    /// the cert needs OS-level trust on the device instead. See
+    /// gitops stacks/test/config/README.md.
     static let devServerTrustedHost: String? = "192.168.4.171"
 }

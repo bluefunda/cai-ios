@@ -40,7 +40,12 @@ final class AuthManager: NSObject, ObservableObject {
 
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
+    // TEMP: was .shared — the local on-prem test Keycloak's token endpoint
+    // (config/keycloak-realm-test.json in gitops) serves a self-signed
+    // cert on the same host as cai-gw, and AppConfig.session already trusts
+    // that host (DevServerTrustDelegate matches by host only, not port —
+    // see APIClient.swift). Revert to .shared before merging.
+    init(session: URLSession = AppConfig.session) {
         self.session = session
         super.init()
     }
