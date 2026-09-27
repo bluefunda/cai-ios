@@ -189,36 +189,38 @@ final class ChatManager: ObservableObject {
     /// Settings default. Swapped per-conversation alongside the toggle above.
     @Published var chatPersonaOverride: Persona?
 
-    /// Legacy single-agent selection, kept as the source of truth for the
-    /// outgoing chat request wire format until cai-bff/cai-llm-router ship
-    /// list-based MCP support (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231).
-    /// Derived automatically from `enabledMCPServers` below.
-    @Published var selectedMCPServer: MCPServer?
+    /// User-facing multi-select state (bluefunda/cai-ios#167).
+    @Published var enabledMCPServers: Set<String> = []
 
-    /// User-facing multi-select state (bluefunda/cai-ios#167). Exactly one
-    /// enabled server maps onto the legacy `selectedMCPServer` field so the
-    /// network payload and backend agent-persona behavior are unchanged;
-    /// zero or multiple enabled servers fall back to no agent persona until
-    /// the backend contract supports a real list.
-    @Published var enabledMCPServers: Set<String> = [] {
-        didSet {
-            selectedMCPServer = enabledMCPServers.count == 1
-                ? availableMCPServers.first(where: { enabledMCPServers.contains($0.id) })
-                : nil
-        }
-    }
+    /// The default web-fetch tool's server name. Not part of `availableMCPServers`
+    /// (cai-mcp-go's catalog scopes it to the CLI channel only), and never shown as
+    /// a user-facing toggle — it's cai-llm-router's `default` agent's own static
+    /// tool, normally attached for free whenever a request carries no explicit MCP
+    /// selection at all. The moment any explicit selection is sent (legacy singular
+    /// fields, or a client-driven `mcpServers` list of any length), cai-llm-router
+    /// treats that selection as exhaustive and does NOT union it with `default`'s
+    /// tools (bluefunda/cai-ios#338) — so it must be included here explicitly to
+    /// keep general prompts working once the user enables any agent.
+    private static let defaultFetchMCPServerName = "fetch-mcp"
 
-    /// Client-driven multi-select payload (bluefunda/cai-ios#171). `nil` unless
-    /// more than one server is enabled — a single enabled server keeps using
-    /// `selectedMCPServer`/the legacy singular fields so persona-swap behavior
-    /// (e.g. ABAPer's tuned model/prompt) is unaffected, and matches
-    /// cai-llm-router's client-driven multi-MCP path, which only activates
-    /// when the list has more than one entry.
+    /// Client-driven multi-select payload (bluefunda/cai-ios#171, #338). `nil` only
+    /// when zero agents are enabled, which omits every MCP-related field from the
+    /// request and lets it fall through to cai-llm-router's own default agent
+    /// (which already carries `fetch-mcp`). As soon as one or more agents are
+    /// enabled, the full list — including the baseline `fetch-mcp` entry above —
+    /// is sent, since cai-llm-router's client-driven multi-MCP path merges every
+    /// entry in this list together rather than choosing just one (bluefunda/cai-ios#338;
+    /// previously a single enabled agent took a separate legacy singular-field path
+    /// that silently dropped `fetch-mcp`).
     private var enabledMCPServerRefs: [MCPServerRef]? {
-        guard enabledMCPServers.count > 1 else { return nil }
+        guard !enabledMCPServers.isEmpty else { return nil }
         let servers = availableMCPServers.filter { enabledMCPServers.contains($0.id) }
         guard !servers.isEmpty else { return nil }
-        return servers.map { MCPServerRef(name: $0.name, url: $0.url) }
+        var refs = servers.map { MCPServerRef(name: $0.name, url: $0.url) }
+        if !refs.contains(where: { $0.name == Self.defaultFetchMCPServerName }) {
+            refs.append(MCPServerRef(name: Self.defaultFetchMCPServerName, url: nil))
+        }
+        return refs
     }
 
     /// Reasoning effort sent with each message. Persisted across launches.
@@ -655,13 +657,10 @@ final class ChatManager: ObservableObject {
             prompt: requestPromptOverride ?? text,
             model: selectedModel.id,
             isNewChat: isFirstMessage,
-            mcpServerName: selectedMCPServer?.name,
-            mcpServerURL: selectedMCPServer?.url,
             mcpServers: enabledMCPServerRefs,
             thinkingMode: thinkingMode.rawValue,
             modelExplicit: userPickedModel,
             fileUrl: fileUrl,
-            agentName: agentNameForSelectedServer,
             // Gated separately from the local metadata above (bluefunda/cai-ios#203-207
             // keep working purely client-side) — the backend doesn't support this field
             // yet, so it's held back from the wire until BFFeatureFlags.personaWireEnabled
@@ -858,9 +857,6 @@ final class ChatManager: ObservableObject {
             pending, text: text, fileUrl: fileUrl, requestPromptOverride: requestPromptOverride
         )
     }
-
-    // agentNameForSelectedServer moved to ChatManager+Connectors.swift (bluefunda/cai-ios#261
-    // precedent) to stay under SwiftLint's type_body_length limit — no behavior change.
 
     func stopStreaming() async {
         guard let conversation = currentConversation else { return }
