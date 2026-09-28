@@ -102,8 +102,8 @@ platform :ios do
         lines.join("\n")
       end
 
-    File.write("../fastlane/metadata/en-US/release_notes.txt", notes)
-    File.write("../fastlane/metadata_macos/en-US/release_notes.txt", notes)
+    File.write("../fastlane/metadata/en-US/release_notes.txt", "#{notes}\n")
+    File.write("../fastlane/metadata_macos/en-US/release_notes.txt", "#{notes}\n")
     UI.message("Drafted release notes:\n#{notes}")
   end
 
