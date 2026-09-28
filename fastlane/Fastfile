@@ -11,6 +11,7 @@
 #   release_all   — build iOS + macOS with the same version/build, upload both (NO submit)
 #   submit_all    — submit the most recent processed iOS + macOS builds together
 #   bump_version  — bump MARKETING_VERSION locally (patch/minor/major)
+#   draft_release_notes — draft App Store release_notes.txt from CHANGELOG.md's latest section
 #   meta          — push metadata + screenshots only, no binary — platform: ios|osx (default ios)
 #   screenshots   — generate raw iOS screenshots for a CPP campaign — campaign: chat|code
 #   cpp_publish   — push a Custom Product Page's screenshots + promo text — does NOT submit for review
@@ -55,6 +56,55 @@ platform :ios do
       xcodeproj: "CAI.xcodeproj",
       bump_type: options[:bump_type] || "patch"
     )
+  end
+
+  # Drafts fastlane/metadata/en-US/release_notes.txt (+ the macOS counterpart)
+  # from CHANGELOG.md's most recent version section (bluefunda/cai-ios#340).
+  # Does NOT commit or open a PR — the release-please.yml CI workflow does
+  # that, as a review PR rather than a direct push, since this is
+  # customer-facing App Store copy and a "Features" commit subject isn't
+  # always good marketing prose as-is. Deliberately generic for a fixes-only
+  # release; a release with any Feature commits gets those called out.
+  desc "Draft App Store release notes from CHANGELOG.md's latest section"
+  lane :draft_release_notes do
+    changelog = File.read("../CHANGELOG.md")
+    latest = changelog.split(/^## /).drop(1).first
+    UI.user_error!("CHANGELOG.md has no '## ' version section to draft from") unless latest
+
+    extract_block = lambda do |heading|
+      match = latest.match(/^### #{heading}\n\n(.*?)(?=\n### |\z)/m)
+      match ? match[1] : nil
+    end
+
+    clean_bullets = lambda do |block|
+      next [] unless block
+      block.lines.map(&:strip).select { |l| l.start_with?("* ") }.map do |line|
+        text = line.sub(/^\*\s*/, "")
+        # Strip release-please's trailing "([abc1234](github-url))" commit link.
+        text = text.sub(%r{\s*\(\[[0-9a-f]+\]\(https://github\.com/[^)]+\)\)\s*\z}, "")
+        # Strip a leading Conventional Commit scope, e.g. "**macos:** ".
+        text = text.sub(/^\*\*[\w.\-]+:\*\*\s*/, "")
+        # Strip a trailing "(#123)" PR reference.
+        text = text.sub(/\s*\(#\d+\)\s*\z/, "")
+        text.strip
+      end.reject(&:empty?).map { |t| t[0].upcase + t[1..-1] }.uniq
+    end
+
+    features = clean_bullets.call(extract_block.call("Features"))
+    fixes = clean_bullets.call(extract_block.call("Bug Fixes"))
+
+    notes =
+      if features.empty?
+        "This release includes bug fixes and performance improvements."
+      else
+        lines = ["New in this release:"] + features.map { |f| "• #{f}" }
+        lines += ["", "Plus bug fixes and performance improvements."] unless fixes.empty?
+        lines.join("\n")
+      end
+
+    File.write("../fastlane/metadata/en-US/release_notes.txt", notes)
+    File.write("../fastlane/metadata_macos/en-US/release_notes.txt", notes)
+    UI.message("Drafted release notes:\n#{notes}")
   end
 
   # ── iOS ──────────────────────────────────────────────────────────────────
