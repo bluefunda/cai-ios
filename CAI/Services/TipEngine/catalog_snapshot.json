@@ -103,7 +103,7 @@
     "render": {
       "ios": {
         "title": "Attach files and photos",
-        "body": "Tap the + next to the message field to attach a photo, document, or camera capture — CAI can read and answer questions about it."
+        "body": "Tap the + next to the message field to attach a photo, document, or camera capture, then ask questions about it."
       }
     },
     "embedding": [
@@ -213,7 +213,7 @@
     "render": {
       "ios": {
         "title": "Decode an ABAP dump instantly",
-        "body": "Paste or screenshot an ST22 short dump into the chat — CAI recognizes it and offers to decode it into a clear explanation."
+        "body": "Paste or screenshot an ST22 short dump into the chat and you'll be offered a one-tap decode into a clear explanation."
       }
     },
     "embedding": [
