@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.2](https://github.com/bluefunda/cai-ios/compare/v2.8.1...v2.8.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* always include default fetch-mcp tool when any agent is enabled ([#339](https://github.com/bluefunda/cai-ios/issues/339)) ([e6b73cb](https://github.com/bluefunda/cai-ios/commit/e6b73cb30e342f0ec4befd1e0c824f1ca5ea93dd)), closes [#338](https://github.com/bluefunda/cai-ios/issues/338)
+* remove internal codename "CAI" from bundled tip snapshot copy ([#323](https://github.com/bluefunda/cai-ios/issues/323)) ([c34f8bb](https://github.com/bluefunda/cai-ios/commit/c34f8bbe9be47be704511f117be6704dac826afc)), closes [#322](https://github.com/bluefunda/cai-ios/issues/322)
+
 ## [2.8.1](https://github.com/bluefunda/cai-ios/compare/v2.8.0...v2.8.1) (2026-09-18)
 
 
