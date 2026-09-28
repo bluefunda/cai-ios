@@ -34,28 +34,6 @@ extension ChatManager {
         }
     }
 
-    /// Maps the selected MCP server to a backend agent name.
-    /// Convention: strip the "-mcp" suffix (e.g. "research-tools-mcp" → "research-tools").
-    ///
-    /// ABAPer is deliberately excluded: cai-llm-router's agents.yaml already has an
-    /// "abaper" agent profile, but for a different, narrower workflow ("implement
-    /// this GitHub issue in ABAP") that hardcodes github-mcp as a required co-server.
-    /// Sending agentName: "abaper" here for ordinary ABAPer chat hits that same
-    /// highest-priority routing rule by name collision, silently pulling in a
-    /// github-mcp requirement the user never asked for — confirmed live: with only
-    /// ABAPer connected (GitHub disconnected), every message failed with an MCP
-    /// connection error, even though ABAPer's own connection was fine. Returning nil
-    /// here instead lets it fall through to the general has_mcp/mcp-default routing
-    /// rule, which only ever includes the servers actually connected+enabled for
-    /// this conversation.
-    var agentNameForSelectedServer: String? {
-        guard let server = selectedMCPServer, !server.isABAPer else { return nil }
-        if server.name.hasSuffix("-mcp") {
-            return String(server.name.dropLast(4))
-        }
-        return server.name
-    }
-
     /// GitHub's connect/disconnect status (Settings → Connectors), fetched once at
     /// startup and refreshed by GitHubConnectionView after a connect/disconnect
     /// action — kept here rather than screen-local state so the Connectors list
