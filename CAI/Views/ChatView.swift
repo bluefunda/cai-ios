@@ -153,6 +153,23 @@ struct ChatView: View {
                 ConnectionBanner(status: chatManager.connectionStatus)
             }
             messageScrollArea
+                .onChange(of: isConfirmedEmptyConversation) { _, isConfirmedEmpty in
+                    // Defensive, platform-independent: a chat that just resolved to
+                    // confirmed-empty (live fetch returned zero messages — e.g.
+                    // bluefunda/cai-bff#166, a chat whose content lives under a
+                    // different realm/org subject than the caller is currently
+                    // resolved to) has nothing to scroll-settle for. If messages
+                    // flip empty while a scroll-settle task (ChatView+Scroll.swift)
+                    // from switching into this conversation is still in flight, that
+                    // task's own completion can be lost to the race described in its
+                    // own comments, leaving isSwitchingConversation stuck true and
+                    // the cover spinner up forever with nothing underneath it ever
+                    // going to finish loading. Clearing it directly here guarantees
+                    // this specific case always settles, regardless of platform.
+                    guard isConfirmedEmpty else { return }
+                    scrollSettleTask?.cancel()
+                    chatManager.isSwitchingConversation = false
+                }
             Divider()
             inputArea
                 .frame(maxWidth: maxChatWidth)
@@ -897,6 +914,27 @@ struct EmptyStateView: View {
             #else
             Spacer(minLength: 64)
             #endif
+        }
+        .padding(BFSpacing._5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - No Messages State
+
+/// Shown for an existing conversation once a live fetch has confirmed it
+/// genuinely has no messages — distinct from EmptyStateView (the "start a
+/// new chat" greeting) and from a loading spinner, so a legitimately-empty
+/// chat has a settled state instead of looking permanently stuck.
+struct NoMessagesView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary.opacity(0.4))
+            Text("No messages found")
+                .font(BFFont.h4)
+                .foregroundStyle(.secondary)
         }
         .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

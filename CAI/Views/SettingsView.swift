@@ -271,6 +271,12 @@ struct SettingsView: View {
                 }
             }
 
+            if let organization = authManager.currentUser?.organization {
+                Section {
+                    OrganizationRow(organization: organization)
+                }
+            }
+
             Section {
                 Button {
                     openURL(reportContentURL)
@@ -930,4 +936,27 @@ private class SplitConfigViewController: UIViewController {
         .environmentObject(AuthManager())
         .environmentObject(ChatManager(service: NATSChatService()))
         .environmentObject(IAPManager())
+}
+
+// MARK: - Organization Row
+
+/// Effective Keycloak Organization (bluefunda/cai-bff#166), shown in Account.
+/// Extracted from SettingsView to keep its body under SwiftLint's type_body_length.
+private struct OrganizationRow: View {
+    let organization: String
+
+    var body: some View {
+        HStack {
+            Label("Organization", systemImage: "building.2")
+                #if targetEnvironment(macCatalyst)
+                .font(MacSettingsFont.row)
+                #endif
+            Spacer()
+            Text(organization)
+                #if targetEnvironment(macCatalyst)
+                .font(MacSettingsFont.row)
+                #endif
+                .foregroundColor(.secondary)
+        }
+    }
 }
