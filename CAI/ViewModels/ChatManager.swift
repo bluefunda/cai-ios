@@ -428,6 +428,7 @@ final class ChatManager: ObservableObject {
         apiService = nil
         conversations = []
         currentConversation = nil
+        clearCache()
         subscribedMCPServerIds = []
         enabledMCPServers = []
         enabledMCPServersByConversationID = [:]
@@ -441,54 +442,8 @@ final class ChatManager: ObservableObject {
         rateLimit = nil
     }
 
-    // MARK: - Message History
-
-    /// Loads full message history for a conversation from the API (lazy on selection).
-    /// - Parameter force: Bypasses the "only fetch if empty" guard — used by
-    ///   `reconcileAfterBackground()` to pull the authoritative server copy
-    ///   over locally-cached messages after a stream was interrupted.
-    func loadMessages(for conversationId: String, force: Bool = false) async {
-        guard let api = apiService,
-              let idx = conversations.firstIndex(where: { $0.id == conversationId }),
-              force || conversations[idx].messages.isEmpty else { return }
-
-        do {
-            let dtos = try await api.fetchChatMessages(chatId: conversationId)
-            let messages = dtos.map { dto -> ChatMessage in
-                ChatMessage(
-                    id: dto.id ?? UUID().uuidString,
-                    role: MessageRole(rawValue: dto.normalizedRoleString) ?? .user,
-                    content: dto.content,
-                    timestamp: dto.createdAt.flatMap(Date.fromISO8601) ?? Date(),
-                    fileUrl: dto.fileUrl,
-                    fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:)),
-                    persona: dto.persona
-                )
-            }
-            conversations[idx].messages = messages
-            if currentConversation?.id == conversationId {
-                currentConversation = conversations[idx]
-            }
-            cacheMessages(messages, for: conversationId)
-            persistHistoryFileReferences(messages, conversationId: conversationId)
-        } catch {
-            // Offline fallback: show whatever is cached
-            if conversations[idx].messages.isEmpty {
-                let convId = conversationId
-                let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
-                if let persisted = try? modelContext?.fetch(desc).first, !persisted.messages.isEmpty {
-                    let cached = persisted.messages
-                        .sorted(by: { $0.timestamp < $1.timestamp })
-                        .compactMap { ChatMessage(from: $0) }
-                    conversations[idx].messages = cached
-                    if currentConversation?.id == conversationId {
-                        currentConversation = conversations[idx]
-                    }
-                }
-            }
-            print("[ChatManager] loadMessages error: \(error)")
-        }
-    }
+    // loadMessages moved to ChatManager+MessageHistory.swift to stay under
+    // SwiftLint's type_body_length limit — no behavior change.
 
     // MARK: - Conversations
 
@@ -510,6 +465,12 @@ final class ChatManager: ObservableObject {
     func selectConversation(_ conversation: Conversation) {
         Haptic.selection()
         shouldAutoFocusInput = false
+        // Re-tapping the open chat changes no id, so neither a load nor a scroll-settle
+        // would run to clear the cover the sidebar raised before calling this.
+        if currentConversation?.id == conversation.id {
+            isSwitchingConversation = false
+            return
+        }
         currentConversation = conversation
         Task { await loadMessages(for: conversation.id) }
     }
@@ -1106,6 +1067,12 @@ struct Conversation: Identifiable, Equatable {
     var messages: [ChatMessage]
     var model: String
     let createdAt: Date
+    /// Distinct from `messages.isEmpty` — tracks whether a live fetch has
+    /// actually confirmed this conversation's message list, so a chat that
+    /// genuinely has zero messages can be told apart from one that just
+    /// hasn't been fetched yet (the "continuously loading" spinner on an
+    /// empty chat). Only ever set by ChatManager.loadMessages.
+    var messagesLoaded: Bool = false
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
 

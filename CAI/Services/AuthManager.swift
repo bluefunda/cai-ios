@@ -73,7 +73,7 @@ final class AuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "client_id",             value: Config.clientId),
             URLQueryItem(name: "redirect_uri",          value: Config.redirectURI),
             URLQueryItem(name: "response_type",         value: "code"),
-            URLQueryItem(name: "scope",                 value: "openid profile email offline_access"),
+            URLQueryItem(name: "scope",                 value: "openid profile email offline_access organization"),
             URLQueryItem(name: "state",                 value: state),
             URLQueryItem(name: "code_challenge",        value: codeChallenge),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
@@ -125,7 +125,13 @@ final class AuthManager: NSObject, ObservableObject {
         }
 
         webAuthSession?.presentationContextProvider = self
-        webAuthSession?.prefersEphemeralWebBrowserSession = false
+        // Ephemeral, not shared with Safari's cookie jar: a shared session silently
+        // reused whatever IdP account (Google, etc.) happened to already be signed
+        // into Safari on the device, with no way to pick a different one short of
+        // manually clearing Safari's website data first. Ephemeral always shows the
+        // IdP's own account picker/login form fresh, at the cost of not remembering
+        // a previously-used IdP session between logins.
+        webAuthSession?.prefersEphemeralWebBrowserSession = true
         webAuthSession?.start()
     }
 
@@ -205,7 +211,7 @@ final class AuthManager: NSObject, ObservableObject {
             "subject_token":      identityToken,
             "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
             "subject_issuer":     "apple-ios",
-            "scope":              "openid profile email offline_access"
+            "scope":              "openid profile email offline_access organization"
         ]
         if let code  = authorizationCode { body["authorization_code"] = code }
         if let nonce = nonce             { body["nonce"] = nonce }
@@ -525,7 +531,9 @@ final class AuthManager: NSObject, ObservableObject {
 
         for attempt in 1...maxAttempts {
             do {
-                let (data, response) = try await session.data(for: request)
+                let (data, response) = try await withRequestTimeout(30) {
+                    try await self.session.data(for: request)
+                }
                 guard let http = response as? HTTPURLResponse else {
                     throw AuthError.tokenRefreshFailed
                 }
@@ -560,6 +568,33 @@ final class AuthManager: NSObject, ObservableObject {
         throw lastError
     }
 
+    /// Races `operation` against a timeout, throwing `AuthError.tokenRefreshFailed` if the
+    /// timeout wins. `URLSession`'s own request timeout doesn't reliably fire across a full app
+    /// suspend/resume boundary — a `URLSessionTask` that was in-flight when the app was
+    /// suspended for a long background period (observed after ~1-2 hours) can leave its
+    /// completion callback never firing on resume, hanging the awaiting call forever with no
+    /// error and no timeout. Since every authenticated request (every chat message fetch) waits
+    /// on a fresh access token, one stuck refresh call permanently spins every chat, not just
+    /// the one that triggered it — this is an explicit backstop so an abandoned refresh fails
+    /// cleanly instead.
+    private func withRequestTimeout<T: Sendable>(
+        _ seconds: TimeInterval,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw AuthError.tokenRefreshFailed
+            }
+            guard let result = try await group.next() else {
+                throw AuthError.tokenRefreshFailed
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+
     private func processTokenResponse(
         _ response: TokenResponse,
         appleFullName: String? = nil,
@@ -572,11 +607,11 @@ final class AuthManager: NSObject, ObservableObject {
 
         if var user = decodeJWT(response.accessToken) {
             if user.name.isEmpty, let name = appleFullName {
-                user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles)
+                user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles, organization: user.organization)
                 needsProfileSync = true
             }
             if user.email.isEmpty, let email = appleEmail {
-                user = User(id: user.id, email: email, name: user.name, roles: user.roles)
+                user = User(id: user.id, email: email, name: user.name, roles: user.roles, organization: user.organization)
                 needsProfileSync = true
             }
             currentUser = user
@@ -723,8 +758,23 @@ extension AuthManager {
             id:    json["sub"] as? String ?? "",
             email: json["email"] as? String ?? "",
             name:  Self.displayName(from: json),
-            roles: (json["realm_access"] as? [String: Any])?["roles"] as? [String] ?? []
+            roles: (json["realm_access"] as? [String: Any])?["roles"] as? [String] ?? [],
+            organization: Self.firstOrganization(from: json)
         )
+    }
+
+    /// Mirrors cai-bff's extractOrganization (internal/transport/http/handler.go) —
+    /// Keycloak's `organization` claim is a bare string for single-org users, or a
+    /// JSON array when a user belongs to multiple orgs. Only the first entry is
+    /// ever used as the effective org, same as the backend.
+    private static func firstOrganization(from json: [String: Any]) -> String? {
+        if let orgs = json["organization"] as? [String] {
+            return orgs.first
+        }
+        if let org = json["organization"] as? String, !org.isEmpty {
+            return org
+        }
+        return nil
     }
 
     /// Derives the user's display name from JWT claims, preferring real name
@@ -793,6 +843,12 @@ struct User: Codable, Identifiable {
     let email: String
     let name: String
     let roles: [String]
+    /// Effective Keycloak Organization context, if any (bluefunda/cai-bff#166).
+    /// Mirrors cai-bff's extractOrganization: when a user belongs to multiple
+    /// orgs the token's `organization` claim is a JSON array and only the
+    /// first entry is ever used as the effective org — shown here for the
+    /// same reason it's picked there, so the user can see which one won.
+    var organization: String? = nil
 
     var isAdmin: Bool { roles.contains("admin") }
 }

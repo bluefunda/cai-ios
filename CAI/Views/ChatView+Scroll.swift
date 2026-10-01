@@ -31,6 +31,15 @@ extension ChatView {
         !(chatManager.currentConversation?.messages.isEmpty ?? true)
     }
 
+    /// True once a live fetch has confirmed this conversation genuinely has
+    /// no messages — distinct from "not loaded yet", so the UI can show a
+    /// clear empty state instead of leaving a loading spinner up forever
+    /// (the "continuously loading" spinner on an empty chat).
+    var isConfirmedEmptyConversation: Bool {
+        guard let conversation = chatManager.currentConversation else { return false }
+        return conversation.messagesLoaded && conversation.messages.isEmpty
+    }
+
     /// Bucketed (not raw) streaming content length, so `.onChange(of:)` below fires roughly every
     /// 20 characters instead of on every single token — following the growing response closely
     /// enough to read as smooth, without re-scrolling so often it costs real render time or reads
@@ -161,7 +170,10 @@ extension ChatView {
             GeometryReader { outer in
                 #if targetEnvironment(macCatalyst)
                 if !hasMessages {
-                    if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
+                    if isConfirmedEmptyConversation {
+                        NoMessagesView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
                         ProgressView()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
@@ -258,6 +270,12 @@ extension ChatView {
                                     .listRowInsets(EdgeInsets())
                                     .listRowBackground(Color.clear)
                             }
+                        } else if isConfirmedEmptyConversation {
+                            NoMessagesView()
+                                .frame(maxWidth: .infinity, minHeight: max(outer.size.height, 300))
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
                         } else if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
                             ProgressView()
                                 .padding(.top, 40)

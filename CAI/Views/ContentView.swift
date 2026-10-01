@@ -375,7 +375,7 @@ struct SidebarContent: View {
 
                             ForEach(group.conversations) { convo in
                                 SidebarConversationRow(
-                                    conversation: convo,
+                                    title: convo.title,
                                     isSelected: chatManager.currentConversation?.id == convo.id
                                 )
                                 .onTapGesture {
@@ -644,7 +644,7 @@ struct SidebarDrawer: View {
 
                             ForEach(group.conversations) { convo in
                                 SidebarConversationRow(
-                                    conversation: convo,
+                                    title: convo.title,
                                     isSelected: chatManager.currentConversation?.id == convo.id
                                 )
                                 .onTapGesture {
@@ -816,7 +816,11 @@ struct ConversationGroup: Identifiable {
 // MARK: - Sidebar Row
 
 struct SidebarConversationRow: View {
-    let conversation: Conversation
+    // Takes the title, not the whole Conversation: Conversation's == compares only id,
+    // so SwiftUI treated a row as unchanged when just its title changed (e.g. a generated
+    // title landing after the list loaded) and kept the stale "New Chat" until something
+    // else — like tapping the row and flipping isSelected — forced a redraw.
+    let title: String
     let isSelected: Bool
 
     var body: some View {
@@ -825,7 +829,7 @@ struct SidebarConversationRow: View {
                 .font(BFFont.sidebarSection)
                 .foregroundStyle(.secondary)
 
-            Text(conversation.title)
+            Text(title)
                 .font(BFFont.sidebarItem)
                 .lineLimit(1)
                 .foregroundStyle(.primary)
