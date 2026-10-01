@@ -425,13 +425,8 @@ struct SidebarContent: View {
                 SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
                     currentMode = .code
                 }
-                // TRM-realm users only — bluerequests (Change Requests /
-                // Projects / Releases) is a TRM feature, not something
-                // individual/consumer accounts have data for.
-                if authManager.realm == "trm" {
-                    SidebarNavButton(icon: "list.bullet.clipboard", label: "Requests") {
-                        currentMode = .requests
-                    }
+                SidebarNavButton(icon: "list.bullet.clipboard", label: "Requests") {
+                    currentMode = .requests
                 }
             }
 
@@ -714,11 +709,9 @@ struct SidebarDrawer: View {
                     currentMode = .code
                     withAnimation { isOpen = false }
                 }
-                if authManager.realm == "trm" {
-                    SidebarNavButton(icon: "list.bullet.clipboard", label: "Requests") {
-                        currentMode = .requests
-                        withAnimation { isOpen = false }
-                    }
+                SidebarNavButton(icon: "list.bullet.clipboard", label: "Requests") {
+                    currentMode = .requests
+                    withAnimation { isOpen = false }
                 }
             }
 
