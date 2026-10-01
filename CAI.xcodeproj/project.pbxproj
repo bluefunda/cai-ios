@@ -50,8 +50,8 @@
 		A1000005201BCDEF /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000015201BCDEF /* SettingsView.swift */; };
 		A1000006201BCDEF /* ChatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDEF /* ChatManager.swift */; };
 		A1000006201BCDF1 /* ChatManager+Background.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF1 /* ChatManager+Background.swift */; };
-		A1000006301BCDF1 /* ChatManager+MessageHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016301BCDF1 /* ChatManager+MessageHistory.swift */; };
 		A1000006201BCDF2 /* ChatManager+FileHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016201BCDF2 /* ChatManager+FileHistory.swift */; };
+		A1000006301BCDF1 /* ChatManager+MessageHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016301BCDF1 /* ChatManager+MessageHistory.swift */; };
 		A1000007201BCDEF /* ChatServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017201BCDEF /* ChatServiceProtocol.swift */; };
 		A1000008201BCDEF /* NATSChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018201BCDEF /* NATSChatService.swift */; };
 		A1000009201BCDEF /* BFFChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000019201BCDEF /* BFFChatService.swift */; };
@@ -196,8 +196,8 @@
 		A1000015201BCDEF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000016201BCDEF /* ChatManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatManager.swift; sourceTree = "<group>"; };
 		A1000016201BCDF1 /* ChatManager+Background.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+Background.swift"; sourceTree = "<group>"; };
-		A1000016301BCDF1 /* ChatManager+MessageHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+MessageHistory.swift"; sourceTree = "<group>"; };
 		A1000016201BCDF2 /* ChatManager+FileHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+FileHistory.swift"; sourceTree = "<group>"; };
+		A1000016301BCDF1 /* ChatManager+MessageHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+MessageHistory.swift"; sourceTree = "<group>"; };
 		A1000017201BCDEF /* ChatServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatServiceProtocol.swift; sourceTree = "<group>"; };
 		A1000018201BCDEF /* NATSChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NATSChatService.swift; sourceTree = "<group>"; };
 		A1000019201BCDEF /* BFFChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFChatService.swift; sourceTree = "<group>"; };
@@ -968,7 +968,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 168;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1000,7 +1000,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8.2;
+				MARKETING_VERSION = 2.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1020,7 +1020,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 168;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1052,7 +1052,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8.2;
+				MARKETING_VERSION = 2.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1070,10 +1070,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 168;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.8.2;
+				MARKETING_VERSION = 2.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1088,10 +1088,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 166;
+				CURRENT_PROJECT_VERSION = 168;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.8.2;
+				MARKETING_VERSION = 2.8.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
