@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.4](https://github.com/bluefunda/cai-ios/compare/v2.8.3...v2.8.4) (2026-10-01)
+
+
+### Bug Fixes
+
+* **macos:** Browse Files picker never opening from the attach sheet ([742dd98](https://github.com/bluefunda/cai-ios/commit/742dd9853b9c0c18bf91ef7bb965b5ed03c348d9))
+* **macos:** Browse Files picker never opening from the attach sheet ([50f7064](https://github.com/bluefunda/cai-ios/commit/50f7064cf6ceeb58bf22dcdcc1e78ec0d020daa6))
+
 ## [2.8.3](https://github.com/bluefunda/cai-ios/compare/v2.8.2...v2.8.3) (2026-10-01)
 
 
