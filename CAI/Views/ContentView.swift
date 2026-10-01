@@ -61,6 +61,9 @@ struct AppShell: View {
     @StateObject private var systemStore = SAPSystemStore()
     @State private var showSystems = false
 
+    // Requests mode
+    @StateObject private var requestsManager = RequestsManager()
+
     enum AppSheet: String, Identifiable {
         case storage, settings, subscription
         var id: String { rawValue }
@@ -116,7 +119,7 @@ struct AppShell: View {
             // hidden in CAIApp.swift) removes the redundant "BlueFunda AI"
             // that duplicated the sidebar's own header (cai-ios#253).
             content
-                .navigationTitle(mode == .code ? "Code" : "")
+                .navigationTitle(mode == .chat ? "" : mode.title)
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
                         #if targetEnvironment(macCatalyst)
@@ -132,6 +135,8 @@ struct AppShell: View {
                                     .font(.system(size: BFFont.toolbarIconPt))
                             }
                             .bfPointerHover()
+                        case .requests:
+                            EmptyView()
                         }
                     }
                 }
@@ -204,6 +209,8 @@ struct AppShell: View {
             ChatTopBar(sidebarOpen: $sidebarOpen, onNewChat: { chatManager.newConversation() })
         case .code:
             CodeTopBar(sidebarOpen: $sidebarOpen, onSystems: { showSystems = true })
+        case .requests:
+            RequestsTopBar(sidebarOpen: $sidebarOpen)
         }
     }
 
@@ -214,6 +221,8 @@ struct AppShell: View {
             ChatView()
         case .code:
             CodeContent(systemStore: systemStore, onConnect: { showSystems = true })
+        case .requests:
+            RequestsContent(manager: requestsManager)
         }
     }
 
@@ -415,6 +424,14 @@ struct SidebarContent: View {
             VStack(spacing: 0) {
                 SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
                     currentMode = .code
+                }
+                // TRM-realm users only — bluerequests (Change Requests /
+                // Projects / Releases) is a TRM feature, not something
+                // individual/consumer accounts have data for.
+                if authManager.realm == "trm" {
+                    SidebarNavButton(icon: "list.bullet.clipboard", label: "Requests") {
+                        currentMode = .requests
+                    }
                 }
             }
 
@@ -696,6 +713,12 @@ struct SidebarDrawer: View {
                 SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
                     currentMode = .code
                     withAnimation { isOpen = false }
+                }
+                if authManager.realm == "trm" {
+                    SidebarNavButton(icon: "list.bullet.clipboard", label: "Requests") {
+                        currentMode = .requests
+                        withAnimation { isOpen = false }
+                    }
                 }
             }
 

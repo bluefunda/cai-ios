@@ -121,6 +121,10 @@
 		H1000013201BCDEF /* SAPSystemStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000003201BCDEF /* SAPSystemStore.swift */; };
 		H1000014201BCDEF /* CodeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000004201BCDEF /* CodeAPIService.swift */; };
 		H1000015201BCDEF /* SystemManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000005201BCDEF /* SystemManagerView.swift */; };
+		445B6206AA62A15129CAAB66 /* RequestsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97A57160B865A21E2E98BAC5 /* RequestsModels.swift */; };
+		F6236F47C90E83812B0518FC /* RequestsAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B456F476DBD3336D4C2CFA75 /* RequestsAPIService.swift */; };
+		0CCC3523FFF45C47D9987ACD /* RequestsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93780C466DE96C9029F573BA /* RequestsManager.swift */; };
+		B5FEBFA812E49EEAB9CA216D /* RequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E3C3355AE0B2FF56143F0F /* RequestsView.swift */; };
 		J1000011201BCDEF /* ADTModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000001201BCDEF /* ADTModels.swift */; };
 		J1000012201BCDEF /* ABAPHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000002201BCDEF /* ABAPHighlighter.swift */; };
 		J1000013201BCDEF /* ObjectBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000003201BCDEF /* ObjectBrowserView.swift */; };
@@ -266,6 +270,10 @@
 		H1000002201BCDEF /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		H1000003201BCDEF /* SAPSystemStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAPSystemStore.swift; sourceTree = "<group>"; };
 		H1000004201BCDEF /* CodeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAPIService.swift; sourceTree = "<group>"; };
+		97A57160B865A21E2E98BAC5 /* RequestsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsModels.swift; sourceTree = "<group>"; };
+		B456F476DBD3336D4C2CFA75 /* RequestsAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsAPIService.swift; sourceTree = "<group>"; };
+		93780C466DE96C9029F573BA /* RequestsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsManager.swift; sourceTree = "<group>"; };
+		64E3C3355AE0B2FF56143F0F /* RequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Requests/RequestsView.swift; sourceTree = "<group>"; };
 		H1000005201BCDEF /* SystemManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/SystemManagerView.swift; sourceTree = "<group>"; };
 		J1000001201BCDEF /* ADTModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADTModels.swift; sourceTree = "<group>"; };
 		J1000002201BCDEF /* ABAPHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Code/ABAPHighlighter.swift; sourceTree = "<group>"; };
@@ -380,6 +388,7 @@
 				C1000007201BCDF0 /* PacedMarkdownView.swift */,
 				F1000009201BCDEF /* SafariView.swift */,
 				G1000010201BCDEF /* CodeView.swift */,
+				64E3C3355AE0B2FF56143F0F /* RequestsView.swift */,
 				H1000005201BCDEF /* SystemManagerView.swift */,
 				J1000002201BCDEF /* ABAPHighlighter.swift */,
 				J1000003201BCDEF /* ObjectBrowserView.swift */,
@@ -417,6 +426,7 @@
 				CF9D664049ECFCEB62148A2F /* ChatManager+MessageMutation.swift */,
 				D1000008201BCDEF /* StorageViewModel.swift */,
 				G1000011201BCDEF /* CodeManager.swift */,
+				93780C466DE96C9029F573BA /* RequestsManager.swift */,
 				B355E56C168401FCCF508D76 /* ChatManager+TipEngine.swift */,
 				3927AA6446C9F4D589ED626C /* ChatManager+Cache.swift */,
 			);
@@ -435,6 +445,7 @@
 				B1000004201BCDEF /* BFFAPIService.swift */,
 				H1000003201BCDEF /* SAPSystemStore.swift */,
 				H1000004201BCDEF /* CodeAPIService.swift */,
+				B456F476DBD3336D4C2CFA75 /* RequestsAPIService.swift */,
 				0305A5E601A51E5EAC372BEF /* Storage */,
 				280DCA3012561F192CB19BAA /* VoiceInputManager.swift */,
 				76EA037805BB647C0BE35070 /* ScreenshotFixtures.swift */,
@@ -461,6 +472,7 @@
 				H1000001201BCDEF /* SAPSystem.swift */,
 				J1000001201BCDEF /* ADTModels.swift */,
 				E69AD9A3F1811EA79D6F71AF /* Persona.swift */,
+				97A57160B865A21E2E98BAC5 /* RequestsModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -699,6 +711,10 @@
 				FF000011201BCDEF /* BFFeatureFlags.swift in Sources */,
 				H1000013201BCDEF /* SAPSystemStore.swift in Sources */,
 				H1000014201BCDEF /* CodeAPIService.swift in Sources */,
+				445B6206AA62A15129CAAB66 /* RequestsModels.swift in Sources */,
+				F6236F47C90E83812B0518FC /* RequestsAPIService.swift in Sources */,
+				0CCC3523FFF45C47D9987ACD /* RequestsManager.swift in Sources */,
+				B5FEBFA812E49EEAB9CA216D /* RequestsView.swift in Sources */,
 				H1000015201BCDEF /* SystemManagerView.swift in Sources */,
 				J1000011201BCDEF /* ADTModels.swift in Sources */,
 				E900FE782FFC336200881287 /* IAPManager.swift in Sources */,

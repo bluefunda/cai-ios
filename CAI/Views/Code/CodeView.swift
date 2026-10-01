@@ -7,11 +7,13 @@ import SwiftUI
 enum AppMode: String, CaseIterable {
     case chat
     case code
+    case requests
 
     var title: String {
         switch self {
         case .chat: return "Chat"
         case .code: return "Code"
+        case .requests: return "Requests"
         }
     }
 
@@ -19,6 +21,7 @@ enum AppMode: String, CaseIterable {
         switch self {
         case .chat: return "bubble.left.and.bubble.right"
         case .code: return "chevron.left.forwardslash.chevron.right"
+        case .requests: return "list.bullet.clipboard"
         }
     }
 }
