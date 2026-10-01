@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.8.3](https://github.com/bluefunda/cai-ios/compare/v2.8.2...v2.8.3) (2026-10-01)
+
+
+### Bug Fixes
+
+* chat loading hangs, stale sidebar titles, and IdP account picker ([a9039d4](https://github.com/bluefunda/cai-ios/commit/a9039d4bbc30d6a42e3ca9a81c8409d29fef8db0))
+* chat loading hangs, stale sidebar titles, sign-out cache, and IdP account picker ([ca527b2](https://github.com/bluefunda/cai-ios/commit/ca527b2bdab1dc07af176b6364580b7783096a37))
+* clear locally cached chats on sign-out ([b6d96d7](https://github.com/bluefunda/cai-ios/commit/b6d96d7713594e143db0c2c51381a5f49ad6e977))
+
 ## [2.8.2](https://github.com/bluefunda/cai-ios/compare/v2.8.1...v2.8.2) (2026-09-28)
 
 
