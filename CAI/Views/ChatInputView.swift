@@ -52,6 +52,12 @@ struct ChatInputView: View {
     // only after the attach sheet has actually finished dismissing.
     @State private var pendingManageAgents = false
     @State private var showManageAgentsSettings = false
+    // Same reason for "Browse Files" / "Take Photo": both present a UIKit picker imperatively
+    // on the root view controller, which UIKit refuses ("already presenting") while that
+    // controller is still presenting — or still dismissing — this attach sheet. On Mac Catalyst
+    // the sheet is its own window and closes slowly enough that the picker lost that race every
+    // time, so Browse Files silently did nothing. Run the action from onDismiss instead.
+    @State private var pendingAttachAction: (() -> Void)?
 
     private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
     private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
@@ -208,11 +214,15 @@ struct ChatInputView: View {
                             pendingManageAgents = false
                             showManageAgentsSettings = true
                         }
+                        if let action = pendingAttachAction {
+                            pendingAttachAction = nil
+                            action()
+                        }
                     }) {
                         ComposerAttachSheet(
-                            onPickCamera: onPickCamera,
+                            onPickCamera: onPickCamera.map { pick in { pendingAttachAction = pick } },
                             onPickPhoto: onPickPhoto,
-                            onPickFile: onPickFile,
+                            onPickFile: onPickFile.map { pick in { pendingAttachAction = pick } },
                             onPickDumpScreenshot: onPickDumpScreenshot,
                             onManageAgents: { pendingManageAgents = true }
                         )
