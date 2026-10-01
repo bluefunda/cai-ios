@@ -38,11 +38,20 @@ struct APIClient {
     let baseURL: String
     let tokenProvider: TokenProvider
     let session: URLSession
+    /// Extra headers merged into every request (e.g. X-Realm for a
+    /// multi-tenant backend). Empty for clients that don't need any.
+    let extraHeaders: [String: String]
 
-    init(baseURL: String, tokenProvider: @escaping TokenProvider, session: URLSession = .shared) {
+    init(
+        baseURL: String,
+        tokenProvider: @escaping TokenProvider,
+        session: URLSession = .shared,
+        extraHeaders: [String: String] = [:]
+    ) {
         self.baseURL = baseURL
         self.tokenProvider = tokenProvider
         self.session = session
+        self.extraHeaders = extraHeaders
     }
 
     // MARK: - GET
@@ -156,6 +165,9 @@ struct APIClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        for (field, value) in extraHeaders {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
         request.timeoutInterval = 30
         request.httpBody = body
         return request
