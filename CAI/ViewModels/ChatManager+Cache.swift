@@ -70,6 +70,20 @@ extension ChatManager {
     }
 
     /// Not `private`: also called from `ChatManager.swift` proper.
+    /// Wipes every locally cached conversation and message. Called on sign-out: the cache
+    /// isn't scoped to a user, realm or server, so without this the next sign-in (another
+    /// account, a migrated Keycloak realm/org, or a different backend) was shown the previous
+    /// session's chats, and loadMessages' "keep local copy on an empty server response" guard
+    /// kept displaying their messages too.
+    func clearCache() {
+        guard let ctx = modelContext else { return }
+        // Explicit per-model deletes: a batch delete doesn't apply the relationship's
+        // cascade rule, so messages are removed directly rather than relied on to follow.
+        try? ctx.delete(model: PersistedMessage.self)
+        try? ctx.delete(model: PersistedConversation.self)
+        try? ctx.save()
+    }
+
     func deleteFromCache(_ conversation: Conversation) {
         guard let ctx = modelContext else { return }
         let id = conversation.id

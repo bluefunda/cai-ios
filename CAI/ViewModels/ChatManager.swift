@@ -428,6 +428,7 @@ final class ChatManager: ObservableObject {
         apiService = nil
         conversations = []
         currentConversation = nil
+        clearCache()
         subscribedMCPServerIds = []
         enabledMCPServers = []
         enabledMCPServersByConversationID = [:]
