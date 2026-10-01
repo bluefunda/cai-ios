@@ -15,10 +15,10 @@ enum AppConfig {
     // ── Auth (Keycloak IDP) ──────────────────────────────────────────────────
     // Change this one string to redirect ALL auth flows (login, token, logout)
     // to a different IDP host. Client ID and realm are unchanged.
-    static let authBaseURL = "https://auth.bluefunda.com"
+    static let authBaseURL = "https://auth-test.bluefunda.com"
 
     // ── BFF API ─────────────────────────────────────────────────────────────
-    static let bffBaseURL = "https://api.bluefunda.com/ai"
+    static let bffBaseURL = "https://api-test.bluefunda.com/ai"
 
     // ── Requests (trm-gw → trm-bff: Change Requests / Projects / Releases) ───
     // Host is a placeholder — there's no public DNS name confirmed yet for
