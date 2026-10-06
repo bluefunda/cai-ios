@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.8.4](https://github.com/bluefunda/cai-ios/compare/v2.8.3...v2.8.4) (2026-10-01)
+
+
+### Bug Fixes
+
+* **macos:** Browse Files picker never opening from the attach sheet ([742dd98](https://github.com/bluefunda/cai-ios/commit/742dd9853b9c0c18bf91ef7bb965b5ed03c348d9))
+* **macos:** Browse Files picker never opening from the attach sheet ([50f7064](https://github.com/bluefunda/cai-ios/commit/50f7064cf6ceeb58bf22dcdcc1e78ec0d020daa6))
+
+## [2.8.3](https://github.com/bluefunda/cai-ios/compare/v2.8.2...v2.8.3) (2026-10-01)
+
+
+### Bug Fixes
+
+* chat loading hangs, stale sidebar titles, and IdP account picker ([a9039d4](https://github.com/bluefunda/cai-ios/commit/a9039d4bbc30d6a42e3ca9a81c8409d29fef8db0))
+* chat loading hangs, stale sidebar titles, sign-out cache, and IdP account picker ([ca527b2](https://github.com/bluefunda/cai-ios/commit/ca527b2bdab1dc07af176b6364580b7783096a37))
+* clear locally cached chats on sign-out ([b6d96d7](https://github.com/bluefunda/cai-ios/commit/b6d96d7713594e143db0c2c51381a5f49ad6e977))
+
+## [2.8.2](https://github.com/bluefunda/cai-ios/compare/v2.8.1...v2.8.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* always include default fetch-mcp tool when any agent is enabled ([#339](https://github.com/bluefunda/cai-ios/issues/339)) ([e6b73cb](https://github.com/bluefunda/cai-ios/commit/e6b73cb30e342f0ec4befd1e0c824f1ca5ea93dd)), closes [#338](https://github.com/bluefunda/cai-ios/issues/338)
+* remove internal codename "CAI" from bundled tip snapshot copy ([#323](https://github.com/bluefunda/cai-ios/issues/323)) ([c34f8bb](https://github.com/bluefunda/cai-ios/commit/c34f8bbe9be47be704511f117be6704dac826afc)), closes [#322](https://github.com/bluefunda/cai-ios/issues/322)
+
+## [2.8.1](https://github.com/bluefunda/cai-ios/compare/v2.8.0...v2.8.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* Mac Catalyst composer — Return sends, keystrokes no longer dropped, auto-focus works ([80ae57c](https://github.com/bluefunda/cai-ios/commit/80ae57c91d2447ce310d23881cdfab6cfd5d67c2))
+* Mac Catalyst composer — Return sends, no dropped keystrokes, auto-focus works ([c3f199e](https://github.com/bluefunda/cai-ios/commit/c3f199eb3a35c576643d98aaffff5a08d594868e))
+
+## [2.8.0](https://github.com/bluefunda/cai-ios/compare/v2.7.0...v2.8.0) (2026-09-17)
+
+
+### Features
+
+* add ABAPer Connect form (SAP host/client/user/password) ([ddb3b42](https://github.com/bluefunda/cai-ios/commit/ddb3b428bb1c257feac8ed91e6df0d947ed3e295))
+* add ABAPer Connect form (SAP host/client/user/password) ([5fa20d8](https://github.com/bluefunda/cai-ios/commit/5fa20d88d0e74057ef65c8f93fefc8dc0f81c5ff))
+* unify GitHub/MCP connectors into an Agents system ([ef1c7a4](https://github.com/bluefunda/cai-ios/commit/ef1c7a471a2e3c05f25e8a9e5c61d2aad69548ca))
+* unify GitHub/MCP connectors into an Agents system, add ABAPer ([56c3c95](https://github.com/bluefunda/cai-ios/commit/56c3c95ecf0ea0e374bff669ad73d9c97b9b2700))
+
+
+### Bug Fixes
+
+* **lint:** split SettingsView and ChatManager to pass SwiftLint file/type length ([8111a6a](https://github.com/bluefunda/cai-ios/commit/8111a6a8b9759d350714ebc02ca9e5f78466008f))
+* **tests:** update MCPServer call site for the new label parameter ([c991a94](https://github.com/bluefunda/cai-ios/commit/c991a94c074912591894010825d856c30756a9f5))
+
 ## [2.7.0](https://github.com/bluefunda/cai-ios/compare/v2.6.3...v2.7.0) (2026-09-10)
 
 

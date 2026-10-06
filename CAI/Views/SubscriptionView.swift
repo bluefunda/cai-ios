@@ -64,6 +64,30 @@ struct SubscriptionContent: View {
 
     // MARK: - Already subscribed
 
+    private var badgeSize: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 48
+        #else
+        return 80
+        #endif
+    }
+
+    private var badgeIconSize: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 22
+        #else
+        return 38
+        #endif
+    }
+
+    private var buttonHeight: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 34
+        #else
+        return 50
+        #endif
+    }
+
     private var subscribedView: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -71,17 +95,25 @@ struct SubscriptionContent: View {
                 ZStack {
                     Circle()
                         .fill(BFColor.primary.opacity(0.12))
-                        .frame(width: 80, height: 80)
+                        .frame(width: badgeSize, height: badgeSize)
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 38))
+                        .font(.system(size: badgeIconSize))
                         .foregroundStyle(BFColor.primary)
                 }
 
                 VStack(spacing: 6) {
                     Text("You're on Pro")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.pageHeader)
+                        #else
                         .font(BFFont.h3)
+                        #endif
                     Text("This includes:")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #else
                         .font(BFFont.body)
+                        #endif
                         .foregroundStyle(BFColor.textTertiary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -103,9 +135,13 @@ struct SubscriptionContent: View {
                 }
             } label: {
                 Label("Manage Subscription", systemImage: "arrow.up.right")
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.rowMedium)
+                    #else
                     .font(BFFont.body)
+                    #endif
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    .frame(height: buttonHeight)
                     .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
                     .foregroundStyle(.primary)
                     .contentShape(RoundedRectangle(cornerRadius: 12))
@@ -134,9 +170,17 @@ struct SubscriptionContent: View {
                             .foregroundStyle(BFColor.textInverse)
                     }
                     Text("BlueFunda AI Pro")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.pageHeader)
+                        #else
                         .font(BFFont.h4)
+                        #endif
                     Text("Full access to all features")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.row)
+                        #else
                         .font(BFFont.bodySmall)
+                        #endif
                         .foregroundStyle(BFColor.textTertiary)
                 }
                 .padding(.top, 28)
@@ -157,7 +201,11 @@ struct SubscriptionContent: View {
                     ProgressView().frame(height: 130)
                 } else if iapManager.products.isEmpty {
                     Text("Unable to load plans. Check your connection and try again.")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.secondary)
+                        #else
                         .font(BFFont.bodySmall)
+                        #endif
                         .foregroundStyle(BFColor.textTertiary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -183,7 +231,11 @@ struct SubscriptionContent: View {
                 // Error
                 if let err = iapManager.purchaseError {
                     Text(err)
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.secondary)
+                        #else
                         .font(BFFont.bodySmall)
+                        #endif
                         .foregroundStyle(BFColor.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -200,11 +252,19 @@ struct SubscriptionContent: View {
                             ProgressView().tint(.white)
                         } else {
                             Text(ctaLabel)
+                                #if targetEnvironment(macCatalyst)
+                                .font(MacSettingsFont.rowSemibold)
+                                #else
                                 .font(BFFont.body.weight(.semibold))
+                                #endif
                         }
                     }
                     .frame(maxWidth: .infinity)
+                    #if targetEnvironment(macCatalyst)
+                    .frame(height: 38)
+                    #else
                     .frame(height: 52)
+                    #endif
                     .background(BFColor.primary, in: Capsule())
                     .foregroundStyle(.white)
                     .contentShape(Capsule())
@@ -220,13 +280,21 @@ struct SubscriptionContent: View {
                     Button("Restore Purchases") {
                         Task { await iapManager.restorePurchases() }
                     }
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.secondary)
+                    #else
                     .font(BFFont.bodySmall)
+                    #endif
                     .foregroundStyle(BFColor.primary)
                     .disabled(iapManager.isPurchasing)
                     .bfPointerHover()
 
                     Text("Subscriptions auto-renew until cancelled. Manage in Settings.")
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.caption)
+                        #else
                         .font(BFFont.micro)
+                        #endif
                         .foregroundStyle(BFColor.textMuted)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
@@ -238,7 +306,11 @@ struct SubscriptionContent: View {
                         Button("Terms of Service") { openURL(termsURL) }
                             .bfPointerHover()
                     }
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.caption)
+                    #else
                     .font(BFFont.micro)
+                    #endif
                     .foregroundStyle(BFColor.textMuted)
                 }
                 .padding(.top, 14)
@@ -271,11 +343,19 @@ struct FeatureBullet: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
+                #if targetEnvironment(macCatalyst)
+                .font(.system(size: 14))
+                #else
                 .font(.system(size: 16))
+                #endif
                 .foregroundStyle(BFColor.primary)
                 .frame(width: 22)
             Text(text)
+                #if targetEnvironment(macCatalyst)
+                .font(MacSettingsFont.row)
+                #else
                 .font(BFFont.body)
+                #endif
                 .foregroundStyle(.primary)
             Spacer()
         }
@@ -298,7 +378,11 @@ private struct PlanCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(product.displayName)
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.rowSemibold)
+                            #else
                             .font(BFFont.body.weight(.semibold))
+                            #endif
                             .foregroundStyle(.primary)
                         if let badge {
                             Text(badge)
@@ -310,17 +394,29 @@ private struct PlanCard: View {
                         }
                     }
                     Text(product.description)
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.secondary)
+                        #else
                         .font(BFFont.bodySmall)
+                        #endif
                         .foregroundStyle(BFColor.textTertiary)
                         .lineLimit(1)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(product.displayPrice)
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.rowSemibold)
+                        #else
                         .font(BFFont.body.weight(.bold))
+                        #endif
                         .foregroundStyle(.primary)
                     Text(period)
+                        #if targetEnvironment(macCatalyst)
+                        .font(MacSettingsFont.caption)
+                        #else
                         .font(BFFont.micro)
+                        #endif
                         .foregroundStyle(BFColor.textTertiary)
                 }
             }

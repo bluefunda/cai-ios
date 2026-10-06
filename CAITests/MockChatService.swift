@@ -17,6 +17,9 @@ final class MockChatService: ChatServiceProtocol {
     var lastRequest: ChatRequest?
 
     var mockEvents: [ChatEvent] = []
+    /// Optional per-event delay (nanoseconds) applied BEFORE mockEvents[i], for tests
+    /// that depend on real elapsed time between events (e.g. "Thought for Ns").
+    var mockEventDelaysNanos: [UInt64] = []
     var mockError: Error?
     /// Injected failure for stopStreaming, independent of mockError (which drives
     /// sendMessage) — lets tests simulate the server never acknowledging a stop
@@ -41,6 +44,7 @@ final class MockChatService: ChatServiceProtocol {
         sendMessageCalled = true
         lastRequest = request
         let events = mockEvents
+        let delays = mockEventDelaysNanos
         let error = mockError
 
         return AsyncThrowingStream { continuation in
@@ -49,7 +53,10 @@ final class MockChatService: ChatServiceProtocol {
                     continuation.finish(throwing: error)
                     return
                 }
-                for event in events {
+                for (index, event) in events.enumerated() {
+                    if index < delays.count, delays[index] > 0 {
+                        try? await Task.sleep(nanoseconds: delays[index])
+                    }
                     continuation.yield(event)
                 }
                 // With no events the test wants to simulate an open stream that

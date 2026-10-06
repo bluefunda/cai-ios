@@ -46,8 +46,14 @@ struct StreamingIndicator: View {
             .offset(x: Self.ringRadius * cos(radians), y: Self.ringRadius * sin(radians))
     }
 
-    private func word(at elapsed: Double) -> String {
-        let index = Int(elapsed / Self.wordIntervalSeconds) % Self.words.count
+    /// When this indicator appeared (the reply was sent). Phrases are timed from here, not from
+    /// the wall clock, so every reply starts on the first phrase.
+    @State private var startedAt = Date()
+
+    /// The phrases play once, in order, then hold on the last ("Almost there…") — looping back
+    /// to "Elevating your answer…" read as if the wait had started over.
+    private func word(at sinceStart: Double) -> String {
+        let index = min(Int(max(0, sinceStart) / Self.wordIntervalSeconds), Self.words.count - 1)
         return Self.words[index]
     }
 
@@ -55,7 +61,7 @@ struct StreamingIndicator: View {
         TimelineView(.animation) { context in
             let elapsed = context.date.timeIntervalSinceReferenceDate
             let angle = (elapsed.truncatingRemainder(dividingBy: Self.periodSeconds) / Self.periodSeconds) * 360
-            let currentWord = word(at: elapsed)
+            let currentWord = word(at: context.date.timeIntervalSince(startedAt))
 
             HStack(spacing: 10) {
                 ZStack {

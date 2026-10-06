@@ -212,6 +212,11 @@ struct StepEvent: Equatable {
     let title: String
     let detail: String
     let state: StepState
+    /// Set for `stream_inline_status`: the step happened after the answer started, at this
+    /// position in the answer text (UTF-16 code units) — rendered in place, claude.ai-style.
+    var contentOffset: Int? = nil
+    /// The AI's apparent mood for this step (thinking / curious / happy / sad), for the mascot.
+    var mood: String? = nil
 }
 
 enum StepState: String, Equatable {
@@ -249,6 +254,11 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     /// header has real data to show after a reload, instead of only being
     /// derivable while the view itself was live for the whole stream.
     var thinkingDurationSeconds: Int? = nil
+    /// When the first thinking step arrived, set only while the turn is live so
+    /// `ThinkingStepsView`'s running timer uses the same clock as the
+    /// `thinkingDurationSeconds` `ChatManager` freezes — not the view's own
+    /// onAppear time. Not sent to the server; `nil` for anything from history.
+    var thinkingStartedAt: Date? = nil
 
     init(
         id: String = UUID().uuidString,
@@ -259,7 +269,8 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         fileMetadata: [MessageFileMetadata]? = nil,
         persona: String? = nil,
         steps: [MessageStep]? = nil,
-        thinkingDurationSeconds: Int? = nil
+        thinkingDurationSeconds: Int? = nil,
+        thinkingStartedAt: Date? = nil
     ) {
         self.id = id
         self.role = role
@@ -270,6 +281,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.persona = persona
         self.steps = steps
         self.thinkingDurationSeconds = thinkingDurationSeconds
+        self.thinkingStartedAt = thinkingStartedAt
     }
 
 }
@@ -277,18 +289,43 @@ struct ChatMessage: Identifiable, Codable, Equatable {
 /// One live status row shown in `ThinkingStepsView` while/after a message
 /// streams (bluefunda/cai-ios#310). Mirrors `StepEvent` but persists on the
 /// message itself so history/cache round-trips it like any other field.
+// MARK: - Thinking phase
+
+/// Thinking is over the moment the answer starts streaming — matching ChatGPT/claude.ai,
+/// where the box locks to "Thought for Ns" and stops its spinner at the first answer token,
+/// not when the whole answer finishes. Shared by every place `ChatManager` closes it.
+extension Array where Element == MessageStep {
+    /// Marks every step finished, so none keeps a spinner once thinking has ended.
+    mutating func finishAll() {
+        for index in indices { self[index].isActive = false }
+    }
+}
+
+extension MessageStep {
+    /// Whole seconds of thinking, at least 1 — what "Thought for Ns" shows.
+    static func thinkingDuration(since startedAt: Date, until end: Date = Date()) -> Int {
+        max(1, Int(end.timeIntervalSince(startedAt).rounded()))
+    }
+}
+
 struct MessageStep: Codable, Equatable, Identifiable {
     var id: String { stepId }
     let stepId: String
     var title: String
     var detail: String
     var isActive: Bool
+    /// nil = part of the "Thought for Ns" card above the answer; set = a step that happened
+    /// mid-answer, shown in place at this UTF-16 offset of the answer text (claude.ai-style).
+    var contentOffset: Int?
+    var mood: String?
 
-    init(stepId: String, title: String, detail: String, isActive: Bool) {
+    init(stepId: String, title: String, detail: String, isActive: Bool, contentOffset: Int? = nil, mood: String? = nil) {
         self.stepId = stepId
         self.title = title
         self.detail = detail
         self.isActive = isActive
+        self.contentOffset = contentOffset
+        self.mood = mood
     }
 
     // Custom decoding: `isActive` is absent from the server's persisted history (cai-mcp-go
@@ -301,6 +338,37 @@ struct MessageStep: Codable, Equatable, Identifiable {
         title = try container.decode(String.self, forKey: .title)
         detail = try container.decodeIfPresent(String.self, forKey: .detail) ?? ""
         isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive) ?? false
+        contentOffset = try container.decodeIfPresent(Int.self, forKey: .contentOffset)
+        mood = try container.decodeIfPresent(String.self, forKey: .mood)
+    }
+}
+
+extension Array where Element == MessageStep {
+    /// Steps for the "Thought for Ns" card above the answer.
+    var cardSteps: [MessageStep] { filter { $0.contentOffset == nil } }
+    /// Steps that happened mid-answer, rendered in place inside the answer.
+    var inlineSteps: [MessageStep] { filter { $0.contentOffset != nil } }
+
+    /// Upserts a live step event by stepId. Only one step reads as in progress at a time
+    /// (claude.ai). Once thinking is locked (answer started), card steps can't reopen —
+    /// but inline steps stay live: they are shown in place in the answer.
+    mutating func apply(_ event: StepEvent, thinkingLocked: Bool) {
+        if let index = firstIndex(where: { $0.stepId == event.stepId }) {
+            self[index].title = event.title
+            self[index].detail = event.detail
+            self[index].isActive = event.state == .active
+            self[index].contentOffset = self[index].contentOffset ?? event.contentOffset
+            self[index].mood = event.mood ?? self[index].mood
+        } else {
+            append(MessageStep(stepId: event.stepId, title: event.title, detail: event.detail,
+                               isActive: event.state == .active, contentOffset: event.contentOffset, mood: event.mood))
+        }
+        if event.state == .active {
+            for index in indices where self[index].stepId != event.stepId { self[index].isActive = false }
+        }
+        if thinkingLocked {
+            for index in indices where self[index].contentOffset == nil { self[index].isActive = false }
+        }
     }
 }
 

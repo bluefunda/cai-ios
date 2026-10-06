@@ -486,17 +486,73 @@ private enum LaTeXMath {
         "therefore": "∴", "because": "∵"
     ]
 
-    /// Converts `$...$` math spans and bare `\command` sequences to Unicode.
-    /// Only touches `$...$` spans that contain a backslash command, so plain
-    /// currency text like "$5 and $10" is left untouched.
+    /// Converts LaTeX math to readable plain text: `$$...$$` display math (delimiters dropped),
+    /// `$...$` spans that contain a backslash command or `{`, and bare `\command` sequences.
+    /// `$...$` without either is left alone, so plain currency like "$5 and $10" is untouched.
     static func sanitize(_ text: String) -> String {
-        guard text.contains("\\") else { return text }
+        guard text.contains("\\") || text.contains("$$") || text.contains("{,}") else { return text }
 
         var result = text
-        if let mathSpan = try? NSRegularExpression(pattern: #"\$([^$\n]*\\[A-Za-z]+[^$\n]*)\$"#) {
-            result = replaceMatches(mathSpan, in: result, transform: replaceCommands)
+        if let displayMath = try? NSRegularExpression(pattern: #"\$\$([^$]+?)\$\$"#) {
+            result = replaceMatches(displayMath, in: result, transform: convertMath)
+        }
+        if let mathSpan = try? NSRegularExpression(pattern: #"\$([^$\n]*[\\{][^$\n]*)\$"#) {
+            result = replaceMatches(mathSpan, in: result, transform: convertMath)
         }
         return replaceCommands(in: result)
+    }
+
+    /// Structural LaTeX → plain text, then symbol commands → Unicode. Handles what models
+    /// actually emit in answers: \frac, \text/\mathrm/\mathbf, \sqrt, {,} thousands
+    /// separators, spacing commands and \left/\right.
+    private static func convertMath(_ math: String) -> String {
+        var m = math
+        m = m.replacingOccurrences(of: "{,}", with: ",")
+        // \left( / \right) sizing hints only before an actual bracket — a bare "\left" replace
+        // would also mangle \leftarrow / \rightarrow.
+        if let sizing = try? NSRegularExpression(pattern: #"\\(?:left|right)(?=[()\[\]|.])"#) {
+            m = sizing.stringByReplacingMatches(in: m, range: NSRange(location: 0, length: (m as NSString).length), withTemplate: "")
+        }
+        for (from, to) in [("\\%", "%"), ("\\ ", " "), ("\\,", " "), ("\\;", " "),
+                           ("\\:", " "), ("\\!", ""), ("\\quad", " "), ("\\qquad", "  "),
+                           ("\\le ", "≤ "), ("\\ge ", "≥ ")] {
+            m = m.replacingOccurrences(of: from, with: to)
+        }
+        // \text{kg}, \mathrm{x}, \mathbf{x}, \operatorname{x} → their content.
+        if let wrapper = try? NSRegularExpression(pattern: #"\\(?:text|mathrm|mathbf|mathit|operatorname)\{([^{}]*)\}"#) {
+            m = replaceMatches(wrapper, in: m) { $0 }
+        }
+        // \frac{a}{b} → a/b, bracketing either side only when it contains spaces/operators.
+        if let frac = try? NSRegularExpression(pattern: #"\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}"#) {
+            m = replaceFractions(frac, in: m)
+        }
+        // \sqrt{x} → √x (or √(x) when x is compound).
+        if let sqrt = try? NSRegularExpression(pattern: #"\\sqrt\{([^{}]*)\}"#) {
+            m = replaceMatches(sqrt, in: m) { inner in "√" + bracketIfCompound(inner) }
+        }
+        var converted = replaceCommands(in: m)
+        while converted.contains("  ") { converted = converted.replacingOccurrences(of: "  ", with: " ") }
+        return converted.trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func bracketIfCompound(_ part: String) -> String {
+        let trimmed = part.trimmingCharacters(in: .whitespaces)
+        return trimmed.rangeOfCharacter(from: CharacterSet(charactersIn: " +-−×*/")) != nil ? "(\(trimmed))" : trimmed
+    }
+
+    private static func replaceFractions(_ regex: NSRegularExpression, in text: String) -> String {
+        let ns = text as NSString
+        var result = ""
+        var lastEnd = 0
+        regex.enumerateMatches(in: text, range: NSRange(location: 0, length: ns.length)) { match, _, _ in
+            guard let match, match.numberOfRanges > 2 else { return }
+            result += ns.substring(with: NSRange(location: lastEnd, length: match.range.location - lastEnd))
+            result += bracketIfCompound(ns.substring(with: match.range(at: 1)))
+                + "/" + bracketIfCompound(ns.substring(with: match.range(at: 2)))
+            lastEnd = match.range.location + match.range.length
+        }
+        result += ns.substring(from: lastEnd)
+        return result
     }
 
     private static func replaceCommands(in text: String) -> String {

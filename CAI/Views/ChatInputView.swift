@@ -4,10 +4,22 @@ import SwiftUI
 // (bluefunda/cai-ios#261 precedent — see ChatManager+Background.swift).
 
 struct ChatInputView: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var iapManager: IAPManager
     @Binding var text: String
     let isStreaming: Bool
     let attachmentFilename: String?
     var isFocused: FocusState<Bool>.Binding
+    // Mac Catalyst-only mirror of `isFocused`, as a plain (non-FocusState) Binding<Bool> —
+    // see MacComposerTextView.swift and ChatView's isInputFocusedMac for why. Defaults to a
+    // fresh, unused constant since only the Mac branch below ever reads/writes it.
+    var isFocusedMac: Binding<Bool> = .constant(false)
+    // Mac-only: bumped by ChatView whenever `text` is changed programmatically (e.g. cleared
+    // after sending) rather than by the user typing. See MacComposerTextView.swift and
+    // ChatView's composerExternalUpdateToken for why this replaced inferring that from
+    // "focus was lost" once the composer started staying focused through send on Mac.
+    var externalUpdateToken: Int = 0
     var rateLimitExceeded: Bool = false
     var isRecording: Bool = false
     var recordingElapsed: TimeInterval = 0
@@ -33,9 +45,19 @@ struct ChatInputView: View {
     var currentPersona: Persona = .general
     var personaOptions: [Persona] = Persona.fallbackCatalog
     var onSelectPersona: (Persona) -> Void = { _ in }
-    // Mac Catalyst only — see ModeModelPicker.showMenu for why the attach
-    // Menu needs a popover instead (cai-ios#257 follow-up).
-    @State private var showAttachMenu = false
+    @State private var showAttachSheet = false
+    // "Manage Agents" inside the attach sheet needs to present Settings —
+    // NOT as a sheet nested inside the attach sheet (that combination left
+    // the whole app stuck in a loading state), but as a sibling presented
+    // only after the attach sheet has actually finished dismissing.
+    @State private var pendingManageAgents = false
+    @State private var showManageAgentsSettings = false
+    // Same reason for "Browse Files" / "Take Photo": both present a UIKit picker imperatively
+    // on the root view controller, which UIKit refuses ("already presenting") while that
+    // controller is still presenting — or still dismissing — this attach sheet. On Mac Catalyst
+    // the sheet is its own window and closes slowly enough that the picker lost that race every
+    // time, so Browse Files silently did nothing. Run the action from onDismiss instead.
+    @State private var pendingAttachAction: (() -> Void)?
 
     private var canSend: Bool { !rateLimitExceeded && (!text.isEmpty || attachmentFilename != nil) }
     private var attachEnabled: Bool { onPickPhoto != nil || onPickFile != nil }
@@ -119,10 +141,48 @@ struct ChatInputView: View {
     // narrow screens, which is exactly what a single-row layout couldn't do.
     private var composerRow: some View {
         VStack(alignment: .leading, spacing: 8) {
+            #if targetEnvironment(macCatalyst)
+            // MacComposerTextView (see that file): a vertical-axis TextField's underlying
+            // UITextView claims a bare Return for its own "insert newline" handling before
+            // SwiftUI's .onKeyPress ever sees it — confirmed live, that approach had zero
+            // effect — so Mac Catalyst gets a real UITextView wrapper that intercepts Return
+            // at the UIKit level instead. Shift+Return still inserts a newline.
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(rateLimitExceeded ? "Usage limit reached" : "Message...")
+                        .font(BFFont.body)
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                }
+                // isFocusedMac, not `isFocused` (a FocusState<Bool>.Binding) or even a plain
+                // Binding<Bool> that proxies through to isFocused.wrappedValue — confirmed
+                // live with debug logging that BOTH still never observed ChatView's
+                // `isInputFocused = true` from inside MacComposerTextView's updateUIView, no
+                // matter how long after. FocusState<Bool>.Binding is built to feed a
+                // `.focused(_:)` modifier on an actual SwiftUI-native focusable view; read
+                // anywhere else — directly, or through a plain Binding's closures that
+                // ultimately still call its .wrappedValue — it doesn't propagate. isFocusedMac
+                // is backed by a genuine @State in ChatView (isInputFocusedMac), kept in
+                // lockstep with isInputFocused by ChatView's setInputFocused(_:) helper, with
+                // no FocusState in this read path at all.
+                MacComposerTextView(
+                    text: $text,
+                    isFocused: isFocusedMac,
+                    externalUpdateToken: externalUpdateToken
+                ) {
+                    guard canSend, !isStreaming else { return }
+                    onSend()
+                }
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            #else
             TextField(rateLimitExceeded ? "Usage limit reached" : "Message...", text: $text, axis: .vertical)
                 .font(BFFont.body)
                 .textFieldStyle(.plain)
                 .focused(isFocused)
+                .accessibilityIdentifier("composerTextField")
                 .lineLimit(1...5)
                 .padding(.horizontal, 4)
                 // Without this, a multi-line (axis: .vertical) TextField only claims its own
@@ -131,37 +191,14 @@ struct ChatInputView: View {
                 // like part of the composer but silently doesn't respond to taps.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
+            #endif
 
             HStack(alignment: .center, spacing: 6) {
-                // Attach button — only rendered when the feature flag is on
-                if attachEnabled {
-                    // Plain Menu — matches the profile menu's recipe
-                    // (ContentView.swift's bottom-left account row), which
-                    // has correct upward-flip and mouse-hover behavior on
-                    // Mac Catalyst. A popover-based rebuild here regressed
-                    // mouse-click reliability, so back to Menu (cai-ios#257
-                    // follow-up).
-                    Menu {
-                        if let pickCamera = onPickCamera {
-                            Button { pickCamera() } label: {
-                                Label("Take Photo", systemImage: "camera")
-                            }
-                        }
-                        if let pickPhoto = onPickPhoto {
-                            Button { pickPhoto() } label: {
-                                Label("Photo Library", systemImage: "photo")
-                            }
-                        }
-                        if let pickFile = onPickFile {
-                            Button { pickFile() } label: {
-                                Label("Browse Files", systemImage: "folder")
-                            }
-                        }
-                        if let pickDumpScreenshot = onPickDumpScreenshot {
-                            Button { pickDumpScreenshot() } label: {
-                                Label("Decode ST22 Dump", systemImage: "exclamationmark.triangle")
-                            }
-                        }
+                // "+" button — attach options and/or per-chat Connectors
+                // toggles, shown whenever either has something to offer.
+                if attachEnabled || !chatManager.visibleMCPServers.isEmpty {
+                    Button {
+                        showAttachSheet = true
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 16, weight: .semibold))
@@ -173,6 +210,35 @@ struct ChatInputView: View {
                     .fixedSize()
                     .disabled(isStreaming)
                     .bfPointerHover()
+                    .sheet(isPresented: $showAttachSheet, onDismiss: {
+                        if pendingManageAgents {
+                            pendingManageAgents = false
+                            showManageAgentsSettings = true
+                        }
+                        if let action = pendingAttachAction {
+                            pendingAttachAction = nil
+                            action()
+                        }
+                    }) {
+                        ComposerAttachSheet(
+                            onPickCamera: onPickCamera.map { pick in { pendingAttachAction = pick } },
+                            onPickPhoto: onPickPhoto,
+                            onPickFile: onPickFile.map { pick in { pendingAttachAction = pick } },
+                            onPickDumpScreenshot: onPickDumpScreenshot,
+                            onManageAgents: { pendingManageAgents = true }
+                        )
+                    }
+                    .sheet(isPresented: $showManageAgentsSettings) {
+                        // Explicit re-injection, same as ContentView's own SettingsView
+                        // sheet (cai-ios#254) — its NavigationSplitView sidebar doesn't
+                        // reliably inherit environment objects on Mac Catalyst, which
+                        // crashed the app ("No ObservableObject of type AuthManager
+                        // found") the moment this sheet's sidebar column appeared.
+                        SettingsView(initialCategory: .connectors)
+                            .environmentObject(authManager)
+                            .environmentObject(chatManager)
+                            .environmentObject(iapManager)
+                    }
                 }
 
                 if personaFeatureEnabled {
@@ -229,6 +295,7 @@ struct ChatInputView: View {
                     .bfPointerHover()
                     // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
                     .keyboardShortcut(.return, modifiers: .command)
+                    .accessibilityIdentifier("composerSendButton")
                 }
             }
         }

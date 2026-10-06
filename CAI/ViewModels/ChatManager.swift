@@ -6,6 +6,11 @@ import SwiftUI
 // MARK: - Chat Manager
 // Coordinates between UI, streaming chat service (BFFChatService), and REST API service (BFFAPIService).
 
+/// UserDefaults key backing ChatManager.locallyConnectedServerIDs — top-level
+/// (not a `static let` on the class) since a stored property initializer
+/// can't reference `Self`.
+private let locallyConnectedServerIDsKey = "locallyConnectedMCPServerIDs"
+
 @MainActor
 final class ChatManager: ObservableObject {
 
@@ -13,19 +18,20 @@ final class ChatManager: ObservableObject {
 
     @Published var conversations: [Conversation] = []
 
-    /// Which MCP servers were enabled the last time each conversation was
-    /// active (bluefunda/cai-ios#172). Keyed by conversation id, in-memory
-    /// only for now (not persisted across relaunches). A conversation with no
-    /// entry — including every brand-new chat — defaults to no tools enabled,
-    /// rather than inheriting whatever was active elsewhere.
-    private var enabledMCPServersByConversationID: [String: Set<String>] = [:]
+    /// Which MCP servers ("Connectors") were enabled the last time each
+    /// conversation was active (bluefunda/cai-ios#172). Keyed by conversation
+    /// id, in-memory only for now (not persisted across relaunches). A
+    /// conversation with no entry — including every brand-new chat — defaults
+    /// to `defaultConnectedMCPServerIDs` (every connected connector), rather
+    /// than inheriting whatever was active elsewhere. Not private —
+    /// ChatManager+Connectors.swift's loadMCPServers() reads/writes this.
+    var enabledMCPServersByConversationID: [String: Set<String>] = [:]
 
     /// Per-conversation SAP Persona toggle/override state (bluefunda/cai-ios#217),
-    /// keyed by conversation id exactly like `enabledMCPServersByConversationID`
-    /// above — in-memory only, not persisted across relaunches. A conversation
-    /// with no entry — including every brand-new chat — defaults to the toggle
-    /// off (General), never inheriting another conversation's selection or the
-    /// Settings default persona.
+    /// keyed by conversation id — in-memory only, not persisted across
+    /// relaunches. A conversation with no entry — including every brand-new
+    /// chat — defaults to the toggle off (General), never inheriting another
+    /// conversation's selection or the Settings default persona.
     private var personaEnabledByConversationID: [String: Bool] = [:]
     private var personaOverrideByConversationID: [String: Persona] = [:]
 
@@ -46,14 +52,15 @@ final class ChatManager: ObservableObject {
         didSet {
             // Guard against in-place refreshes of the *same* conversation
             // (e.g. loadMessages replacing it with an updated copy) — only
-            // save/restore the tool selection on an actual conversation switch.
+            // save/restore the tool/persona selection on an actual conversation switch.
             guard oldValue?.id != currentConversation?.id else { return }
             if let previous = oldValue {
                 // A real switch between two conversations — persist the
                 // outgoing one's selection and restore the incoming one's
-                // (defaulting to none for a conversation never seen before).
+                // (defaulting to every connected connector for one never
+                // seen before, not to none).
                 enabledMCPServersByConversationID[previous.id] = enabledMCPServers
-                enabledMCPServers = currentConversation.flatMap { enabledMCPServersByConversationID[$0.id] } ?? []
+                enabledMCPServers = currentConversation.flatMap { enabledMCPServersByConversationID[$0.id] } ?? defaultConnectedMCPServerIDs
 
                 personaEnabledByConversationID[previous.id] = chatPersonaEnabled
                 personaOverrideByConversationID[previous.id] = chatPersonaOverride
@@ -62,10 +69,11 @@ final class ChatManager: ObservableObject {
             } else if let new = currentConversation {
                 // No prior "current" conversation — this is the first one
                 // established this session, e.g. a lazily-created draft from
-                // sendMessage(), possibly after the user already picked tools
-                // via the composer before any conversation existed. Keep the
-                // active selection as-is rather than resetting it; just start
-                // tracking it under this conversation's id going forward.
+                // sendMessage(), possibly after the user already toggled
+                // connectors via the composer before any conversation existed.
+                // Keep the active selection as-is rather than resetting it;
+                // just start tracking it under this conversation's id going
+                // forward.
                 enabledMCPServersByConversationID[new.id] = enabledMCPServers
                 personaEnabledByConversationID[new.id] = chatPersonaEnabled
                 personaOverrideByConversationID[new.id] = chatPersonaOverride
@@ -181,36 +189,38 @@ final class ChatManager: ObservableObject {
     /// Settings default. Swapped per-conversation alongside the toggle above.
     @Published var chatPersonaOverride: Persona?
 
-    /// Legacy single-agent selection, kept as the source of truth for the
-    /// outgoing chat request wire format until cai-bff/cai-llm-router ship
-    /// list-based MCP support (bluefunda/cai-bff#107, bluefunda/cai-llm-router#231).
-    /// Derived automatically from `enabledMCPServers` below.
-    @Published var selectedMCPServer: MCPServer?
+    /// User-facing multi-select state (bluefunda/cai-ios#167).
+    @Published var enabledMCPServers: Set<String> = []
 
-    /// User-facing multi-select state (bluefunda/cai-ios#167). Exactly one
-    /// enabled server maps onto the legacy `selectedMCPServer` field so the
-    /// network payload and backend agent-persona behavior are unchanged;
-    /// zero or multiple enabled servers fall back to no agent persona until
-    /// the backend contract supports a real list.
-    @Published var enabledMCPServers: Set<String> = [] {
-        didSet {
-            selectedMCPServer = enabledMCPServers.count == 1
-                ? availableMCPServers.first(where: { enabledMCPServers.contains($0.id) })
-                : nil
-        }
-    }
+    /// The default web-fetch tool's server name. Not part of `availableMCPServers`
+    /// (cai-mcp-go's catalog scopes it to the CLI channel only), and never shown as
+    /// a user-facing toggle — it's cai-llm-router's `default` agent's own static
+    /// tool, normally attached for free whenever a request carries no explicit MCP
+    /// selection at all. The moment any explicit selection is sent (legacy singular
+    /// fields, or a client-driven `mcpServers` list of any length), cai-llm-router
+    /// treats that selection as exhaustive and does NOT union it with `default`'s
+    /// tools (bluefunda/cai-ios#338) — so it must be included here explicitly to
+    /// keep general prompts working once the user enables any agent.
+    private static let defaultFetchMCPServerName = "fetch-mcp"
 
-    /// Client-driven multi-select payload (bluefunda/cai-ios#171). `nil` unless
-    /// more than one server is enabled — a single enabled server keeps using
-    /// `selectedMCPServer`/the legacy singular fields so persona-swap behavior
-    /// (e.g. ABAPer's tuned model/prompt) is unaffected, and matches
-    /// cai-llm-router's client-driven multi-MCP path, which only activates
-    /// when the list has more than one entry.
+    /// Client-driven multi-select payload (bluefunda/cai-ios#171, #338). `nil` only
+    /// when zero agents are enabled, which omits every MCP-related field from the
+    /// request and lets it fall through to cai-llm-router's own default agent
+    /// (which already carries `fetch-mcp`). As soon as one or more agents are
+    /// enabled, the full list — including the baseline `fetch-mcp` entry above —
+    /// is sent, since cai-llm-router's client-driven multi-MCP path merges every
+    /// entry in this list together rather than choosing just one (bluefunda/cai-ios#338;
+    /// previously a single enabled agent took a separate legacy singular-field path
+    /// that silently dropped `fetch-mcp`).
     private var enabledMCPServerRefs: [MCPServerRef]? {
-        guard enabledMCPServers.count > 1 else { return nil }
+        guard !enabledMCPServers.isEmpty else { return nil }
         let servers = availableMCPServers.filter { enabledMCPServers.contains($0.id) }
         guard !servers.isEmpty else { return nil }
-        return servers.map { MCPServerRef(name: $0.name, url: $0.url) }
+        var refs = servers.map { MCPServerRef(name: $0.name, url: $0.url) }
+        if !refs.contains(where: { $0.name == Self.defaultFetchMCPServerName }) {
+            refs.append(MCPServerRef(name: Self.defaultFetchMCPServerName, url: nil))
+        }
+        return refs
     }
 
     /// Reasoning effort sent with each message. Persisted across launches.
@@ -252,16 +262,38 @@ final class ChatManager: ObservableObject {
     @Published var availableMCPServers: [MCPServer] = []
     @Published var subscribedMCPServerIds: Set<String> = []
 
-    /// SAP assistants (ABAPer, SAP Analytics) hidden from all selection UI —
-    /// use this instead of `availableMCPServers` in every picker/list view.
-    private static let hiddenMCPServerNameFragments = ["abaper", "sap"]
+    /// GitHub's connect status (Settings → Connectors), see
+    /// `refreshGitHubConnectionStatus()`. `nil` username means connected but
+    /// the display name hasn't resolved (or was never set) — mirrors
+    /// GitHubOAuthStatusDTO exactly.
+    @Published var connectedGitHub = false
+    @Published var githubUsername: String?
 
-    var visibleMCPServers: [MCPServer] {
-        availableMCPServers.filter { server in
-            let name = server.displayName.lowercased()
-            return !Self.hiddenMCPServerNameFragments.contains { name.contains($0) }
+    /// ABAPer's connect status (Settings → Agents), see
+    /// `refreshSAPConnectionStatus()` — same real, server-verified pattern as
+    /// GitHub (cai-bff#160's /sap/status), not the local-only flip
+    /// `locallyConnectedServerIDs` below uses for connectors with no backend.
+    @Published var connectedSAP = false
+    @Published var sapHost: String?
+
+    /// Server ids "connected" via a simple local flip — no OAuth, no
+    /// credentials, just a Connect tap (e.g. Sales Tracker today; reusable
+    /// for any future connector needing the same lightweight treatment,
+    /// rather than a dedicated flag per connector). No backend to fetch this
+    /// from, so it's persisted in UserDefaults instead (device-local only,
+    /// unlike GitHub's real server-side connection) so it survives
+    /// relaunches/rebuilds.
+    @Published var locallyConnectedServerIDs: Set<String> = Set(
+        UserDefaults.standard.stringArray(forKey: locallyConnectedServerIDsKey) ?? []
+    ) {
+        didSet {
+            UserDefaults.standard.set(Array(locallyConnectedServerIDs), forKey: locallyConnectedServerIDsKey)
         }
     }
+
+    // visibleMCPServers, defaultConnectedMCPServerIDs, connectedMCPServers moved to
+    // ChatManager+Connectors.swift (bluefunda/cai-ios#261 precedent) to stay under
+    // SwiftLint's type_body_length limit — no behavior change, purely a structural split.
 
     @Published var rateLimit: RateLimitInfo?
     /// Set when loadRateLimit() fails to produce usable data (network error, or a stale backend
@@ -396,115 +428,25 @@ final class ChatManager: ObservableObject {
         apiService = nil
         conversations = []
         currentConversation = nil
+        clearCache()
         subscribedMCPServerIds = []
         enabledMCPServers = []
         enabledMCPServersByConversationID = [:]
+        connectedGitHub = false
+        githubUsername = nil
+        connectedSAP = false
+        sapHost = nil
+        locallyConnectedServerIDs = []
         personaEnabledByConversationID = [:]
         personaOverrideByConversationID = [:]
         rateLimit = nil
     }
 
-    // MARK: - Message History
+    // loadMessages moved to ChatManager+MessageHistory.swift to stay under
+    // SwiftLint's type_body_length limit — no behavior change.
 
-    /// Loads full message history for a conversation from the API (lazy on selection).
-    /// - Parameter force: Bypasses the "only fetch if empty" guard — used by
-    ///   `reconcileAfterBackground()` to pull the authoritative server copy
-    ///   over locally-cached messages after a stream was interrupted.
-    func loadMessages(for conversationId: String, force: Bool = false) async {
-        guard let api = apiService,
-              let idx = conversations.firstIndex(where: { $0.id == conversationId }),
-              force || conversations[idx].messages.isEmpty else { return }
-
-        do {
-            let dtos = try await api.fetchChatMessages(chatId: conversationId)
-            // cai-mcp-go now persists steps/thinkingDurationSeconds itself, so the server is
-            // authoritative and syncs across devices/reinstalls — but only for messages
-            // persisted AFTER that support was added. The local SwiftData cache is the fallback
-            // for anything the server doesn't have yet (older history, or a persist call that
-            // failed), by message id. Mirrors cai-android's ChatRepository.loadMessages.
-            let convId = conversationId
-            let cachedById: [String: PersistedMessage] = {
-                let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
-                guard let persisted = try? modelContext?.fetch(desc).first else { return [:] }
-                return Dictionary(uniqueKeysWithValues: persisted.messages.map { ($0.id, $0) })
-            }()
-            let messages = dtos.map { dto -> ChatMessage in
-                var message = ChatMessage(
-                    id: dto.id ?? UUID().uuidString,
-                    role: MessageRole(rawValue: dto.normalizedRoleString) ?? .user,
-                    content: dto.content,
-                    timestamp: dto.createdAt.flatMap(Date.fromISO8601) ?? Date(),
-                    fileUrl: dto.fileUrl,
-                    fileMetadata: dto.fileMetadata?.map(MessageFileMetadata.init(from:)),
-                    persona: dto.persona,
-                    steps: dto.steps,
-                    thinkingDurationSeconds: dto.thinkingDurationSeconds
-                )
-                if message.steps?.isEmpty ?? true,
-                   let cached = cachedById[message.id], let cachedMessage = ChatMessage(from: cached) {
-                    message.steps = cachedMessage.steps
-                    message.thinkingDurationSeconds = message.thinkingDurationSeconds ?? cachedMessage.thinkingDurationSeconds
-                }
-                return message
-            }
-            conversations[idx].messages = messages
-            if currentConversation?.id == conversationId {
-                currentConversation = conversations[idx]
-            }
-            cacheMessages(messages, for: conversationId)
-            persistHistoryFileReferences(messages, conversationId: conversationId)
-        } catch {
-            // Offline fallback: show whatever is cached
-            if conversations[idx].messages.isEmpty {
-                let convId = conversationId
-                let desc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
-                if let persisted = try? modelContext?.fetch(desc).first, !persisted.messages.isEmpty {
-                    let cached = persisted.messages
-                        .sorted(by: { $0.timestamp < $1.timestamp })
-                        .compactMap { ChatMessage(from: $0) }
-                    conversations[idx].messages = cached
-                    if currentConversation?.id == conversationId {
-                        currentConversation = conversations[idx]
-                    }
-                }
-            }
-            print("[ChatManager] loadMessages error: \(error)")
-        }
-    }
-
-    // MARK: - Conversations
-
-    func newConversation(focus: Bool = true) {
-        // Create a draft only — it is NOT added to history until the first
-        // message is sent (see sendMessage → upsertConversation). This keeps
-        // empty "New Chat" entries out of the sidebar when the user taps New
-        // Chat without typing anything (ChatGPT-style).
-        currentConversation = Conversation(
-            id: UUID().uuidString,
-            title: "New Chat",
-            messages: [],
-            model: selectedModel.id,
-            createdAt: Date()
-        )
-        if focus { shouldAutoFocusInput = true }
-    }
-
-    func selectConversation(_ conversation: Conversation) {
-        Haptic.selection()
-        shouldAutoFocusInput = false
-        currentConversation = conversation
-        Task { await loadMessages(for: conversation.id) }
-    }
-
-    func deleteConversation(_ conversation: Conversation) {
-        Haptic.impact(.rigid)
-        conversations.removeAll { $0.id == conversation.id }
-        if currentConversation?.id == conversation.id {
-            currentConversation = conversations.first
-        }
-        deleteFromCache(conversation)
-        Task { try? await fileStore.deleteAll(conversationId: conversation.id) }
-    }
+    // Conversations (new/select/delete) live in the Data Loading extension below,
+    // to keep this class body under SwiftLint's type_body_length — no behavior change.
 
     // MARK: - Messaging
 
@@ -567,6 +509,11 @@ final class ChatManager: ObservableObject {
         // Append user message
         let userMessage = ChatMessage(role: .user, content: text, fileUrl: fileUrl, persona: effectivePersona?.rawValue)
         conversation.messages.append(userMessage)
+        // Publish the prompt alone first and let the List measure it: inserting both rows in one
+        // update placed the reply row at the prompt's not-yet-measured height, underneath it, so
+        // "Thinking…" stayed hidden until the answer forced a re-layout.
+        currentConversation = conversation
+        try? await Task.sleep(for: .milliseconds(32))
 
         // Append empty assistant placeholder — same persona as the user
         // message it's answering, so the turn's lens stays paired (#207).
@@ -603,21 +550,6 @@ final class ChatManager: ObservableObject {
         )
     }
 
-    /// Patches a user message's fileUrl once an attachment upload resolves — beginUserTurn shows
-    /// the message immediately with the local filename (so the chip renders right away, above the
-    /// prompt, without waiting on the network), and this swaps in the real remote URL once known.
-    func updateUserMessageFileUrl(_ fileUrl: String, messageId: String, in conversationId: String) {
-        guard var conversation = conversations.first(where: { $0.id == conversationId }),
-              let index = conversation.messages.firstIndex(where: { $0.id == messageId }) else { return }
-
-        conversation.messages[index].fileUrl = fileUrl
-        updateConversation(conversation)
-
-        if currentConversation?.id == conversationId {
-            currentConversation = conversation
-        }
-    }
-
     /// Builds and fires the actual network request for a turn already begun
     /// via `beginUserTurn` — `fileUrl` is passed again here (rather than read
     /// back off `pending`) since it may have only just resolved from an
@@ -639,13 +571,10 @@ final class ChatManager: ObservableObject {
             prompt: requestPromptOverride ?? text,
             model: selectedModel.id,
             isNewChat: isFirstMessage,
-            mcpServerName: selectedMCPServer?.name,
-            mcpServerURL: selectedMCPServer?.url,
             mcpServers: enabledMCPServerRefs,
             thinkingMode: thinkingMode.rawValue,
             modelExplicit: userPickedModel,
             fileUrl: fileUrl,
-            agentName: agentNameForSelectedServer,
             // Gated separately from the local metadata above (bluefunda/cai-ios#203-207
             // keep working purely client-side) — the backend doesn't support this field
             // yet, so it's held back from the wire until BFFeatureFlags.personaWireEnabled
@@ -674,6 +603,8 @@ final class ChatManager: ObservableObject {
             // local wall-clock timer, which has nothing to measure from once a
             // message is reloaded from history (bluefunda/cai-ios#310 follow-up).
             var stepsStartedAt: Date?
+            // Thinking is timed from the send (assistantTimestamp) — the same clock as the
+            // "Thinking… Ns" placeholder, so the count never jumps back when steps arrive.
             var thinkingDurationSeconds: Int?
 
             var lastPublishAt = Date.distantPast
@@ -692,6 +623,13 @@ final class ChatManager: ObservableObject {
 
                     case .chunk(let content, _, _):
                         finalContent += content
+                        // First answer text ends thinking: freeze the duration now (thinking time
+                        // only, not answer time) and publish straight away so the card flips.
+                        if !content.isEmpty, thinkingDurationSeconds == nil, let started = stepsStartedAt {
+                            currentSteps?.finishAll()
+                            thinkingDurationSeconds = MessageStep.thinkingDuration(since: started)
+                            lastPublishAt = .distantPast
+                        }
                         let now = Date()
                         if now.timeIntervalSince(lastPublishAt) >= 0.03 {
                             lastPublishAt = now
@@ -701,35 +639,17 @@ final class ChatManager: ObservableObject {
                                 content: finalContent,
                                 timestamp: assistantTimestamp,
                                 persona: assistantPersona,
-                                steps: currentSteps
+                                steps: currentSteps,
+                                thinkingDurationSeconds: thinkingDurationSeconds,
+                                thinkingStartedAt: stepsStartedAt
                             )
                             updateLastMessage(interimMessage, in: conversation.id)
                         }
 
                     case .status(let stepEvent):
-                        if stepsStartedAt == nil { stepsStartedAt = Date() }
+                        if stepsStartedAt == nil { stepsStartedAt = assistantTimestamp }
                         var steps = currentSteps ?? []
-                        if let index = steps.firstIndex(where: { $0.stepId == stepEvent.stepId }) {
-                            steps[index].title = stepEvent.title
-                            steps[index].detail = stepEvent.detail
-                            steps[index].isActive = (stepEvent.state == .active)
-                        } else {
-                            steps.append(
-                                MessageStep(
-                                    stepId: stepEvent.stepId,
-                                    title: stepEvent.title,
-                                    detail: stepEvent.detail,
-                                    isActive: stepEvent.state == .active
-                                )
-                            )
-                        }
-                        // Only one step reads as "in progress" at a time — mirrors
-                        // claude.ai's single-expanded-row behavior.
-                        if stepEvent.state == .active {
-                            for index in steps.indices where steps[index].stepId != stepEvent.stepId {
-                                steps[index].isActive = false
-                            }
-                        }
+                        steps.apply(stepEvent, thinkingLocked: thinkingDurationSeconds != nil)
                         currentSteps = steps
                         let interimMessage = ChatMessage(
                             id: assistantId,
@@ -737,7 +657,9 @@ final class ChatManager: ObservableObject {
                             content: finalContent,
                             timestamp: assistantTimestamp,
                             persona: assistantPersona,
-                            steps: currentSteps
+                            steps: currentSteps,
+                            thinkingDurationSeconds: thinkingDurationSeconds,
+                            thinkingStartedAt: stepsStartedAt
                         )
                         updateLastMessage(interimMessage, in: conversation.id)
 
@@ -745,12 +667,10 @@ final class ChatManager: ObservableObject {
                         if !full.isEmpty {
                             finalContent = full
                         }
-                        // Finalize: no step reads as "in progress" once the answer is done.
-                        if currentSteps != nil {
-                            for index in currentSteps!.indices { currentSteps![index].isActive = false }
-                        }
+                        // Usually already closed at the first answer chunk; this covers answer-less turns.
+                        currentSteps?.finishAll()
                         if let stepsStartedAt, thinkingDurationSeconds == nil {
-                            thinkingDurationSeconds = max(1, Int(Date().timeIntervalSince(stepsStartedAt).rounded()))
+                            thinkingDurationSeconds = MessageStep.thinkingDuration(since: stepsStartedAt)
                         }
                         let interimMessage = ChatMessage(
                             id: assistantId,
@@ -823,8 +743,9 @@ final class ChatManager: ObservableObject {
 
             if !wasRateLimited, !Task.isCancelled, !finalContent.isEmpty {
                 if let stepsStartedAt, thinkingDurationSeconds == nil {
-                    thinkingDurationSeconds = max(1, Int(Date().timeIntervalSince(stepsStartedAt).rounded()))
+                    thinkingDurationSeconds = MessageStep.thinkingDuration(since: stepsStartedAt)
                 }
+                currentSteps?.finishAll()
                 assistantMessage = ChatMessage(
                     id: assistantId,
                     role: .assistant,
@@ -916,16 +837,6 @@ final class ChatManager: ObservableObject {
         )
     }
 
-    /// Maps the selected MCP server to a backend agent name.
-    /// Convention: strip the "-mcp" suffix (e.g. "abaper-mcp" → "abaper").
-    private var agentNameForSelectedServer: String? {
-        guard let server = selectedMCPServer else { return nil }
-        if server.name.hasSuffix("-mcp") {
-            return String(server.name.dropLast(4))
-        }
-        return server.name
-    }
-
     func stopStreaming() async {
         guard let conversation = currentConversation else { return }
         guard isStreaming else {
@@ -990,6 +901,46 @@ final class ChatManager: ObservableObject {
 // type_body_length limit — extensions are measured independently even
 // within the same file.
 extension ChatManager {
+    // MARK: - Conversations
+
+    func newConversation(focus: Bool = true) {
+        // Create a draft only — it is NOT added to history until the first
+        // message is sent (see sendMessage → upsertConversation). This keeps
+        // empty "New Chat" entries out of the sidebar when the user taps New
+        // Chat without typing anything (ChatGPT-style).
+        currentConversation = Conversation(
+            id: UUID().uuidString,
+            title: "New Chat",
+            messages: [],
+            model: selectedModel.id,
+            createdAt: Date()
+        )
+        if focus { shouldAutoFocusInput = true }
+    }
+
+    func selectConversation(_ conversation: Conversation) {
+        Haptic.selection()
+        shouldAutoFocusInput = false
+        // Re-tapping the open chat changes no id, so neither a load nor a scroll-settle
+        // would run to clear the cover the sidebar raised before calling this.
+        if currentConversation?.id == conversation.id {
+            isSwitchingConversation = false
+            return
+        }
+        currentConversation = conversation
+        Task { await loadMessages(for: conversation.id) }
+    }
+
+    func deleteConversation(_ conversation: Conversation) {
+        Haptic.impact(.rigid)
+        conversations.removeAll { $0.id == conversation.id }
+        if currentConversation?.id == conversation.id {
+            currentConversation = conversations.first
+        }
+        deleteFromCache(conversation)
+        Task { try? await fileStore.deleteAll(conversationId: conversation.id) }
+    }
+
     private func loadInitialData() async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadChats() }
@@ -997,44 +948,17 @@ extension ChatManager {
             group.addTask { await self.loadMCPServers() }
             group.addTask { await self.loadGreeting() }
             group.addTask { await self.loadPersonas() }
+            group.addTask { await self.refreshGitHubConnectionStatus() }
+            group.addTask { await self.refreshSAPConnectionStatus() }
         }
     }
 
-    func loadChats() async {
-        guard let api = apiService else { return }
-        isLoadingChats = true
+    // refreshGitHubConnectionStatus, refreshSAPConnectionStatus moved to
+    // ChatManager+Connectors.swift (bluefunda/cai-ios#261 precedent) to stay under
+    // SwiftLint's file_length limit — no behavior change.
 
-        do {
-            let dtos = try await api.fetchChats()
-            let loaded = dtos.map { dto -> Conversation in
-                Conversation(
-                    id: dto.id,
-                    title: dto.title ?? dto.firstMessage?.truncated(to: 50) ?? "Chat",
-                    messages: [],
-                    model: dto.model ?? selectedModel.id,
-                    createdAt: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
-                )
-            }
-            // Merge: keep cached messages for conversations that were already loaded
-            let mergedIds = Set(conversations.map(\.id))
-            let merged = loaded.map { conv -> Conversation in
-                if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
-                    return Conversation(id: conv.id, title: conv.title,
-                                        messages: cached.messages, model: conv.model, createdAt: conv.createdAt)
-                }
-                return conv
-            }
-            let localOnly = conversations.filter { !mergedIds.contains($0.id) }
-            conversations = merged + localOnly
-            cacheConversations(loaded)
-            retryStuckTitles(dtos)
-        } catch {
-            // Don't surface load errors — user can still create new chats
-            print("[ChatManager] loadChats error: \(error)")
-        }
-
-        isLoadingChats = false
-    }
+    // loadChats moved to ChatManager+MessageHistory.swift (alongside loadMessages) to stay
+    // under SwiftLint's file_length/type_body_length limits — no behavior change.
 
     func loadModels() async {
         guard let api = apiService else { return }
@@ -1091,24 +1015,8 @@ extension ChatManager {
         }
     }
 
-    func loadMCPServers() async {
-        guard let api = apiService else { return }
-
-        async let allServers = api.fetchAllMCPServers()
-        async let userServers = api.fetchUserMCPServers()
-
-        do {
-            let (all, user) = try await (allServers, userServers)
-            let subscribedIds = Set(user.map(\.id))
-            subscribedMCPServerIds = subscribedIds
-
-            availableMCPServers = all.map { dto in
-                MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description)
-            }
-        } catch {
-            print("[ChatManager] loadMCPServers error: \(error)")
-        }
-    }
+    // loadMCPServers moved to ChatManager+Connectors.swift (bluefunda/cai-ios#261 precedent)
+    // to stay under SwiftLint's file_length limit — no behavior change.
 
     func loadRateLimit() async {
         guard let api = apiService else { return }
@@ -1184,6 +1092,12 @@ struct Conversation: Identifiable, Equatable {
     var messages: [ChatMessage]
     var model: String
     let createdAt: Date
+    /// Distinct from `messages.isEmpty` — tracks whether a live fetch has
+    /// actually confirmed this conversation's message list, so a chat that
+    /// genuinely has zero messages can be told apart from one that just
+    /// hasn't been fetched yet (the "continuously loading" spinner on an
+    /// empty chat). Only ever set by ChatManager.loadMessages.
+    var messagesLoaded: Bool = false
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
 
@@ -1265,16 +1179,43 @@ struct MCPServer: Identifiable, Hashable {
     let name: String        // technical ID sent to backend (e.g. "abaper-mcp")
     let url: String
     let description: String?
+    /// Clean short display name (bluefunda/cai-mcp-go#262) — preferred over
+    /// `description`, which may be more verbose ("GitHub MCP Server").
+    let label: String?
 
-    /// User-facing label: shortDescription from BFF when set, otherwise the
-    /// technical name cleaned up (strip "-mcp", title-case each word).
+    /// User-facing label: `label` from BFF when set, else `description`,
+    /// else the technical name cleaned up (strip "-mcp", title-case each word).
     var displayName: String {
+        if let l = label, !l.isEmpty { return l }
         if let d = description, !d.isEmpty { return d }
         return name
             .replacingOccurrences(of: "-mcp", with: "")
             .split(separator: "-")
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }
             .joined(separator: " ")
+    }
+
+    /// Matches cai-llm-router's `isGitHubMCP` exact-hostname check
+    /// (internal/mcp/principal.go) — the only connector with a real,
+    /// working OAuth connect flow so far (Settings → Connectors).
+    var isGitHub: Bool { name == "github-mcp" }
+
+    /// No OAuth or credential form for this one — "Connect" just adds this
+    /// server's id to `ChatManager.locallyConnectedServerIDs`, no backend call.
+    var isSalesTracker: Bool { displayName.lowercased() == "sales tracker" }
+
+    var isABAPer: Bool { displayName.lowercased() == "abaper" }
+    var isSAPAnalytics: Bool { displayName.lowercased() == "sap analytics" }
+
+    /// SF Symbol for connector rows (Settings → Agents, composer's Agents
+    /// tab) — every connector except GitHub, which uses a real brand mark
+    /// ("GitHubMark" asset) instead of a generic symbol; callers branch on
+    /// `isGitHub` separately since that's a different Image initializer.
+    var connectorIconName: String {
+        if isABAPer { return "curlybraces" }
+        if isSAPAnalytics { return "chart.bar.xaxis" }
+        if isSalesTracker { return "chart.line.uptrend.xyaxis" }
+        return "brain.head.profile"
     }
 }
 

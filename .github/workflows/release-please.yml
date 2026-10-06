@@ -259,3 +259,53 @@ jobs:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets:
       GH_PAT: ${{ secrets.GH_PAT }}
+
+  draft-app-store-release-notes:
+    name: Draft App Store release notes for review
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GH_PAT }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Draft release notes from CHANGELOG.md
+        run: bundle exec fastlane ios draft_release_notes
+
+      # bluefunda/cai-ios#340: this is customer-facing App Store copy, so it's
+      # a review PR rather than a direct commit — a "Features" commit subject
+      # isn't always good marketing prose, and near-duplicate entries (two
+      # commits describing the same feature slightly differently) need a
+      # human to merge them. Note this PR can't affect the release that just
+      # shipped in the ios-deploy/macos-deploy jobs above (fastlane already
+      # pushed whatever was committed *before* this job ran) — it only sets
+      # up the copy for the *next* release.
+      - name: Open review PR if notes changed
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet fastlane/metadata/en-US/release_notes.txt fastlane/metadata_macos/en-US/release_notes.txt; then
+            echo "Release notes unchanged — nothing to draft"
+            exit 0
+          fi
+          TAG="${{ needs.release-please.outputs.tag_name }}"
+          BRANCH="chore/release-notes-$TAG"
+          git checkout -b "$BRANCH"
+          git add fastlane/metadata/en-US/release_notes.txt fastlane/metadata_macos/en-US/release_notes.txt
+          git commit -m "chore: draft App Store release notes for $TAG"
+          git push origin "HEAD:refs/heads/$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: draft App Store release notes for $TAG" \
+            --body "Auto-drafted from $TAG's Conventional Commits in CHANGELOG.md — **review and edit the wording before merging** (clean up near-duplicate bullets, sharpen the phrasing for end users). This release ($TAG) has already shipped to App Store Connect with whatever release notes were committed prior to this PR; merging this one only sets up the copy fastlane will push on the *next* release."

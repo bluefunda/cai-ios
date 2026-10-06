@@ -110,9 +110,41 @@ struct ChatView: View {
     /// The trailing "bottom" sentinel's position — see BottomSentinelYKey's declaration for why
     /// scrollToBottom's settle loop needs this instead of trusting a fixed pass count.
     @State var bottomSentinelY: CGFloat?
+    /// The List's backing UIScrollView (found by ListScrollViewProbe) — scrollToBottom offsets it
+    /// directly instead of `proxy.scrollTo`, see that function for why.
+    @State var listScrollView = WeakScrollViewBox()
 
     // Keyboard: focus only fires once per session on first launch
     @State private var hasTriggeredInitialFocus = false
+
+    // Mac Catalyst mirror of isInputFocused, kept in lockstep by setInputFocused(_:) below.
+    // MacComposerTextView (the composer's real UITextView on Mac Catalyst) needs this instead
+    // of $isInputFocused directly — confirmed live with debug logging that reading a
+    // FocusState<Bool>.Binding's wrappedValue from outside the view that actually attaches it
+    // via .focused(_:) never observes updates at all (stayed false for 10+ seconds after this
+    // view set isInputFocused = true, with or without an intermediate plain-Binding proxy
+    // wrapping the read). A genuine @State-backed Binding<Bool>, not routed through FocusState,
+    // does not have that problem. iOS/iPadOS keep using $isInputFocused with .focused(_:)
+    // directly, unaffected by any of this.
+    @State private var isInputFocusedMac = false
+
+    private func setInputFocused(_ value: Bool) {
+        isInputFocused = value
+        isInputFocusedMac = value
+    }
+
+    // Mac-only: MacComposerTextView keeps first responder through send now (see
+    // sendMessage/isStreaming's #if !macCatalyst guards), so it can no longer rely on
+    // "the field lost focus" to know an `inputText` change came from outside the user's own
+    // typing — that was how it safely told a real post-send clear apart from a stale
+    // pre-typing snapshot before. Bumping this alongside every programmatic inputText write
+    // gives it an explicit, unambiguous signal instead of an inferred one.
+    @State private var composerExternalUpdateToken = 0
+
+    private func clearComposerText() {
+        inputText = ""
+        composerExternalUpdateToken += 1
+    }
 
     // Max readable width, centred — matches ChatGPT / Claude desktop.
     // On iPhone the screen is narrower so the constraint never triggers.
@@ -124,6 +156,23 @@ struct ChatView: View {
                 ConnectionBanner(status: chatManager.connectionStatus)
             }
             messageScrollArea
+                .onChange(of: isConfirmedEmptyConversation) { _, isConfirmedEmpty in
+                    // Defensive, platform-independent: a chat that just resolved to
+                    // confirmed-empty (live fetch returned zero messages — e.g.
+                    // bluefunda/cai-bff#166, a chat whose content lives under a
+                    // different realm/org subject than the caller is currently
+                    // resolved to) has nothing to scroll-settle for. If messages
+                    // flip empty while a scroll-settle task (ChatView+Scroll.swift)
+                    // from switching into this conversation is still in flight, that
+                    // task's own completion can be lost to the race described in its
+                    // own comments, leaving isSwitchingConversation stuck true and
+                    // the cover spinner up forever with nothing underneath it ever
+                    // going to finish loading. Clearing it directly here guarantees
+                    // this specific case always settles, regardless of platform.
+                    guard isConfirmedEmpty else { return }
+                    scrollSettleTask?.cancel()
+                    chatManager.isSwitchingConversation = false
+                }
             Divider()
             inputArea
                 .frame(maxWidth: maxChatWidth)
@@ -132,11 +181,16 @@ struct ChatView: View {
         // Dismiss keyboard the moment the response starts rendering
         .onChange(of: chatManager.isStreaming) { _, streaming in
             guard streaming else { return }
-            isInputFocused = false
+            #if !targetEnvironment(macCatalyst)
+            // Mac Catalyst has no soft keyboard to reclaim screen space from by dismissing
+            // here — unlike iOS, there's no upside, only the downside of the composer
+            // going unfocused while a reply streams in. Keep it focused there instead.
+            setInputFocused(false)
             // FocusState alone doesn't always force UIKit to resign; do it explicitly
             UIApplication.shared.sendAction(
                 #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
             )
+            #endif
             // Re-run the new-prompt top positioning once more, right as real content starts
             // rendering. A genuinely cold app launch's first-ever List layout pass can be slow
             // enough that the same positioning fired from .onChange(of: latestUserMessageID) —
@@ -248,6 +302,8 @@ struct ChatView: View {
                 isStreaming: chatManager.isStreaming || chatManager.isReconciling || chatManager.isRevealingLastMessage,
                 attachmentFilename: attachmentFilename,
                 isFocused: $isInputFocused,
+                isFocusedMac: $isInputFocusedMac,
+                externalUpdateToken: composerExternalUpdateToken,
                 rateLimitExceeded: chatManager.rateLimit?.status == .exceeded || chatManager.rateLimit?.status == .blocked,
                 isRecording: voiceInput.isRecording,
                 recordingElapsed: voiceInput.elapsed,
@@ -298,13 +354,18 @@ struct ChatView: View {
 
     private func sendMessage() {
         guard !inputText.isEmpty || attachmentData != nil else { return }
-        // Dismiss keyboard immediately — don't wait for isStreaming to flip
-        isInputFocused = false
+        #if !targetEnvironment(macCatalyst)
+        // Dismiss keyboard immediately — don't wait for isStreaming to flip. Mac Catalyst
+        // has no soft keyboard to reclaim space from by dismissing (see the matching guard
+        // on .onChange(of: chatManager.isStreaming) below) — keep the composer focused
+        // there so the next message can be typed right away without re-clicking it.
+        setInputFocused(false)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
+        #endif
         let text = inputText
-        inputText = ""
+        clearComposerText()
         let personaForThisSend = personaForActiveChat
 
         // Scrolling to the new prompt happens reactively via
@@ -364,12 +425,12 @@ struct ChatView: View {
     /// "Decode" banner shown when the text looks like an ST22 short dump.
     private func decodeDump() {
         guard !inputText.isEmpty else { return }
-        isInputFocused = false
+        setInputFocused(false)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
         let text = inputText
-        inputText = ""
+        clearComposerText()
         let personaForThisSend = personaForActiveChat
         Task {
             await chatManager.sendMessage(
@@ -414,7 +475,7 @@ struct ChatView: View {
     /// and giving the keyboard a moment to actually finish dismissing before
     /// presenting avoids the corrupted transition.
     private func presentCamera() {
-        isInputFocused = false
+        setInputFocused(false)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
@@ -553,7 +614,17 @@ struct ChatView: View {
     private func triggerFocus(delay milliseconds: Int) {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(milliseconds))
-            isInputFocused = true
+            setInputFocused(true)
+            // A single delayed assignment can lose a timing race against another
+            // view's own focus-affecting transition running at the same moment —
+            // e.g. the sidebar drawer's "New Chat" button both starts a new
+            // conversation (which schedules this) AND animates the sidebar closed
+            // in the same tap, while a separate handler elsewhere resigns first
+            // responder on sidebar-open transitions. Re-asserting once more a beat
+            // later self-heals from a lost race without needing to chase down every
+            // possible interleaving; harmless no-op if the first assignment stuck.
+            try? await Task.sleep(for: .milliseconds(200))
+            setInputFocused(true)
         }
     }
 
@@ -694,7 +765,11 @@ struct MessageView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             }
-            .frame(maxWidth: 280, alignment: .trailing)
+            #if targetEnvironment(macCatalyst)
+            .frame(maxWidth: 620, alignment: .trailing)
+            #else
+            .frame(maxWidth: 600, alignment: .trailing)
+            #endif
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 6)
@@ -709,11 +784,16 @@ struct MessageView: View {
             // Unlike StreamingIndicator below, this deliberately coexists with partial/finished
             // answer text (matches claude.ai's "Thought for Ns" box staying visible above the
             // answer), so it's not gated on `message.content.isEmpty`.
-            if let steps = message.steps, !steps.isEmpty {
+            // Only steps from BEFORE the answer — mid-answer steps render in place inside it.
+            if let steps = message.steps?.cardSteps, !steps.isEmpty {
+                // Active only while still THINKING — ChatManager freezes thinkingDurationSeconds
+                // at the first answer token, so the card locks to "Thought for Ns" as the answer
+                // starts (ChatGPT/claude.ai), instead of staying live until the stream ends.
                 ThinkingStepsView(
                     steps: steps,
-                    isActive: isThisMessageStreaming,
-                    persistedDurationSeconds: message.thinkingDurationSeconds
+                    isActive: isThisMessageStreaming && message.thinkingDurationSeconds == nil,
+                    persistedDurationSeconds: message.thinkingDurationSeconds,
+                    startedAt: message.thinkingStartedAt
                 )
             }
 
@@ -723,28 +803,26 @@ struct MessageView: View {
             // screen before any real text existed. Also suppressed once real steps exist above —
             // otherwise this generic cycling caption renders on top of/behind the steps card
             // while a tool call is still in flight and content hasn't started yet.
-            if isThisMessageStreaming, message.content.isEmpty, (message.steps ?? []).isEmpty {
+            if isThisMessageStreaming, message.content.isEmpty, (message.steps ?? []).cardSteps.isEmpty {
+                // The branded pinwheel + cycling phrases from the moment the turn is sent — no
+                // blank gap while the backend sets up tools and the model starts reasoning.
+                // Replaced in place by the real ThinkingStepsView card when steps arrive, or by
+                // the answer if it comes first.
                 StreamingIndicator()
-            } else if message.content.isEmpty, !(message.steps ?? []).isEmpty {
+            } else if message.content.isEmpty, !(message.steps ?? []).cardSteps.isEmpty {
                 // Real steps are shown above and content hasn't started streaming yet (still
                 // mid-tool-call) — render nothing here rather than an empty rounded box with no
                 // text in it.
                 EmptyView()
             } else {
-                // PacedMarkdownView reveals streamed text at a readable pace instead of
-                // repainting the full markdown tree on every token.
-                PacedMarkdownView(
-                    messageId: message.id,
-                    targetContent: message.content,
-                    isStreaming: isThisMessageStreaming && !message.content.isEmpty,
+                // Paced answer text, with any mid-answer steps (text → tool → text) drawn in place
+                // like claude.ai; identical to the plain paced answer when there are none.
+                AnswerWithInlineStepsView(
+                    message: message,
+                    isStreaming: isThisMessageStreaming,
                     wasStopped: wasStopped,
                     onRevealingChanged: onRevealingChanged
                 )
-                .font(BFFont.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .contextMenu { if !message.content.isEmpty { messageActions } }
             }
 
@@ -864,6 +942,27 @@ struct EmptyStateView: View {
             #else
             Spacer(minLength: 64)
             #endif
+        }
+        .padding(BFSpacing._5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - No Messages State
+
+/// Shown for an existing conversation once a live fetch has confirmed it
+/// genuinely has no messages — distinct from EmptyStateView (the "start a
+/// new chat" greeting) and from a loading spinner, so a legitimately-empty
+/// chat has a settled state instead of looking permanently stuck.
+struct NoMessagesView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary.opacity(0.4))
+            Text("No messages found")
+                .font(BFFont.h4)
+                .foregroundStyle(.secondary)
         }
         .padding(BFSpacing._5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

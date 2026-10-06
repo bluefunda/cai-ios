@@ -10,7 +10,7 @@ import XCTest
 final class ChatManagerMCPTests: XCTestCase {
 
     private func makeServer(_ id: String, name: String? = nil, url: String = "http://example/mcp") -> MCPServer {
-        MCPServer(id: id, name: name ?? id, url: url, description: nil)
+        MCPServer(id: id, name: name ?? id, url: url, description: nil, label: nil)
     }
 
     /// sendMessage() kicks off streaming in a detached `Task` and returns as
@@ -62,22 +62,26 @@ final class ChatManagerMCPTests: XCTestCase {
 
     // MARK: - ChatManager.sendMessage — wire-format flip (#171)
 
-    func test_sendMessage_singleServer_usesLegacyFieldsNotList() async {
+    func test_sendMessage_singleServer_usesListWithDefaultFetchTool() async {
         let mock = MockChatService()
         let chatManager = ChatManager(service: mock)
-        let server = makeServer("abaper-mcp", url: "http://abaper-mcp:8015/sse")
+        let server = makeServer("github-mcp", url: "http://github-mcp:8020/mcp")
         chatManager.availableMCPServers = [server]
         chatManager.enabledMCPServers = [server.id]
 
         await chatManager.sendMessage("hello")
         await waitForCondition { mock.sendMessageCalled }
 
-        XCTAssertEqual(mock.lastRequest?.mcpServerName, server.name)
-        XCTAssertEqual(mock.lastRequest?.mcpServerURL, server.url)
-        XCTAssertNil(mock.lastRequest?.mcpServers, "a single enabled server must keep using the legacy singular fields")
+        // bluefunda/cai-ios#338: a single enabled agent must not take the legacy singular-field path.
+        XCTAssertNil(mock.lastRequest?.mcpServerName)
+        XCTAssertNil(mock.lastRequest?.mcpServerURL)
+        // Named-agent routing excludes cai-llm-router's default tools — must not request it.
+        XCTAssertNil(mock.lastRequest?.agentName)
+        let names = Set((mock.lastRequest?.mcpServers ?? []).map(\.name))
+        XCTAssertEqual(names, [server.name, "fetch-mcp"], "must still include the default web-fetch tool")
     }
 
-    func test_sendMessage_multipleServers_populatesMcpServersList() async {
+    func test_sendMessage_multipleServers_populatesMcpServersListWithDefaultFetchTool() async {
         let mock = MockChatService()
         let chatManager = ChatManager(service: mock)
         let serverA = makeServer("abaper-mcp", url: "http://abaper-mcp:8015/sse")
@@ -88,10 +92,26 @@ final class ChatManagerMCPTests: XCTestCase {
         await chatManager.sendMessage("hello")
         await waitForCondition { mock.sendMessageCalled }
 
-        XCTAssertNil(mock.lastRequest?.mcpServerName, "the multi-select path must not also populate the legacy singular field")
+        // The multi-select path must not also populate the legacy singular field.
+        XCTAssertNil(mock.lastRequest?.mcpServerName)
         XCTAssertNil(mock.lastRequest?.mcpServerURL)
         let names = Set((mock.lastRequest?.mcpServers ?? []).map(\.name))
-        XCTAssertEqual(names, [serverA.name, serverB.name])
+        XCTAssertEqual(names, [serverA.name, serverB.name, "fetch-mcp"])
+    }
+
+    func test_sendMessage_singleServer_alreadyNamedFetchMcp_isNotDuplicated() async {
+        let mock = MockChatService()
+        let chatManager = ChatManager(service: mock)
+        let server = makeServer("fetch-mcp", url: "http://fetch-mcp:8023/mcp")
+        chatManager.availableMCPServers = [server]
+        chatManager.enabledMCPServers = [server.id]
+
+        await chatManager.sendMessage("hello")
+        await waitForCondition { mock.sendMessageCalled }
+
+        // Must not send a duplicate fetch-mcp entry when it's already the enabled server.
+        let servers = mock.lastRequest?.mcpServers ?? []
+        XCTAssertEqual(servers.count, 1)
     }
 
     func test_sendMessage_noServersEnabled_sendsNoMcpFields() async {

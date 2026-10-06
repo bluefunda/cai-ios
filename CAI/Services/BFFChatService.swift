@@ -63,8 +63,8 @@ final class BFFChatService: ChatServiceProtocol {
                     "thinkingMode": request.thinkingMode,
                     "modelExplicit": request.modelExplicit
                 ]
-                if let mcpName = request.mcpServerName { payload["mcp_server_name"] = mcpName }
-                if let mcpURL  = request.mcpServerURL  { payload["mcp_server_url"]  = mcpURL  }
+                if let mcpName = request.mcpServerName { payload["mcpServerName"] = mcpName }
+                if let mcpURL  = request.mcpServerURL  { payload["mcpServerUrl"]  = mcpURL  }
                 if let servers = request.mcpServers, !servers.isEmpty {
                     payload["mcpServers"] = servers.map { $0.toJSON() }
                 }
@@ -331,13 +331,17 @@ final class BFFChatService: ChatServiceProtocol {
         // Real-time tool-use status (bluefunda/cai-llm-router#324, bluefunda/cai-ios#310) —
         // e.g. "Searching the knowledge base…" — only emitted when the backend actually runs
         // a tool for this turn.
-        case "stream_status":
+        // stream_inline_status: the same step, but it happened after the answer started —
+        // carries content_offset (UTF-16) so it renders in place inside the answer.
+        case "stream_status", "stream_inline_status":
             let stepId = json["step_id"] as? String ?? json["stepId"] as? String ?? ""
             let title = json["title"] as? String ?? ""
             let detail = json["detail"] as? String ?? ""
             let state = StepState(rawValue: json["state"] as? String ?? "") ?? .done
             guard !stepId.isEmpty else { return nil }
-            return .status(StepEvent(stepId: stepId, title: title, detail: detail, state: state))
+            let offset = type == "stream_inline_status" ? (json["content_offset"] as? Int) : nil
+            return .status(StepEvent(stepId: stepId, title: title, detail: detail, state: state,
+                                     contentOffset: offset, mood: json["mood"] as? String))
 
         // Sidebar/telemetry events that happen to carry a non-empty "content" field in a
         // different encoding (e.g. live_usage_pct's content is "pct|period", not chat text).
