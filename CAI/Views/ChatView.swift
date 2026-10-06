@@ -883,6 +883,10 @@ struct MessageView: View {
             .font(.caption2)
             .foregroundStyle(.tertiary)
         }
+        // Always the full column, left-aligned (ChatGPT/claude.ai: your bubble on the right edge,
+        // the reply on the left edge). Without it, a reply with only narrow content (a thinking
+        // line, no answer text yet) shrank to that width and centred in the column.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
     }

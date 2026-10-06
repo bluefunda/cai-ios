@@ -339,4 +339,23 @@ final class ChatManagerThinkingTests: XCTestCase {
         XCTAssertEqual(messages.last?.content, "Half an ans")
         XCTAssertFalse(manager.conversations.first?.messagesLoaded ?? true, "fetch again next open, once the save lands")
     }
+
+    // MARK: Thought line shows a full sentence, never a two-word fragment
+
+    func test_fullSentence_showsOnlyCompleteSentencesWhileThinking() {
+        let forming = MessageStep(stepId: "s", title: "But this leaves",
+                                  detail: "Testing Ben=5 gives a consistent arrangement.\nBut this leaves", isActive: true)
+        XCTAssertEqual(forming.fullSentence, "Testing Ben=5 gives a consistent arrangement.",
+                       "a sentence still being written is never shown")
+
+        let finished = MessageStep(stepId: "s", title: "But this…",
+                                   detail: "Testing Ben=5 works.\nBut this leaves the rabbit for Ela, which clue 6 forbids.", isActive: true)
+        XCTAssertEqual(finished.fullSentence, "But this leaves the rabbit for Ela, which clue 6 forbids.")
+
+        let nothingYet = MessageStep(stepId: "s", title: "Setting", detail: "Setting", isActive: true)
+        XCTAssertEqual(nothingYet.fullSentence, "", "no complete sentence yet: the header shows Thinking…")
+
+        let history = MessageStep(stepId: "s", title: "Planning the", detail: "Planning the", isActive: false)
+        XCTAssertEqual(history.fullSentence, "Planning the", "a finished step always shows its text")
+    }
 }

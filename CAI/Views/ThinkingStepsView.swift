@@ -25,6 +25,12 @@ struct ThinkingStepsView: View {
         _elapsedSeconds = State(initialValue: persistedDurationSeconds)
     }
 
+    /// The newest complete thought across all steps (a step whose sentence is still being
+    /// written falls back to the previous step's).
+    private var latestSentence: String? {
+        steps.reversed().lazy.map(\.fullSentence).first { !$0.isEmpty }
+    }
+
     private var durationText: String {
         elapsedSeconds.map { "Thought for \($0)s" } ?? "Thought"
     }
@@ -38,14 +44,15 @@ struct ThinkingStepsView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Group {
                     if isActive {
-                        TypingText(text: steps.last?.title ?? "Thinking…")
+                        TypingText(text: latestSentence ?? "Thinking…")
                     } else {
-                        Text(steps.last?.title.nilIfEmpty ?? durationText)
+                        Text(latestSentence ?? durationText)
                     }
                 }
-                .font(.subheadline)
+                .font(BFFont.bodySmall)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.leading)
+                .lineLimit(3)
                 ThinkingChevron(isExpanded: isExpanded)
             }
             .contentShape(Rectangle())
@@ -61,9 +68,9 @@ struct ThinkingStepsView: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: BFSpacing._3) {
                     Text(isActive ? "Thinking…" : durationText)
-                        .font(.subheadline)
+                        .font(BFFont.bodySmall)
                         .foregroundStyle(.secondary)
-                    ForEach(steps) { step in
+                    ForEach(steps.filter { !$0.fullSentence.isEmpty }) { step in
                         thoughtRow(step)
                     }
                 }
@@ -75,6 +82,9 @@ struct ThinkingStepsView: View {
                 )
             }
         }
+        // Full width, leading: while no answer text exists yet, nothing else in the reply spans
+        // the column, and the card shrank to its own width and centred (visible on Mac/iPad).
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { if startedAt == nil { startedAt = Date() } }
         // ChatManager's frozen duration is authoritative.
         .onChange(of: persistedDurationSeconds) { _, seconds in
@@ -97,8 +107,8 @@ struct ThinkingStepsView: View {
             if step.hasExtraDetail { expandedStepIds.formSymmetricDifference([step.stepId]) }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                TypingText(text: step.title, animates: step.isActive)
-                    .font(.subheadline)
+                TypingText(text: step.fullSentence, animates: step.isActive)
+                    .font(BFFont.bodySmall)
                     .foregroundStyle(.primary.opacity(0.75))
                     .multilineTextAlignment(.leading)
                 if isRowExpanded {
@@ -152,7 +162,7 @@ struct InlineStepsGroupView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     if isRunning { ProgressView().controlSize(.mini) }
                     Text(groupTitle)
-                        .font(.subheadline)
+                        .font(BFFont.bodySmall)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     ThinkingChevron(isExpanded: isExpanded)
@@ -175,6 +185,7 @@ struct InlineStepsGroupView: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: isRunning) { _, running in
             if !running { isExpanded = false }
         }
@@ -191,9 +202,9 @@ struct InlineStepsGroupView: View {
                         Text(tool.label).foregroundStyle(.secondary)
                         Text(tool.value).foregroundStyle(.primary).lineLimit(isRowExpanded ? nil : 1)
                     } else {
-                        TypingText(text: step.title, animates: step.isActive)
+                        TypingText(text: step.fullSentence, animates: step.isActive)
                             .foregroundStyle(.secondary)
-                            .lineLimit(isRowExpanded ? nil : 2)
+                            .lineLimit(isRowExpanded ? nil : 3)
                     }
                     if step.hasExtraDetail {
                         Image(systemName: "chevron.right")
@@ -204,7 +215,7 @@ struct InlineStepsGroupView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .font(.subheadline)
+                .font(BFFont.bodySmall)
                 if isRowExpanded {
                     Text(step.detail)
                         .font(.caption)
@@ -300,10 +311,30 @@ private struct ThinkingChevron: View {
 }
 
 extension MessageStep {
+    /// The newest full sentence of a reasoning step — the router's `title` is a caption cut at
+    /// ~60 characters ("…for Ela, Asha,…"); `detail` holds the step's sentences in full, newest
+    /// last. Tool steps (whose detail is a query/URL/sources) keep their title.
+    var fullSentence: String {
+        guard toolLabelAndValue == nil else { return title }
+        let lines = detail.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        // Only ever a COMPLETE sentence: the router re-sends the sentence being written ~4x/s,
+        // and showing it grew the line a few words at a time, retyping each update. A sentence
+        // shows once finished and stays until the next one is. Empty = none finished yet.
+        if let complete = lines.last(where: Self.isComplete) { return complete }
+        return isActive ? "" : (lines.last ?? title)
+    }
+
+    private static func isComplete(_ sentence: String) -> Bool {
+        guard let end = sentence.last else { return false }
+        return ".!?:…)\"'”".contains(end)
+    }
+
     /// Whether the detail adds anything beyond the title (only then is a row expandable).
     var hasExtraDetail: Bool {
         let detail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !detail.isEmpty && detail != title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !detail.isEmpty && detail != fullSentence.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// A tool step's title split claude.ai-style into a dim label and the specific input:
