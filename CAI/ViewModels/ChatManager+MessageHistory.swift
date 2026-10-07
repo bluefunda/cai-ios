@@ -20,6 +20,11 @@ extension ChatManager {
 
     func loadMessages(for conversationId: String, force: Bool = false) async {
         if !force, hasTurnInFlight(conversationId) { return }
+        // One fetch per chat at a time: a second, concurrent load of the same chat (opening it
+        // triggers two) replaced the rows twice — visible as the prompt flashing twice.
+        if !force, loadingConversationIds.contains(conversationId) { return }
+        loadingConversationIds.insert(conversationId)
+        defer { loadingConversationIds.remove(conversationId) }
         guard let api = apiService,
               let startIdx = conversations.firstIndex(where: { $0.id == conversationId }),
               force || !conversations[startIdx].messagesLoaded else {
@@ -78,7 +83,7 @@ extension ChatManager {
             if messages.isEmpty && !conversations[idx].messages.isEmpty {
                 print("[ChatManager] loadMessages: server returned no messages for \(conversationId); keeping local copy")
             } else {
-                var messages = messages
+                var messages = keepingOnScreenIds(messages, onScreen: conversations[idx].messages)
                 var confirmed = true
                 // A just-stopped reply is saved server-side a moment after Stop; a fetch that
                 // lands first (Stop → switch chat → back) is exactly one reply behind. Keep the
@@ -133,6 +138,25 @@ extension ChatManager {
         }
     }
 
+    /// The server's copy of a message the app already shows (sent from this device, or cached)
+    /// has a different id than the on-screen one. Swapping ids made the List animate "new row in,
+    /// old row out", showing the prompt twice for a moment. Same position, role and text = same
+    /// message: keep the on-screen id so the List sees no change.
+    func keepingOnScreenIds(_ fromServer: [ChatMessage], onScreen: [ChatMessage]) -> [ChatMessage] {
+        fromServer.enumerated().map { index, message in
+            guard index < onScreen.count else { return message }
+            let shown = onScreen[index]
+            guard shown.id != message.id, shown.role == message.role, shown.content == message.content else {
+                return message
+            }
+            return ChatMessage(
+                id: shown.id, role: message.role, content: message.content, timestamp: message.timestamp,
+                fileUrl: message.fileUrl, fileMetadata: message.fileMetadata, persona: message.persona,
+                steps: message.steps, thinkingDurationSeconds: message.thinkingDurationSeconds
+            )
+        }
+    }
+
     // MARK: - Chat List
 
     func loadChats() async {
@@ -151,7 +175,7 @@ extension ChatManager {
                 )
             }
             // Merge: keep cached messages for conversations that were already loaded
-            let mergedIds = Set(conversations.map(\.id))
+            let serverIds = Set(loaded.map(\.id))
             let merged = loaded.map { conv -> Conversation in
                 if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
                     return Conversation(id: conv.id, title: conv.title,
@@ -159,9 +183,16 @@ extension ChatManager {
                 }
                 return conv
             }
-            let localOnly = conversations.filter { !mergedIds.contains($0.id) }
+            // Chats the server doesn't list yet are kept only while they're genuinely local — the
+            // open chat, or one still streaming (sent moments ago). Everything else not on the server
+            // is stale (deleted elsewhere, or cached from another backend) and is dropped, here and
+            // from the cache, so it can't reappear at the next launch.
+            let localOnly = conversations.filter {
+                !serverIds.contains($0.id) && ($0.id == currentConversation?.id || hasTurnInFlight($0.id))
+            }
             conversations = merged + localOnly
             cacheConversations(loaded)
+            pruneCachedConversations(keeping: serverIds.union(localOnly.map(\.id)))
             retryStuckTitles(dtos)
         } catch {
             // Don't surface load errors — user can still create new chats

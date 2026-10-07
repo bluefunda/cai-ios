@@ -30,8 +30,15 @@ final class BFFAPIService {
 
     // MARK: - Chats
 
+    /// Up to `chatListLimit` most recent chats. Without a limit the server returns only its
+    /// default of 10, so the sidebar shrank to 10 a moment after launch (the cache shows up to
+    /// 200) — and older chats vanished from the list entirely.
+    static let chatListLimit = 200
+
     func fetchChats() async throws -> [ChatSummaryDTO] {
-        let response: ChatListResponse = try await client.get("/chats")
+        let response: ChatListResponse = try await client.get(
+            "/chats", queryItems: [URLQueryItem(name: "limit", value: String(Self.chatListLimit))]
+        )
         return response.chats
     }
 

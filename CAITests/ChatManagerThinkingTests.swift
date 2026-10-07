@@ -358,4 +358,30 @@ final class ChatManagerThinkingTests: XCTestCase {
         let history = MessageStep(stepId: "s", title: "Planning the", detail: "Planning the", isActive: false)
         XCTAssertEqual(history.fullSentence, "Planning the", "a finished step always shows its text")
     }
+
+    // MARK: Opening a chat doesn't flash the prompt twice
+
+    func test_keepingOnScreenIds_reusesTheShownIdForTheSameMessage() {
+        let manager = ChatManager(service: MockChatService())
+        let shown = [ChatMessage(id: "local-1", role: .user, content: "Hi"),
+                     ChatMessage(id: "local-2", role: .assistant, content: "Hello!")]
+        let server = [ChatMessage(id: "srv-1", role: .user, content: "Hi"),
+                      ChatMessage(id: "srv-2", role: .assistant, content: "Hello! (edited)")]
+
+        let merged = manager.keepingOnScreenIds(server, onScreen: shown)
+
+        XCTAssertEqual(merged[0].id, "local-1", "same position, role and text: the row must not be swapped")
+        XCTAssertEqual(merged[1].id, "srv-2", "different text is a different message")
+    }
+
+    func test_loadMessages_secondConcurrentLoadOfTheSameChatIsSkipped() async {
+        let (manager, _) = managerWithStreamingTurn()
+        manager.isStreaming = false
+        manager.streamingMessageId = nil
+        manager.loadingConversationIds.insert("c1")   // a load already in flight
+
+        await manager.loadMessages(for: "c1")
+
+        XCTAssertEqual(CountingURLProtocol.messagesRequests, 0, "a concurrent load of the same chat must not fetch again")
+    }
 }

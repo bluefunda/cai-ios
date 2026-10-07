@@ -68,7 +68,7 @@ final class ChatManagerTitleTests: XCTestCase {
                 let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
                 return (response, Data(#"{"title":"Generated Title"}"#.utf8))
             }
-            if url.hasSuffix("/chats") {
+            if request.url?.path.hasSuffix("/chats") == true {
                 let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
                 return (response, chatListJSON)
             }
