@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.9.0](https://github.com/bluefunda/cai-ios/compare/v2.8.4...v2.9.0) (2026-10-07)
+
+
+### Features
+
+* claude.ai-style thinking UI, inline tool steps, smoother streaming ([8c5a872](https://github.com/bluefunda/cai-ios/commit/8c5a8722d9ad06fd00377fdc066c92a296151b4a))
+* claude.ai-style thinking UI, inline tool steps, smoother streaming ([337eced](https://github.com/bluefunda/cai-ios/commit/337eced6e5f3a53313865fe0998a78cbccc10b6a))
+
+
+### Bug Fixes
+
+* left-align replies, larger thoughts, complete-sentence thought line ([0be323c](https://github.com/bluefunda/cai-ios/commit/0be323ccc2c286a9129c828c5b52752f82da46c3))
+
 ## [2.8.4](https://github.com/bluefunda/cai-ios/compare/v2.8.3...v2.8.4) (2026-10-01)
 
 
