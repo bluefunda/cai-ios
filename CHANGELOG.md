@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.0](https://github.com/bluefunda/cai-ios/compare/v2.9.0...v2.10.0) (2026-10-07)
+
+
+### Features
+
+* refined chat chrome + stable chat list, no duplicate prompt flash ([85d13ce](https://github.com/bluefunda/cai-ios/commit/85d13ce1b56fdc68f5dbb8c78d8ce47f0b4a0f93))
+
 ## [2.9.0](https://github.com/bluefunda/cai-ios/compare/v2.8.4...v2.9.0) (2026-10-07)
 
 
