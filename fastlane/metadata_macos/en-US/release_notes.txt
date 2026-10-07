@@ -1,4 +1,2 @@
 New in this release:
-• Claude.ai-style thinking UI, inline tool steps, smoother streaming
-
-Plus bug fixes and performance improvements.
+• Refined chat chrome + stable chat list, no duplicate prompt flash
