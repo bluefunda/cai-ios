@@ -110,6 +110,9 @@ struct ChatView: View {
     /// The trailing "bottom" sentinel's position — see BottomSentinelYKey's declaration for why
     /// scrollToBottom's settle loop needs this instead of trusting a fixed pass count.
     @State var bottomSentinelY: CGFloat?
+    /// The List's backing UIScrollView (found by ListScrollViewProbe) — scrollToBottom offsets it
+    /// directly instead of `proxy.scrollTo`, see that function for why.
+    @State var listScrollView = WeakScrollViewBox()
 
     // Keyboard: focus only fires once per session on first launch
     @State private var hasTriggeredInitialFocus = false
@@ -776,25 +779,50 @@ struct MessageView: View {
     // matches cai-android's MessageBubble (assistantBg + animateContentSize()).
     private var assistantContent: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Live tool-use status (bluefunda/cai-ios#310) — only present when the backend
+            // actually ran a tool for this turn, so most turns render nothing extra here.
+            // Unlike StreamingIndicator below, this deliberately coexists with partial/finished
+            // answer text (matches claude.ai's "Thought for Ns" box staying visible above the
+            // answer), so it's not gated on `message.content.isEmpty`.
+            // Only steps from BEFORE the answer — mid-answer steps render in place inside it.
+            if let steps = message.steps?.cardSteps, !steps.isEmpty {
+                // Active only while still THINKING — ChatManager freezes thinkingDurationSeconds
+                // at the first answer token, so the card locks to "Thought for Ns" as the answer
+                // starts (ChatGPT/claude.ai), instead of staying live until the stream ends.
+                ThinkingStepsView(
+                    steps: steps,
+                    isActive: isThisMessageStreaming && message.thinkingDurationSeconds == nil,
+                    persistedDurationSeconds: message.thinkingDurationSeconds,
+                    startedAt: message.thinkingStartedAt
+                )
+            }
+
             // Mutually exclusive with the boxed content below — matches cai-android's
             // MessageBubble (`if (content.isEmpty && isStreaming) StreamingIndicator() else
             // Column(background) { ... }`). Showing both at once put an empty rounded box on
-            // screen before any real text existed.
-            if isThisMessageStreaming, message.content.isEmpty {
+            // screen before any real text existed. Also suppressed once real steps exist above —
+            // otherwise this generic cycling caption renders on top of/behind the steps card
+            // while a tool call is still in flight and content hasn't started yet.
+            if isThisMessageStreaming, message.content.isEmpty, (message.steps ?? []).cardSteps.isEmpty {
+                // The branded pinwheel + cycling phrases from the moment the turn is sent — no
+                // blank gap while the backend sets up tools and the model starts reasoning.
+                // Replaced in place by the real ThinkingStepsView card when steps arrive, or by
+                // the answer if it comes first.
                 StreamingIndicator()
+            } else if message.content.isEmpty, !(message.steps ?? []).cardSteps.isEmpty {
+                // Real steps are shown above and content hasn't started streaming yet (still
+                // mid-tool-call) — render nothing here rather than an empty rounded box with no
+                // text in it.
+                EmptyView()
             } else {
-                // PacedMarkdownView reveals streamed text at a readable pace instead of
-                // repainting the full markdown tree on every token.
-                PacedMarkdownView(
-                    messageId: message.id,
-                    targetContent: message.content,
-                    isStreaming: isThisMessageStreaming && !message.content.isEmpty,
+                // Paced answer text, with any mid-answer steps (text → tool → text) drawn in place
+                // like claude.ai; identical to the plain paced answer when there are none.
+                AnswerWithInlineStepsView(
+                    message: message,
+                    isStreaming: isThisMessageStreaming,
                     wasStopped: wasStopped,
                     onRevealingChanged: onRevealingChanged
                 )
-                .font(BFFont.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
                 .contextMenu { if !message.content.isEmpty { messageActions } }
             }
 
@@ -855,6 +883,10 @@ struct MessageView: View {
             .font(.caption2)
             .foregroundStyle(.tertiary)
         }
+        // Always the full column, left-aligned (ChatGPT/claude.ai: your bubble on the right edge,
+        // the reply on the left edge). Without it, a reply with only narrow content (a thinking
+        // line, no answer text yet) shrank to that width and centred in the column.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
     }

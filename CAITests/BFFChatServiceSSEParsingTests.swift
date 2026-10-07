@@ -59,6 +59,37 @@ final class BFFChatServiceSSEParsingTests: XCTestCase {
         XCTAssertNil(event)
     }
 
+    /// stream_status (bluefunda/cai-llm-router#324) is the one previously-unrecognized-shaped
+    /// event that *is* now surfaced — as `.status`, never as a chat chunk — since it drives the
+    /// live tool-use step list (bluefunda/cai-ios#310).
+    func testStreamStatusActive_ParsedAsStatus() {
+        let event = BFFChatService.parseSSEEvent(sseEvent(
+            #"{"type":"stream_status","step_id":"tool-1","title":"Searching the knowledge base","detail":"Looking for relevant context.","state":"active"}"#
+        ))
+        guard case .status(let step) = event else {
+            return XCTFail("Expected .status, got \(String(describing: event))")
+        }
+        XCTAssertEqual(step.stepId, "tool-1")
+        XCTAssertEqual(step.title, "Searching the knowledge base")
+        XCTAssertEqual(step.detail, "Looking for relevant context.")
+        XCTAssertEqual(step.state, .active)
+    }
+
+    func testStreamStatusDone_ParsedAsStatus() {
+        let event = BFFChatService.parseSSEEvent(sseEvent(
+            #"{"type":"stream_status","step_id":"tool-1","title":"Searched the knowledge base","detail":"Found 3 relevant results.","state":"done"}"#
+        ))
+        guard case .status(let step) = event else {
+            return XCTFail("Expected .status, got \(String(describing: event))")
+        }
+        XCTAssertEqual(step.state, .done)
+    }
+
+    func testStreamStatusMissingStepId_IsIgnored() {
+        let event = BFFChatService.parseSSEEvent(sseEvent(#"{"type":"stream_status","title":"x","state":"active"}"#))
+        XCTAssertNil(event, "a stream_status frame with no step_id can't be upserted, so it must be ignored rather than crash/misrender")
+    }
+
     /// A genuinely unknown, forward-compatible event type must also be ignored rather than
     /// falling back to "treat any non-empty content as a chat chunk" — that fallback was the
     /// root cause: it silently absorbed *any* future event type nobody had written a case for
@@ -66,5 +97,24 @@ final class BFFChatServiceSSEParsingTests: XCTestCase {
     func testUnknownFutureEventType_IsIgnored_NotAssumedToBeChunk() {
         let event = BFFChatService.parseSSEEvent(sseEvent(#"{"type":"some_new_event_type","content":"whatever"}"#))
         XCTAssertNil(event)
+    }
+
+    func test_inlineStatus_parsesOffsetAndMood() {
+        let event = BFFChatService.parseSSEEvent(sseEvent(
+            #"{"type":"stream_inline_status","step_id":"t1","title":"Read fao.org","state":"done","mood":"happy","content_offset":61}"#
+        ))
+        guard case .status(let step)? = event else { return XCTFail("expected a status event, got \(String(describing: event))") }
+        XCTAssertEqual(step.stepId, "t1")
+        XCTAssertEqual(step.contentOffset, 61)
+        XCTAssertEqual(step.mood, "happy")
+    }
+
+    func test_regularStatus_hasNoOffset() {
+        let event = BFFChatService.parseSSEEvent(sseEvent(
+            #"{"type":"stream_status","step_id":"s1","title":"Planning","state":"active","mood":"thinking","content_offset":5}"#
+        ))
+        guard case .status(let step)? = event else { return XCTFail("expected a status event") }
+        XCTAssertNil(step.contentOffset, "only stream_inline_status carries a position")
+        XCTAssertEqual(step.mood, "thinking")
     }
 }

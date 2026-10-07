@@ -182,6 +182,7 @@ struct ChatInputView: View {
                 .font(BFFont.body)
                 .textFieldStyle(.plain)
                 .focused(isFocused)
+                .accessibilityIdentifier("composerTextField")
                 .lineLimit(1...5)
                 .padding(.horizontal, 4)
                 // Without this, a multi-line (axis: .vertical) TextField only claims its own
@@ -294,6 +295,7 @@ struct ChatInputView: View {
                     .bfPointerHover()
                     // ⌘↩ sends on Mac (and external keyboards on iOS); plain ↩ adds a newline
                     .keyboardShortcut(.return, modifiers: .command)
+                    .accessibilityIdentifier("composerSendButton")
                 }
             }
         }

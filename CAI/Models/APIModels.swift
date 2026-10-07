@@ -156,10 +156,17 @@ struct ChatMessageDTO: Codable {
     /// since older history predates this field on the backend
     /// (cai-mcp-go#181) — absent means "unknown", not "none".
     let persona: String?
+    /// Live "what's happening now" steps captured while this AI_RESPONSE streamed, persisted
+    /// server-side by cai-mcp-go. Absent on history predating this field, or on any turn with
+    /// no step activity.
+    let steps: [MessageStep]?
+    /// Wall-clock seconds from the first step to stream end, persisted alongside `steps`.
+    let thinkingDurationSeconds: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, role, content, createdAt, fileUrl, fileDownloadUrl, persona
         case fileMetadata = "file_metadata"
+        case steps, thinkingDurationSeconds
     }
 
     /// Converts web role names ("Human", "AI") to canonical role strings ("user", "assistant")

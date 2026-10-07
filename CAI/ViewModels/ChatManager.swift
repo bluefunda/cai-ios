@@ -445,45 +445,8 @@ final class ChatManager: ObservableObject {
     // loadMessages moved to ChatManager+MessageHistory.swift to stay under
     // SwiftLint's type_body_length limit — no behavior change.
 
-    // MARK: - Conversations
-
-    func newConversation(focus: Bool = true) {
-        // Create a draft only — it is NOT added to history until the first
-        // message is sent (see sendMessage → upsertConversation). This keeps
-        // empty "New Chat" entries out of the sidebar when the user taps New
-        // Chat without typing anything (ChatGPT-style).
-        currentConversation = Conversation(
-            id: UUID().uuidString,
-            title: "New Chat",
-            messages: [],
-            model: selectedModel.id,
-            createdAt: Date()
-        )
-        if focus { shouldAutoFocusInput = true }
-    }
-
-    func selectConversation(_ conversation: Conversation) {
-        Haptic.selection()
-        shouldAutoFocusInput = false
-        // Re-tapping the open chat changes no id, so neither a load nor a scroll-settle
-        // would run to clear the cover the sidebar raised before calling this.
-        if currentConversation?.id == conversation.id {
-            isSwitchingConversation = false
-            return
-        }
-        currentConversation = conversation
-        Task { await loadMessages(for: conversation.id) }
-    }
-
-    func deleteConversation(_ conversation: Conversation) {
-        Haptic.impact(.rigid)
-        conversations.removeAll { $0.id == conversation.id }
-        if currentConversation?.id == conversation.id {
-            currentConversation = conversations.first
-        }
-        deleteFromCache(conversation)
-        Task { try? await fileStore.deleteAll(conversationId: conversation.id) }
-    }
+    // Conversations (new/select/delete) live in the Data Loading extension below,
+    // to keep this class body under SwiftLint's type_body_length — no behavior change.
 
     // MARK: - Messaging
 
@@ -546,6 +509,11 @@ final class ChatManager: ObservableObject {
         // Append user message
         let userMessage = ChatMessage(role: .user, content: text, fileUrl: fileUrl, persona: effectivePersona?.rawValue)
         conversation.messages.append(userMessage)
+        // Publish the prompt alone first and let the List measure it: inserting both rows in one
+        // update placed the reply row at the prompt's not-yet-measured height, underneath it, so
+        // "Thinking…" stayed hidden until the answer forced a re-layout.
+        currentConversation = conversation
+        try? await Task.sleep(for: .milliseconds(32))
 
         // Append empty assistant placeholder — same persona as the user
         // message it's answering, so the turn's lens stays paired (#207).
@@ -580,21 +548,6 @@ final class ChatManager: ObservableObject {
             userMessage: userMessage,
             assistantMessage: assistantMessage
         )
-    }
-
-    /// Patches a user message's fileUrl once an attachment upload resolves — beginUserTurn shows
-    /// the message immediately with the local filename (so the chip renders right away, above the
-    /// prompt, without waiting on the network), and this swaps in the real remote URL once known.
-    func updateUserMessageFileUrl(_ fileUrl: String, messageId: String, in conversationId: String) {
-        guard var conversation = conversations.first(where: { $0.id == conversationId }),
-              let index = conversation.messages.firstIndex(where: { $0.id == messageId }) else { return }
-
-        conversation.messages[index].fileUrl = fileUrl
-        updateConversation(conversation)
-
-        if currentConversation?.id == conversationId {
-            currentConversation = conversation
-        }
     }
 
     /// Builds and fires the actual network request for a turn already begun
@@ -640,6 +593,20 @@ final class ChatManager: ObservableObject {
             let assistantTimestamp = assistantMessage.timestamp
             let assistantPersona = assistantMessage.persona
 
+            // Live tool-use status steps (bluefunda/cai-ios#310), upserted by
+            // `stepId` as `.status` events arrive. `nil` (not just empty) so a
+            // turn with no backend tool activity threads `nil` through every
+            // `ChatMessage` below and `ThinkingStepsView` never renders for it.
+            var currentSteps: [MessageStep]?
+            // When the first step appeared — lets us compute a real, persistable
+            // "Thought for Ns" duration instead of relying on the view's own
+            // local wall-clock timer, which has nothing to measure from once a
+            // message is reloaded from history (bluefunda/cai-ios#310 follow-up).
+            var stepsStartedAt: Date?
+            // Thinking is timed from the send (assistantTimestamp) — the same clock as the
+            // "Thinking… Ns" placeholder, so the count never jumps back when steps arrive.
+            var thinkingDurationSeconds: Int?
+
             var lastPublishAt = Date.distantPast
 
             do {
@@ -656,6 +623,13 @@ final class ChatManager: ObservableObject {
 
                     case .chunk(let content, _, _):
                         finalContent += content
+                        // First answer text ends thinking: freeze the duration now (thinking time
+                        // only, not answer time) and publish straight away so the card flips.
+                        if !content.isEmpty, thinkingDurationSeconds == nil, let started = stepsStartedAt {
+                            currentSteps?.finishAll()
+                            thinkingDurationSeconds = MessageStep.thinkingDuration(since: started)
+                            lastPublishAt = .distantPast
+                        }
                         let now = Date()
                         if now.timeIntervalSince(lastPublishAt) >= 0.03 {
                             lastPublishAt = now
@@ -664,32 +638,63 @@ final class ChatManager: ObservableObject {
                                 role: .assistant,
                                 content: finalContent,
                                 timestamp: assistantTimestamp,
-                                persona: assistantPersona
+                                persona: assistantPersona,
+                                steps: currentSteps,
+                                thinkingDurationSeconds: thinkingDurationSeconds,
+                                thinkingStartedAt: stepsStartedAt
                             )
                             updateLastMessage(interimMessage, in: conversation.id)
                         }
 
+                    case .status(let stepEvent):
+                        if stepsStartedAt == nil { stepsStartedAt = assistantTimestamp }
+                        var steps = currentSteps ?? []
+                        steps.apply(stepEvent, thinkingLocked: thinkingDurationSeconds != nil)
+                        currentSteps = steps
+                        let interimMessage = ChatMessage(
+                            id: assistantId,
+                            role: .assistant,
+                            content: finalContent,
+                            timestamp: assistantTimestamp,
+                            persona: assistantPersona,
+                            steps: currentSteps,
+                            thinkingDurationSeconds: thinkingDurationSeconds,
+                            thinkingStartedAt: stepsStartedAt
+                        )
+                        updateLastMessage(interimMessage, in: conversation.id)
+
                     case .streamEnd(_, let full, _):
                         if !full.isEmpty {
                             finalContent = full
+                        }
+                        // Usually already closed at the first answer chunk; this covers answer-less turns.
+                        currentSteps?.finishAll()
+                        if let stepsStartedAt, thinkingDurationSeconds == nil {
+                            thinkingDurationSeconds = MessageStep.thinkingDuration(since: stepsStartedAt)
                         }
                         let interimMessage = ChatMessage(
                             id: assistantId,
                             role: .assistant,
                             content: finalContent,
                             timestamp: assistantTimestamp,
-                            persona: assistantPersona
+                            persona: assistantPersona,
+                            steps: currentSteps,
+                            thinkingDurationSeconds: thinkingDurationSeconds
                         )
                         updateLastMessage(interimMessage, in: conversation.id)
                         Haptic.impact(.light)   // response complete
 
-                        // Persist AI message (best-effort)
+                        // Persist AI message (best-effort) — steps/thinkingDurationSeconds
+                        // included so cai-mcp-go stores them server-side, not just in this
+                        // device's SwiftData cache (see BFFAPIService.persistMessage).
                         if let api = apiService, !finalContent.isEmpty {
                             Task {
                                 try? await api.persistMessage(
                                     chatId: conversation.id,
                                     role: "AI",
-                                    content: finalContent
+                                    content: finalContent,
+                                    steps: currentSteps,
+                                    thinkingDurationSeconds: thinkingDurationSeconds
                                 )
                             }
                         }
@@ -737,12 +742,18 @@ final class ChatManager: ObservableObject {
             }
 
             if !wasRateLimited, !Task.isCancelled, !finalContent.isEmpty {
+                if let stepsStartedAt, thinkingDurationSeconds == nil {
+                    thinkingDurationSeconds = MessageStep.thinkingDuration(since: stepsStartedAt)
+                }
+                currentSteps?.finishAll()
                 assistantMessage = ChatMessage(
                     id: assistantId,
                     role: .assistant,
                     content: finalContent,
                     timestamp: assistantTimestamp,
-                    persona: assistantPersona
+                    persona: assistantPersona,
+                    steps: currentSteps,
+                    thinkingDurationSeconds: thinkingDurationSeconds
                 )
                 updateLastMessage(assistantMessage, in: conversation.id)
             }
@@ -761,7 +772,14 @@ final class ChatManager: ObservableObject {
                     role: .assistant,
                     content: "I couldn't generate a response for that. Please try rephrasing or send it again.",
                     timestamp: assistantMessage.timestamp,
-                    persona: assistantMessage.persona
+                    persona: assistantMessage.persona,
+                    // A turn can stream real reasoning steps and still end with no answer text
+                    // (e.g. the backend's final completion came back empty) — omitting these would
+                    // silently default them to nil via ChatMessage's memberwise init, wiping out a
+                    // thinking card the user was actually watching. Mirrors cai-android's equivalent
+                    // fix to ChatViewModel's blank-completion branch.
+                    steps: currentSteps,
+                    thinkingDurationSeconds: thinkingDurationSeconds
                 )
                 updateLastMessage(assistantMessage, in: conversation.id)
             }
@@ -883,6 +901,46 @@ final class ChatManager: ObservableObject {
 // type_body_length limit — extensions are measured independently even
 // within the same file.
 extension ChatManager {
+    // MARK: - Conversations
+
+    func newConversation(focus: Bool = true) {
+        // Create a draft only — it is NOT added to history until the first
+        // message is sent (see sendMessage → upsertConversation). This keeps
+        // empty "New Chat" entries out of the sidebar when the user taps New
+        // Chat without typing anything (ChatGPT-style).
+        currentConversation = Conversation(
+            id: UUID().uuidString,
+            title: "New Chat",
+            messages: [],
+            model: selectedModel.id,
+            createdAt: Date()
+        )
+        if focus { shouldAutoFocusInput = true }
+    }
+
+    func selectConversation(_ conversation: Conversation) {
+        Haptic.selection()
+        shouldAutoFocusInput = false
+        // Re-tapping the open chat changes no id, so neither a load nor a scroll-settle
+        // would run to clear the cover the sidebar raised before calling this.
+        if currentConversation?.id == conversation.id {
+            isSwitchingConversation = false
+            return
+        }
+        currentConversation = conversation
+        Task { await loadMessages(for: conversation.id) }
+    }
+
+    func deleteConversation(_ conversation: Conversation) {
+        Haptic.impact(.rigid)
+        conversations.removeAll { $0.id == conversation.id }
+        if currentConversation?.id == conversation.id {
+            currentConversation = conversations.first
+        }
+        deleteFromCache(conversation)
+        Task { try? await fileStore.deleteAll(conversationId: conversation.id) }
+    }
+
     private func loadInitialData() async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadChats() }
@@ -899,41 +957,8 @@ extension ChatManager {
     // ChatManager+Connectors.swift (bluefunda/cai-ios#261 precedent) to stay under
     // SwiftLint's file_length limit — no behavior change.
 
-    func loadChats() async {
-        guard let api = apiService else { return }
-        isLoadingChats = true
-
-        do {
-            let dtos = try await api.fetchChats()
-            let loaded = dtos.map { dto -> Conversation in
-                Conversation(
-                    id: dto.id,
-                    title: dto.title ?? dto.firstMessage?.truncated(to: 50) ?? "Chat",
-                    messages: [],
-                    model: dto.model ?? selectedModel.id,
-                    createdAt: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
-                )
-            }
-            // Merge: keep cached messages for conversations that were already loaded
-            let mergedIds = Set(conversations.map(\.id))
-            let merged = loaded.map { conv -> Conversation in
-                if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
-                    return Conversation(id: conv.id, title: conv.title,
-                                        messages: cached.messages, model: conv.model, createdAt: conv.createdAt)
-                }
-                return conv
-            }
-            let localOnly = conversations.filter { !mergedIds.contains($0.id) }
-            conversations = merged + localOnly
-            cacheConversations(loaded)
-            retryStuckTitles(dtos)
-        } catch {
-            // Don't surface load errors — user can still create new chats
-            print("[ChatManager] loadChats error: \(error)")
-        }
-
-        isLoadingChats = false
-    }
+    // loadChats moved to ChatManager+MessageHistory.swift (alongside loadMessages) to stay
+    // under SwiftLint's file_length/type_body_length limits — no behavior change.
 
     func loadModels() async {
         guard let api = apiService else { return }

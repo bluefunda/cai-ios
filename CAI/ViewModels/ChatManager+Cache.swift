@@ -49,9 +49,14 @@ extension ChatManager {
         guard let persisted = try? ctx.fetch(convDesc).first else { return }
         let existingIds = Set(persisted.messages.map(\.id))
         for msg in messages where !existingIds.contains(msg.id) {
+            let stepsJSON = msg.steps.flatMap { steps in
+                (try? JSONEncoder().encode(steps)).flatMap { String(data: $0, encoding: .utf8) }
+            }
             let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
                                       roleRaw: msg.role.rawValue, content: msg.content,
-                                      timestamp: msg.timestamp, persona: msg.persona)
+                                      timestamp: msg.timestamp, persona: msg.persona,
+                                      stepsJSON: stepsJSON,
+                                      thinkingDurationSeconds: msg.thinkingDurationSeconds)
             pm.conversation = persisted
             ctx.insert(pm)
         }

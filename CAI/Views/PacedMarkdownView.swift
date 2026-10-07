@@ -76,6 +76,33 @@ struct PacedMarkdownView: View {
     // below would no longer block it, and it would resume/replay the tail that arrived during
     // that window. Once true this never resets for the lifetime of this view instance.
     @State private var hasFrozen = false
+    // Smoothed chars/sec at which streamed text is arriving — see maxLagSeconds.
+    @State private var arrivalRate: Double = 0
+    @State private var lastArrival: ContinuousClock.Instant?
+
+    init(
+        messageId: String,
+        targetContent: String,
+        isStreaming: Bool,
+        wasStopped: Bool = false,
+        onRevealingChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.messageId = messageId
+        self.targetContent = targetContent
+        self.isStreaming = isStreaming
+        self.wasStopped = wasStopped
+        self.onRevealingChanged = onRevealingChanged
+        // A message that isn't streaming has nothing to reveal — start with its full text so
+        // the List row's FIRST layout pass already measures the real height. Starting from ""
+        // and filling it in onChange(initial:) one update later made every history row size
+        // as empty first, then grow: the List re-measured those cells a beat late, and the
+        // text drew over the rows below for a moment (the overlap seen when switching chats).
+        if !isStreaming {
+            _pacedContent = State(initialValue: targetContent)
+            _renderedContent = State(initialValue: targetContent)
+            _latestTarget = State(initialValue: targetContent)
+        }
+    }
 
     // A word-stepped reveal (fixed pause between whole words, matching the Gemini app's look)
     // was tried here and explicitly rejected: any discrete step with a real pause between
@@ -86,16 +113,52 @@ struct PacedMarkdownView: View {
     // word" is keeping the *tick interval* small (paceDelay) so each individual update is only a
     // couple of characters — well under one word — regardless of the overall chars/sec rate.
     private static let paceDelay: Duration = .milliseconds(8)
-    private static let charsPerSecond: Double = 460
+    // Adaptive rate (was a fixed 460 chars/s): aim to drain whatever has arrived but isn't shown
+    // yet within `catchUpSeconds`. A fast model (e.g. Groq) builds a big backlog, so the reveal
+    // speeds up instead of trailing seconds behind a finished stream; a slow model leaves a small
+    // backlog, so the reveal slows down and spreads each bursty network chunk across the gap to
+    // the next one instead of racing ahead and stalling (stop-and-go). Clamped both ways so it
+    // never crawls or dumps a wall of text in one tick.
+    private static let catchUpSeconds: Double = 0.6
+    private static let minCharsPerSecond: Double = 90
+    private static let maxCharsPerSecond: Double = 2400
+    // Pace to the stream's measured ARRIVAL rate (smoothed), not just "drain the backlog in
+    // 0.6s". A provider that sends few, large chunks (Gemini: hundreds of chars ~once a second)
+    // otherwise revealed each chunk in a 0.6s burst and then sat idle until the next — fast and
+    // stop-and-go. Matching the arrival rate spreads each chunk across the gap to the next one.
+    // `maxLagSeconds` still bounds how far the reveal may trail what has arrived.
+    private static let maxLagSeconds: Double = 1.5
+    private static let arrivalSmoothing: Double = 0.15
     private static let maxCharsPerTick = 60
     private static let boundarySnapSlack = 8
-    // How often the (expensive) markdown re-render is allowed to run while actively revealing —
-    // independent of paceDelay, which stays fast so the underlying text keeps advancing smoothly.
-    private static let renderInterval: Duration = .milliseconds(60)
+    // How often the markdown re-render may run while revealing. Plain text is cheap enough to
+    // redraw ~every frame (was 60ms for everything, i.e. ~16 visible updates/s, each dropping
+    // several words at once); an OPEN code block keeps the slower interval, because re-parsing and
+    // re-highlighting a growing fenced block costs O(block length) per render.
+    private static let renderInterval: Duration = .milliseconds(16)
+    private static let codeBlockRenderInterval: Duration = .milliseconds(60)
+
+    /// True when `text` ends inside an unclosed ``` fence — an odd number of fences so far.
+    private static func endsInsideCodeBlock(_ text: String) -> Bool {
+        var count = 0
+        var searchStart = text.startIndex
+        while let range = text.range(of: "```", range: searchStart..<text.endIndex) {
+            count += 1
+            searchStart = range.upperBound
+        }
+        return count % 2 == 1
+    }
 
     var body: some View {
-        MarkdownView(content: renderedContent, isStreaming: isActivelyRevealing, cacheKey: messageId)
+        MarkdownView(
+            content: isActivelyRevealing
+                ? StreamingMarkdown.displayable(renderedContent, insideCodeBlock: Self.endsInsideCodeBlock(renderedContent))
+                : renderedContent,
+            isStreaming: isActivelyRevealing,
+            cacheKey: messageId
+        )
             .onChange(of: targetContent, initial: true) { _, newTarget in
+                recordArrival(newTarget)
                 latestTarget = newTarget
 
                 if pacedContent.isEmpty {
@@ -177,6 +240,19 @@ struct PacedMarkdownView: View {
     /// every "snap straight to this text" path (fresh mount, divergence, stop, resume). The
     /// throttled render path inside the tick loop below is the only place these two are
     /// deliberately allowed to drift apart.
+    /// Updates the smoothed arrival rate from how much text arrived since the previous update.
+    private func recordArrival(_ newTarget: String) {
+        let now = ContinuousClock.now
+        defer { lastArrival = now }
+        guard isStreaming, let last = lastArrival else { return }
+        let added = newTarget.count - latestTarget.count
+        guard added > 0 else { return }
+        let components = (now - last).components
+        let seconds = max(Double(components.seconds) + Double(components.attoseconds) * 1e-18, 0.05)
+        let instant = Double(added) / seconds
+        arrivalRate = arrivalRate == 0 ? instant : arrivalRate + Self.arrivalSmoothing * (instant - arrivalRate)
+    }
+
     private func publish(_ value: String) {
         pacedContent = value
         renderedContent = value
@@ -207,7 +283,16 @@ struct PacedMarkdownView: View {
                 // time, not assumed from paceDelay — if a tick lands late (scheduler jitter,
                 // markdown re-parse cost, scroll contention), the next one reveals proportionally
                 // more so the average rate holds steady instead of visibly stalling.
-                let rawChars = Int((elapsedSeconds * Self.charsPerSecond).rounded())
+                let backlog = Double(target.count - pacedContent.count)
+                // The arrival rate, sped up only if the reveal would trail by more than
+                // maxLagSeconds. With no rate measured yet, drain over catchUpSeconds.
+                // Also after the stream ends: keep the measured pace and finish within maxLagSeconds,
+                // instead of rushing the remainder out in catchUpSeconds (a visible end burst).
+                let desiredRate = arrivalRate > 0
+                    ? max(arrivalRate, backlog / Self.maxLagSeconds)
+                    : backlog / Self.catchUpSeconds
+                let charsPerSecond = min(max(desiredRate, Self.minCharsPerSecond), Self.maxCharsPerSecond)
+                let rawChars = Int((elapsedSeconds * charsPerSecond).rounded())
                 let charsToReveal = min(max(rawChars, 1), Self.maxCharsPerTick)
 
                 // Recomputed fresh against *this* tick's `target` every time — a String.Index
@@ -251,7 +336,10 @@ struct PacedMarkdownView: View {
                 // publish on the tick that catches pacedContent up to the target, though, so the
                 // response doesn't sit briefly stale right when it finishes.
                 let sinceLastRender = now - lastRenderPublish
-                if sinceLastRender >= Self.renderInterval || pacedContent.count >= target.count {
+                let interval = sinceLastRender >= Self.codeBlockRenderInterval
+                    ? Self.renderInterval // already overdue for either case — skip the fence scan
+                    : (Self.endsInsideCodeBlock(pacedContent) ? Self.codeBlockRenderInterval : Self.renderInterval)
+                if sinceLastRender >= interval || pacedContent.count >= target.count {
                     renderedContent = pacedContent
                     lastRenderPublish = now
                 }
@@ -270,5 +358,68 @@ struct PacedMarkdownView: View {
         revealTask = nil
         publish(latestTarget)
         if wasRevealing { setRevealing(false) }
+    }
+}
+
+/// Display-only cleanup for markdown that is still being revealed (claude.ai-style: elements
+/// appear once they can render, never as half-typed syntax). The revealed prefix often ends
+/// mid-construct — a lone "##", a "- " with no text, an unclosed "**", a table row still being
+/// typed — which rendered as raw symbols for a moment and then visibly reflowed into the real
+/// element ("formatting jumps"). This holds such a tail back (or closes it) until it completes.
+/// Never applied to finished text, and never inside an open code fence (code is shown verbatim).
+enum StreamingMarkdown {
+    /// Line prefixes that mean nothing yet on their own: a heading/list/quote marker with no text,
+    /// a fence opener still getting its language, a rule/setext underline, a table row in progress.
+    private static let incompleteLinePattern = try? NSRegularExpression(
+        pattern: #"^\s*(#{1,6}\s*|[-*+]\s*|\d+[.)]\s*|>\s*|`{1,3}[\w+-]*|[-=_*]{1,}\s*|\|.*)$"#
+    )
+
+    static func displayable(_ text: String, insideCodeBlock: Bool) -> String {
+        guard !text.isEmpty, !insideCodeBlock else { return text }
+        // A display formula ($$…$$) still being typed: hide it until its closing $$ arrives, so
+        // it appears once, formatted, instead of as raw "$$3.22B = 1" for a moment.
+        let mathFences = text.components(separatedBy: "$$").count - 1
+        if mathFences % 2 == 1, let open = text.range(of: "$$", options: .backwards) {
+            return displayable(String(text[..<open.lowerBound]), insideCodeBlock: false)
+        }
+        var body = text
+        var lastLine = ""
+        if let newline = text.lastIndex(of: "\n") {
+            body = String(text[...newline])
+            lastLine = String(text[text.index(after: newline)...])
+        } else {
+            body = ""
+            lastLine = text
+        }
+
+        // 1. A trailing line that is only a block marker (or a half-typed table row) is held
+        //    back until its line completes.
+        let range = NSRange(lastLine.startIndex..., in: lastLine)
+        if incompleteLinePattern?.firstMatch(in: lastLine, range: range) != nil {
+            return body
+        }
+
+        // 2. Inline constructs still open in the trailing line are closed or trimmed.
+        return body + closeInline(lastLine)
+    }
+
+    private static func closeInline(_ line: String) -> String {
+        var line = line
+        // A half-typed link: hide from its "[" until the whole "[text](url)" has arrived.
+        if let open = line.lastIndex(of: "["), !line[open...].contains(")") {
+            line = String(line[..<open])
+        }
+        // An opening "**" with nothing after it yet, or a lone trailing "*"/"_" (emphasis
+        // still forming), is hidden until its text arrives.
+        if line.hasSuffix("**"), line.components(separatedBy: "**").count % 2 == 0 {
+            line.removeLast(2)
+        } else if let last = line.last, last == "*" || last == "_", !line.hasSuffix("**") {
+            line.removeLast()
+        }
+        // Unclosed bold / inline code: close them so the text renders styled while it types.
+        if line.components(separatedBy: "**").count % 2 == 0 { line += "**" }
+        let ticks = line.replacingOccurrences(of: "```", with: "").filter { $0 == "`" }.count
+        if ticks % 2 == 1 { line += "`" }
+        return line
     }
 }

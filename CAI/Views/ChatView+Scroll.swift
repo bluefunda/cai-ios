@@ -88,8 +88,6 @@ extension ChatView {
     }
 
     func scrollToBottom(
-        proxy: ScrollViewProxy,
-        targetID: String,
         conversationID: String?,
         isSettled: @escaping () -> Bool
     ) async {
@@ -101,18 +99,75 @@ extension ChatView {
         // closest plain-SwiftUI approximation (no CADisplayLink/frame-callback API here) to that
         // same per-frame cadence.
         //
-        // 60 passes (~1s) is a hard safety cap, not the expected case — both platforms settle
+        // 90 passes (~1.5s) is a hard safety cap, not the expected case — both platforms settle
         // long before that in practice (iOS reliably within the first ~10, same as before this
         // became dynamic, so this is not expected to change iOS's timing at all); it only exists
         // so a case isSettled() can never satisfy (e.g. this ran before "bottom" ever laid out)
         // can't spin forever.
-        for _ in 0..<60 {
+        //
+        //
+        // Offsets the List's UIScrollView directly rather than `proxy.scrollTo(sentinel)`. On a
+        // chat switch SwiftUI resolves the sentinel to its NEW row index while its coalescing
+        // UICollectionView may not have applied the new rows yet — it crashed with "Attempted to
+        // scroll the collection view to an out-of-bounds item (26) when there are only 4 items"
+        // (SIGABRT), even well after the rows changed. A content offset names no row, so it can't
+        // go out of bounds; repeating it each pass follows contentSize as rows self-size.
+        //
+        // "Settled" is judged from the scroll view itself — at the max offset with contentSize
+        // unchanged for 3 consecutive frames — not from the sentinel's reported position, which
+        // can be a stale reading from before the rows near the end self-sized and so stopped a
+        // long chat short of its end. `isSettled` is only the fallback before the scroll view is
+        // found.
+        var lastHeight: CGFloat = -1
+        var stablePasses = 0
+        for _ in 0..<90 {
             guard !Task.isCancelled else { return }
             guard chatManager.currentConversation?.id == conversationID else { return }
-            proxy.scrollTo(targetID, anchor: .bottom)
+            guard let scrollView = listScrollView.scrollView else {
+                try? await Task.sleep(for: .milliseconds(16))
+                if isSettled() { return }
+                continue
+            }
+            Self.pinToBottom(scrollView)
             try? await Task.sleep(for: .milliseconds(16))
-            if isSettled() { return }
+            let height = scrollView.contentSize.height
+            if height == lastHeight, Self.isAtBottom(scrollView) {
+                stablePasses += 1
+                if stablePasses >= 3 { return }
+            } else {
+                stablePasses = 0
+            }
+            lastHeight = height
         }
+    }
+
+    /// Keeps a just-opened chat pinned to its end for a short while after the loading cover
+    /// drops — late layout (code highlighting, images, a row finishing its self-sizing) can still
+    /// grow the content. Stops the moment the user touches the list, so it never fights a scroll.
+    func holdAtBottom(conversationID: String?, for duration: Duration = .milliseconds(800)) async {
+        let deadline = ContinuousClock.now + duration
+        while ContinuousClock.now < deadline {
+            guard !Task.isCancelled, chatManager.currentConversation?.id == conversationID,
+                  let scrollView = listScrollView.scrollView,
+                  !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating
+            else { return }
+            if !Self.isAtBottom(scrollView) { Self.pinToBottom(scrollView) }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+    }
+
+    private static func bottomOffsetY(_ scrollView: UIScrollView) -> CGFloat {
+        let maxY = scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        return max(-scrollView.adjustedContentInset.top, maxY)
+    }
+
+    private static func isAtBottom(_ scrollView: UIScrollView) -> Bool {
+        abs(scrollView.contentOffset.y - bottomOffsetY(scrollView)) < 1
+    }
+
+    private static func pinToBottom(_ scrollView: UIScrollView) {
+        let target = CGPoint(x: scrollView.contentOffset.x, y: bottomOffsetY(scrollView))
+        if scrollView.contentOffset != target { scrollView.setContentOffset(target, animated: false) }
     }
 
     /// Scrolls a newly-sent user message to the top of the viewport, leaving room below for the
@@ -139,6 +194,7 @@ extension ChatView {
         // reports a real position, which is exactly the behavior wanted for a fresh send.
         streamingRowBottomY = nil
         scrollSettleTask?.cancel()
+        let convoID = chatManager.currentConversation?.id
         scrollSettleTask = Task { @MainActor in
             guard !Task.isCancelled else { return }
             try? await Task.sleep(for: .milliseconds(50))
@@ -150,11 +206,11 @@ extension ChatView {
             // first aren't meant to be seen — they just get this row's geometry established so the
             // actual visible motion (the animated pass after) lands accurately on the first try.
             for _ in 0..<3 {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, chatManager.currentConversation?.id == convoID else { return }
                 proxy.scrollTo(id, anchor: .top)
                 try? await Task.sleep(for: .milliseconds(16))
             }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, chatManager.currentConversation?.id == convoID else { return }
             withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(id, anchor: .top)
             }
@@ -239,6 +295,7 @@ extension ChatView {
                                         : { _ in }
                                 )
                                 .id(message.id)
+                                .background(ListScrollViewProbe(box: listScrollView))
                                 .background {
                                     // Tracks the streaming row's bottom edge relative to the
                                     // List's own viewport (named coordinate space, not the
@@ -354,20 +411,29 @@ extension ChatView {
                         // has ever had real rows to lay out, same unmeasured-content race the
                         // settle loop exists to cover everywhere else.
                         guard isNonEmpty else { return }
-                        // Cancelling scrollSettleTask here can land on an in-flight conversation-
-                        // switch task (.onAppear / currentConversation.id below) before it reaches
-                        // its own `isSwitchingConversation = false` — cooperative cancellation
-                        // means that task's remaining code (including that reset) never runs, so
-                        // without clearing it here too the loading overlay is left stuck on
-                        // forever. Real content is about to render regardless, so it's always
-                        // correct to drop it at this point.
-                        chatManager.isSwitchingConversation = false
+                        // A fresh send into an empty chat also flips hasMessages — that's the
+                        // new-prompt case, not "opened an existing chat": scroll the prompt to the
+                        // top like every later send. Scrolling to the bottom here (past the
+                        // streaming spacer) raced scheduleNewPromptPositioning, cancelled it, and
+                        // pushed the user's first prompt off-screen.
+                        if chatManager.isStreaming, let id = latestUserMessageID {
+                            scheduleNewPromptPositioning(id: id, proxy: proxy)
+                            return
+                        }
+                        // History just arrived for a chat being opened. Keep the loading cover up
+                        // while the jump to the bottom settles, and drop it only then — so the
+                        // chat appears already at its end. Dropping it here (before settling) left
+                        // a long chat visibly jumping as its rows self-sized. This task replaces
+                        // (cancels) any in-flight switch task, so it owns clearing the cover; the
+                        // loop is capped (~1s), so the cover can't get stuck.
                         bottomSentinelY = nil
                         scrollSettleTask?.cancel()
-                        let target = bottomSentinelID
                         let convoID = chatManager.currentConversation?.id
                         scrollSettleTask = Task { @MainActor in
-                            await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                            await scrollToBottom(conversationID: convoID, isSettled: checkNearBottomSentinel)
+                            guard !Task.isCancelled else { return }
+                            chatManager.isSwitchingConversation = false
+                            await holdAtBottom(conversationID: convoID)
                         }
                     }
                     // reconcileAfterBackground() re-fetches the conversation from the server and
@@ -394,7 +460,11 @@ extension ChatView {
                         // anchoring there pushes the actual (short) message content off-screen
                         // above, leaving the spacer's blank space visible below: the prompt reads
                         // as cut off under the header on a cold launch + first message.
-                        guard let newID else { return }
+                        // Only for an actual send. Opening a chat also changes this id (nil ->
+                        // its last user message, once history loads) — positioning there
+                        // dropped the switching cover early (rows visibly overlapping mid-layout)
+                        // and fought the bottom settle; a chat switch belongs to that settle.
+                        guard let newID, chatManager.isStreaming else { return }
                         scheduleNewPromptPositioning(id: newID, proxy: proxy)
                     }
                     // Keeps a growing response from disturbing wherever the user has scrolled to —
@@ -425,7 +495,7 @@ extension ChatView {
                         }
                     }
                     .onPreferenceChange(StreamingRowBottomKey.self) { streamingRowBottomY = $0 }
-                    .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
+                    // EXPERIMENT .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
                     .onChange(of: chatManager.currentConversation?.id) { _, _ in
                         // Guarded on hasMessages: for a brand-new empty conversation (New Chat),
                         // there's nothing below the EmptyStateView but its "bottom" spacer —
@@ -436,17 +506,17 @@ extension ChatView {
                         chatManager.isSwitchingConversation = true
                         bottomSentinelY = nil
                         scrollSettleTask?.cancel()
-                        let target = bottomSentinelID
                         let convoID = chatManager.currentConversation?.id
                         scrollSettleTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
-                            await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                            await scrollToBottom(conversationID: convoID, isSettled: checkNearBottomSentinel)
                             // Guards against a cancelled/superseded task's cooperative-cancellation
                             // remnant (scrollToBottom returns early but this task's own code after
                             // it keeps running) clobbering the *new* task's isSwitchingConversation =
                             // true with a stale false once it finally gets scheduled.
                             guard !Task.isCancelled else { return }
                             chatManager.isSwitchingConversation = false
+                            await holdAtBottom(conversationID: convoID)
                         }
                     }
                     .onAppear {
@@ -455,17 +525,17 @@ extension ChatView {
                         chatManager.isSwitchingConversation = true
                         bottomSentinelY = nil
                         scrollSettleTask?.cancel()
-                        let target = bottomSentinelID
                         let convoID = chatManager.currentConversation?.id
                         scrollSettleTask = Task { @MainActor in
                             try? await Task.sleep(for: .milliseconds(50))
-                            await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                            await scrollToBottom(conversationID: convoID, isSettled: checkNearBottomSentinel)
                             // Guards against a cancelled/superseded task's cooperative-cancellation
                             // remnant (scrollToBottom returns early but this task's own code after
                             // it keeps running) clobbering the *new* task's isSwitchingConversation =
                             // true with a stale false once it finally gets scheduled.
                             guard !Task.isCancelled else { return }
                             chatManager.isSwitchingConversation = false
+                            await holdAtBottom(conversationID: convoID)
                         }
                     }
                 }
@@ -514,6 +584,7 @@ extension ChatView {
                         .frame(maxWidth: maxChatWidth)
                         .frame(maxWidth: .infinity)
                         .id(message.id)
+                        .background(ListScrollViewProbe(box: listScrollView))
                         .background {
                             if isThisMessageStreaming {
                                 GeometryReader { rowGeo in
@@ -555,13 +626,20 @@ extension ChatView {
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: hasMessages) { _, isNonEmpty in
                 guard isNonEmpty else { return }
-                chatManager.isSwitchingConversation = false
+                // Fresh send into an empty chat — position the prompt at the top (see iOS path).
+                if chatManager.isStreaming, let id = latestUserMessageID {
+                    scheduleNewPromptPositioning(id: id, proxy: proxy)
+                    return
+                }
+                // Cover stays up until settled — see the iOS handler.
                 bottomSentinelY = nil
                 scrollSettleTask?.cancel()
-                let target = bottomSentinelID
                 let convoID = chatManager.currentConversation?.id
                 scrollSettleTask = Task { @MainActor in
-                    await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                    await scrollToBottom(conversationID: convoID, isSettled: checkNearBottomSentinel)
+                    guard !Task.isCancelled else { return }
+                    chatManager.isSwitchingConversation = false
+                    await holdAtBottom(conversationID: convoID)
                 }
             }
             .onChange(of: chatManager.isReconciling) { wasReconciling, isReconciling in
@@ -570,7 +648,7 @@ extension ChatView {
                 proxy.scrollTo(lastID, anchor: .bottom)
             }
             .onChange(of: latestUserMessageID) { _, newID in
-                guard let newID else { return }
+                guard let newID, chatManager.isStreaming else { return }  // sends only — see iOS path
                 scheduleNewPromptPositioning(id: newID, proxy: proxy)
             }
             .onChange(of: streamingContentBucket) { _, _ in
@@ -589,19 +667,19 @@ extension ChatView {
                 }
             }
             .onPreferenceChange(StreamingRowBottomKey.self) { streamingRowBottomY = $0 }
-            .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
+            // EXPERIMENT .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
             .onChange(of: chatManager.currentConversation?.id) { _, _ in
                 guard hasMessages else { return }
                 chatManager.isSwitchingConversation = true
                 bottomSentinelY = nil
                 scrollSettleTask?.cancel()
-                let target = bottomSentinelID
                 let convoID = chatManager.currentConversation?.id
                 scrollSettleTask = Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(50))
-                    await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                    await scrollToBottom(conversationID: convoID, isSettled: checkNearBottomSentinel)
                     guard !Task.isCancelled else { return }
                     chatManager.isSwitchingConversation = false
+                    await holdAtBottom(conversationID: convoID)
                 }
             }
             .onAppear {
@@ -610,13 +688,13 @@ extension ChatView {
                 chatManager.isSwitchingConversation = true
                 bottomSentinelY = nil
                 scrollSettleTask?.cancel()
-                let target = bottomSentinelID
                 let convoID = chatManager.currentConversation?.id
                 scrollSettleTask = Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(50))
-                    await scrollToBottom(proxy: proxy, targetID: target, conversationID: convoID, isSettled: checkNearBottomSentinel)
+                    await scrollToBottom(conversationID: convoID, isSettled: checkNearBottomSentinel)
                     guard !Task.isCancelled else { return }
                     chatManager.isSwitchingConversation = false
+                    await holdAtBottom(conversationID: convoID)
                 }
             }
         }
@@ -659,3 +737,37 @@ private extension UIView {
     }
 }
 #endif
+
+/// Weak handle to the chat List's backing UIScrollView, shared between the row probes that find
+/// it and scrollToBottom that drives it. A class so a probe can fill it without a state change.
+final class WeakScrollViewBox {
+    weak var scrollView: UIScrollView?
+}
+
+/// Zero-size, non-interactive view placed in a List row that records the List's backing
+/// UIScrollView (the row's nearest scroll-view ancestor) into `box`.
+struct ListScrollViewProbe: UIViewRepresentable {
+    let box: WeakScrollViewBox
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        DispatchQueue.main.async { record(from: view) }
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        record(from: uiView)
+    }
+
+    private func record(from view: UIView) {
+        var current = view.superview
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView {
+                if box.scrollView !== scrollView { box.scrollView = scrollView }
+                return
+            }
+            current = candidate.superview
+        }
+    }
+}

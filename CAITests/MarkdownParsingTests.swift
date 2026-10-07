@@ -103,3 +103,65 @@ final class SyntaxHighlightingTests: XCTestCase {
         XCTAssertEqual(tokens.first { $0.0 == "from" }?.1, .keyword)
     }
 }
+
+// MARK: - Streaming markdown (no half-typed syntax while revealing)
+
+final class StreamingMarkdownTests: XCTestCase {
+    private func shown(_ text: String, code: Bool = false) -> String {
+        StreamingMarkdown.displayable(text, insideCodeBlock: code)
+    }
+
+    func test_loneHeadingMarker_isHeldBack() {
+        XCTAssertEqual(shown("Intro\n##"), "Intro\n")
+        XCTAssertEqual(shown("Intro\n## "), "Intro\n")
+        XCTAssertEqual(shown("Intro\n## Step 1"), "Intro\n## Step 1", "a heading with text shows as it types")
+    }
+
+    func test_emptyListItemsAndQuotes_areHeldBack() {
+        XCTAssertEqual(shown("Items:\n- "), "Items:\n")
+        XCTAssertEqual(shown("Items:\n2."), "Items:\n")
+        XCTAssertEqual(shown("Items:\n>"), "Items:\n")
+        XCTAssertEqual(shown("Items:\n- apples"), "Items:\n- apples")
+    }
+
+    func test_tableRowInProgress_isHeldBackUntilItsLineEnds() {
+        let table = "| A | B |\n|---|---|\n"
+        XCTAssertEqual(shown(table + "| 1 | 2"), table)
+        XCTAssertEqual(shown(table + "| 1 | 2 |\n"), table + "| 1 | 2 |\n")
+    }
+
+    func test_fenceOpenerStillGettingItsLanguage_isHeldBack() {
+        XCTAssertEqual(shown("Code:\n```sw"), "Code:\n")
+    }
+
+    func test_unclosedBoldAndInlineCode_areClosedSoTheyRenderStyled() {
+        XCTAssertEqual(shown("Use **bold te"), "Use **bold te**")
+        XCTAssertEqual(shown("Run `npm i"), "Run `npm i`")
+        XCTAssertEqual(shown("Done **here** ok"), "Done **here** ok", "balanced markers are untouched")
+    }
+
+    func test_openingMarkersWithNothingAfter_areHidden() {
+        XCTAssertEqual(shown("Next is **"), "Next is ")
+        XCTAssertEqual(shown("An *"), "An ")
+    }
+
+    func test_halfTypedLink_isHiddenUntilComplete() {
+        XCTAssertEqual(shown("See [the docs](https://exa"), "See ")
+        XCTAssertEqual(shown("See [the docs](https://example.com) now"), "See [the docs](https://example.com) now")
+    }
+
+    func test_insideOpenCodeBlock_textIsUntouched() {
+        XCTAssertEqual(shown("```\nlet x = **", code: true), "```\nlet x = **")
+    }
+
+    func test_displayMathStillBeingTyped_isHiddenUntilClosed() {
+        XCTAssertEqual(shown("Since the total is 1,240 kg:\n\n$$3.22B = 1"), "Since the total is 1,240 kg:\n\n")
+        XCTAssertEqual(shown("So $$B = 385$$ and"), "So $$B = 385$$ and", "a closed formula shows")
+        XCTAssertEqual(shown("$$a$$ then $$b"), "$$a$$ then ", "only the open one is hidden")
+    }
+
+    func test_plainSentencesAreUnchanged() {
+        XCTAssertEqual(shown("The total is 1,240 kg"), "The total is 1,240 kg")
+        XCTAssertEqual(shown(""), "")
+    }
+}

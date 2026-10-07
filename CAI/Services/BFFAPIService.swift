@@ -45,11 +45,26 @@ final class BFFAPIService {
         return response.context
     }
 
-    func persistMessage(chatId: String, role: String, content: String) async throws {
-        try await client.postIgnoringResponse("/chats/\(chatId)/persist", body: [
+    /// - Parameters:
+    ///   - steps/thinkingDurationSeconds: Only meaningful on an "AI" persist call. Sent so
+    ///     cai-mcp-go can store them server-side (previously on-device only, via SwiftData) —
+    ///     without this, reopening the same chat on a different device or after a reinstall
+    ///     never showed thinking history for a turn, even though it had one.
+    func persistMessage(
+        chatId: String, role: String, content: String,
+        steps: [MessageStep]? = nil, thinkingDurationSeconds: Int? = nil
+    ) async throws {
+        var body: [String: Any] = [
             "role": role,
             "content": content
-        ])
+        ]
+        if let steps, !steps.isEmpty {
+            body["steps"] = steps.map { ["stepId": $0.stepId, "title": $0.title, "detail": $0.detail] }
+        }
+        if let thinkingDurationSeconds {
+            body["thinkingDurationSeconds"] = thinkingDurationSeconds
+        }
+        try await client.postIgnoringResponse("/chats/\(chatId)/persist", body: body)
     }
 
     func generateTitle(chatId: String, message: String) async throws -> String {

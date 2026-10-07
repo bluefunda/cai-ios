@@ -360,10 +360,15 @@ struct PersonaComposerControl: View {
                 HStack(spacing: 3) {
                     Image(systemName: isOn ? "person.text.rectangle.fill" : "person.text.rectangle")
                         .font(.system(size: 14))
-                    Text("Persona")
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
+                    // Icon-only once on: the persona chip beside it already names the persona,
+                    // and every part of this row is fixedSize — label + chip + mode picker +
+                    // send overflowed an iPhone-width composer, shifting the whole screen sideways.
+                    if !isOn {
+                        Text("Persona")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+                    }
                 }
                 .foregroundStyle(isOn ? BFColor.primary : .secondary)
                 .padding(.horizontal, 6)
