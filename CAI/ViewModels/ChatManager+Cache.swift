@@ -40,17 +40,44 @@ extension ChatManager {
         try? ctx.save()
     }
 
-    /// Upserts messages for a conversation — adds new ones without duplicating.
+    /// Removes cached chats the server no longer lists (deleted on another device, or cached from a
+    /// different backend). The cache only ever grew, so those reappeared at every launch until the
+    /// server's list replaced them a few seconds later.
+    func pruneCachedConversations(keeping ids: Set<String>) {
+        guard let ctx = modelContext else { return }
+        guard let cached = try? ctx.fetch(FetchDescriptor<PersistedConversation>()) else { return }
+        for conversation in cached where !ids.contains(conversation.id) {
+            for message in conversation.messages { ctx.delete(message) }
+            ctx.delete(conversation)
+        }
+        try? ctx.save()
+    }
+
     /// Not `private`: also called from `ChatManager.swift` proper.
+    /// Mirrors the conversation's complete message list into the cache (both callers pass the
+    /// full list: a history load, and a finished reply). It used to only ever ADD messages, so when
+    /// the server's copy (server id) replaced the one sent from this device (local id), both stayed
+    /// cached — reopening the chat showed the prompt twice until the server copy replaced it.
     func cacheMessages(_ messages: [ChatMessage], for conversationId: String) {
         guard let ctx = modelContext else { return }
         let convId = conversationId
         let convDesc = FetchDescriptor<PersistedConversation>(predicate: #Predicate { $0.id == convId })
         guard let persisted = try? ctx.fetch(convDesc).first else { return }
-        let existingIds = Set(persisted.messages.map(\.id))
-        for msg in messages where !existingIds.contains(msg.id) {
+        let keepIds = Set(messages.map(\.id))
+        for stale in persisted.messages where !keepIds.contains(stale.id) {
+            ctx.delete(stale)
+        }
+        let cachedById = Dictionary(persisted.messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for msg in messages {
             let stepsJSON = msg.steps.flatMap { steps in
                 (try? JSONEncoder().encode(steps)).flatMap { String(data: $0, encoding: .utf8) }
+            }
+            if let cached = cachedById[msg.id], keepIds.contains(cached.id) {
+                // Keep a finished reply's thinking record current (it may have arrived after
+                // the message was first cached).
+                if stepsJSON != nil { cached.stepsJSON = stepsJSON }
+                if let seconds = msg.thinkingDurationSeconds { cached.thinkingDurationSeconds = seconds }
+                continue
             }
             let pm = PersistedMessage(id: msg.id, conversationId: conversationId,
                                       roleRaw: msg.role.rawValue, content: msg.content,

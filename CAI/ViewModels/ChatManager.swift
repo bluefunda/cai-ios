@@ -110,6 +110,9 @@ final class ChatManager: ObservableObject {
     /// drawer-close animation and the loading spinner both get a real chance to render *first*,
     /// instead of competing with that heavier work for the same SwiftUI update pass.
     @Published var isSwitchingConversation = false
+    /// Conversations whose history fetch is in flight — opening a chat triggers loadMessages
+    /// from both selectConversation and ChatView's .task(id:); without this both fetched.
+    var loadingConversationIds: Set<String> = []
     /// Set at the moment the user taps Stop, cleared when the next message starts sending.
     /// Lets PacedMarkdownView tell "the user explicitly stopped this response" (snap the reveal
     /// to whatever has arrived so far) apart from "the network side finished naturally" (keep

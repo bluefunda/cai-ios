@@ -34,8 +34,8 @@ struct SidebarConversationRow: View {
     /// this, so rows are simply selected-or-not there.
     @State private var isHovered = false
 
-    /// Pill rows, not square ones — `BFRadius.full` on a ~34-pt row resolves
-    /// to a true capsule, the shape both reference sidebars use.
+    /// Softly rounded rows (`BFRadius.row`, 10pt) — a full capsule read as too curved for the
+    /// selected chat.
     private var background: Color {
         if isSelected { return BFColor.primary.opacity(0.15) }
         if isHovered { return BFColor.rowHover }
@@ -56,7 +56,7 @@ struct SidebarConversationRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(background, in: RoundedRectangle(cornerRadius: BFRadius.full, style: .continuous))
+        .background(background, in: RoundedRectangle(cornerRadius: BFRadius.row, style: .continuous))
         .contentShape(Rectangle())
         .animation(BFMotion.easingDefault, value: isHovered)
         .onHover { isHovered = $0 }

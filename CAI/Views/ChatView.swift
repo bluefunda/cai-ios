@@ -944,18 +944,11 @@ struct EmptyStateView: View {
             #else
             Spacer(minLength: 24)
             #endif
-            // The greeting carries the brand gradient itself — Gemini's
-            // signature empty state — so the 52-pt sparkles mark that used to
-            // sit above it is gone rather than competing with it for weight.
+            // The greeting carries the app's brand blue itself (solid, not a gradient), so the
+            // 52-pt sparkles mark that used to sit above it is gone rather than competing with it.
             Text(greeting)
                 .font(BFFont.h3)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [BFColor.primary, BFColor.accentGradientTo],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .foregroundStyle(BFColor.primary)
                 .multilineTextAlignment(.center)
             Text("How can I help you today?")
                 .font(BFFont.bodyLarge)
