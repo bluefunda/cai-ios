@@ -33,8 +33,8 @@ struct ChatTopBar: View {
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
-        .background(Color(.systemBackground))
-        .overlay(alignment: .bottom) { Divider() }
+        .background(BFColor.surfaceCanvas)
+        .overlay(alignment: .bottom) { BFHairline() }
     }
 }
 
@@ -61,8 +61,8 @@ struct CodeTopBar: View {
         }
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
-        .background(Color(.systemBackground))
-        .overlay(alignment: .bottom) { Divider() }
+        .background(BFColor.surfaceCanvas)
+        .overlay(alignment: .bottom) { BFHairline() }
     }
 }
 
