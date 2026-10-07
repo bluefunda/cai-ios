@@ -1,1 +1,4 @@
-This release includes bug fixes and performance improvements.
+New in this release:
+• Claude.ai-style thinking UI, inline tool steps, smoother streaming
+
+Plus bug fixes and performance improvements.
