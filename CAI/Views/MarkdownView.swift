@@ -689,6 +689,8 @@ private struct HeadingView: View {
             .font(headingFont)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Same as paragraphs: a long heading wraps instead of being cut to one line with "…".
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.top, level <= 2 ? 6 : 2)
     }
 

@@ -229,9 +229,6 @@ extension ChatView {
                     if isConfirmedEmptyConversation {
                         NoMessagesView()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         EmptyStateView(greeting: greetingText)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -333,14 +330,10 @@ extension ChatView {
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
-                        } else if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
-                            ProgressView()
-                                .padding(.top, 40)
-                                .frame(maxWidth: .infinity)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
                         } else {
+                            // No spinner while the chat LIST loads: launch always opens a new chat,
+                            // so the greeting is already right. Showing one here flickered welcome →
+                            // spinner → welcome at every launch. (The sidebar shows its own.)
                             EmptyStateView(greeting: greetingText)
                                 // A List row sizes to its own content — unlike a plain
                                 // ScrollView+VStack child, it does NOT stretch to fill the List's

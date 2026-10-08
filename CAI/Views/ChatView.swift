@@ -753,6 +753,10 @@ struct MessageView: View {
                         .font(BFFont.body)
                         .foregroundStyle(.primary)
                         .textSelection(.enabled)
+                        // Pin the full wrapped height, as MarkdownView's paragraphs do: without it
+                        // the List could size this row a line short on narrow screens (iPhone 13
+                        // mini), and the prompt's last line spilled under the reply below.
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 11)
                         .background(
