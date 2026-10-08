@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.1](https://github.com/bluefunda/cai-ios/compare/v2.10.0...v2.10.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* prompt bubble overlapping the reply, cut-off headings, launch flicker ([e8f7565](https://github.com/bluefunda/cai-ios/commit/e8f7565f8822a81689a631430c9d631a17d85bb0))
+* prompt bubble overlapping the reply, cut-off headings, launch flicker ([c028e0f](https://github.com/bluefunda/cai-ios/commit/c028e0f133fc3d898c42344cd050e79f89da8395))
+
 ## [2.10.0](https://github.com/bluefunda/cai-ios/compare/v2.9.0...v2.10.0) (2026-10-07)
 
 
