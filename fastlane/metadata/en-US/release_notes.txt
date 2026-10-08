@@ -1,2 +1,1 @@
-New in this release:
-• Refined chat chrome + stable chat list, no duplicate prompt flash
+This release includes bug fixes and performance improvements.
