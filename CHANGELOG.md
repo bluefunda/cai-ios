@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.2](https://github.com/bluefunda/cai-ios/compare/v2.10.1...v2.10.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **thinking:** show a tool step's title instead of its duration ([c94f562](https://github.com/bluefunda/cai-ios/commit/c94f562a0d747a50da444a42868a9e306b4c723c))
+* **thinking:** show a tool step's title instead of its duration ([76f3ea4](https://github.com/bluefunda/cai-ios/commit/76f3ea4a09c7debf047d3ac61896b67433096b6b))
+
 ## [2.10.1](https://github.com/bluefunda/cai-ios/compare/v2.10.0...v2.10.1) (2026-10-08)
 
 
