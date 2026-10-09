@@ -359,6 +359,18 @@ final class ChatManagerThinkingTests: XCTestCase {
         XCTAssertEqual(history.fullSentence, "Planning the", "a finished step always shows its text")
     }
 
+    func test_fullSentence_unrecognisedToolStepShowsTitleNotDuration() {
+        let abaper = MessageStep(stepId: "t1", title: "Used Get object", detail: "CL_ABAP_TYPEDESCR\n9.9s", isActive: false)
+        XCTAssertEqual(abaper.fullSentence, "Used Get object", "never just the duration")
+
+        let failed = MessageStep(stepId: "t2", title: "Activating the object",
+                                 detail: "Failed: tool error: login failed", isActive: false)
+        XCTAssertEqual(failed.fullSentence, "Activating the object")
+
+        let reasoning = MessageStep(stepId: "r", title: "Checking the", detail: "Checking the numbers.", isActive: false)
+        XCTAssertEqual(reasoning.fullSentence, "Checking the numbers.", "reasoning steps are unaffected")
+    }
+
     // MARK: Opening a chat doesn't flash the prompt twice
 
     func test_keepingOnScreenIds_reusesTheShownIdForTheSameMessage() {

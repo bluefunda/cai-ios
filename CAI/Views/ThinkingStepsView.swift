@@ -315,7 +315,10 @@ extension MessageStep {
     /// ~60 characters ("…for Ela, Asha,…"); `detail` holds the step's sentences in full, newest
     /// last. Tool steps (whose detail is a query/URL/sources) keep their title.
     var fullSentence: String {
-        guard toolLabelAndValue == nil else { return title }
+        // A tool step keeps its title. Only "Read <host>" / "Searched the web for …" are parsed
+        // into label + value; any other tool ("Used Get object", "Activating the object") used to
+        // fall through to the detail's last line — its duration ("9.9s").
+        guard toolLabelAndValue == nil, !isToolStep else { return title }
         let lines = detail.split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
@@ -324,6 +327,16 @@ extension MessageStep {
         // shows once finished and stays until the next one is. Empty = none finished yet.
         if let complete = lines.last(where: Self.isComplete) { return complete }
         return isActive ? "" : (lines.last ?? title)
+    }
+
+    /// A finished tool step's detail has a duration line ("9.9s") or a failure ("Failed: …");
+    /// reasoning steps never do.
+    private var isToolStep: Bool {
+        detail.split(separator: "\n").contains { line in
+            let line = line.trimmingCharacters(in: .whitespaces)
+            return line.hasPrefix("Failed: ")
+                || line.range(of: #"^\d+(\.\d+)?s$"#, options: .regularExpression) != nil
+        }
     }
 
     private static func isComplete(_ sentence: String) -> Bool {
