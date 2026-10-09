@@ -1,0 +1,15 @@
+# fastlane/Matchfile
+#
+# Signing certs/profiles live encrypted in a separate private repo. This file
+# holds only the storage location — the decryption passphrase is never stored
+# here; supply it via the MATCH_PASSWORD env var or the interactive prompt.
+#
+# See docs/FASTLANE_MATCH_MIGRATION.md.
+
+git_url("git@github.com:bluefunda/ios-certificates.git")
+git_branch("main")
+storage_mode("git")
+
+type("appstore")
+app_identifier(["com.bluefunda.ai"])
+team_id("UR7HWT72SR")

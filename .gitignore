@@ -50,3 +50,10 @@ fastlane/screenshots_ios_raw/
 
 # Brand assets — large binary; extracted content lives in BRAND.md
 Brand_Guidelines.zip
+
+# Code signing material — managed by fastlane match, never commit
+*.p12
+*.cer
+*.p8
+*.mobileprovision
+*.provisionprofile
