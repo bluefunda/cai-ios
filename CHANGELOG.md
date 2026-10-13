@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.3](https://github.com/bluefunda/cai-ios/compare/v2.10.2...v2.10.3) (2026-10-13)
+
+
+### Bug Fixes
+
+* **camera:** open Take Photo from the topmost view controller, handle denied permission ([bdfcbea](https://github.com/bluefunda/cai-ios/commit/bdfcbea77815b6f0a12abd56a1a520e10574f6ed))
+* **camera:** open Take Photo from the topmost view controller, handle denied permission ([08e6b90](https://github.com/bluefunda/cai-ios/commit/08e6b90b35bf25bcb405b5604a99c984c098f0c6)), closes [#369](https://github.com/bluefunda/cai-ios/issues/369)
+
 ## [2.10.2](https://github.com/bluefunda/cai-ios/compare/v2.10.1...v2.10.2) (2026-10-09)
 
 
