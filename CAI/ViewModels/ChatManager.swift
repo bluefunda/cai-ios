@@ -127,6 +127,9 @@ final class ChatManager: ObservableObject {
     /// "streaming" on screen.
     @Published var isRevealingLastMessage = false
     @Published var isLoadingChats = false
+    /// Cursor for the next page of the chat list; nil once the last page is loaded (cai-ios#370).
+    @Published var chatListNextCursor: String?
+    @Published var isLoadingMoreChats = false
     @Published var error: String? {
         didSet { if error != nil, oldValue == nil { Haptic.notify(.error) } }
     }
@@ -1101,6 +1104,8 @@ struct Conversation: Identifiable, Equatable {
     /// hasn't been fetched yet (the "continuously loading" spinner on an
     /// empty chat). Only ever set by ChatManager.loadMessages.
     var messagesLoaded: Bool = false
+    /// Pinned chats sit in their own section above the date-grouped list (cai-ios#335).
+    var isPinned: Bool = false
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
 

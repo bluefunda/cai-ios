@@ -157,51 +157,6 @@ extension ChatManager {
         }
     }
 
-    // MARK: - Chat List
-
-    func loadChats() async {
-        guard let api = apiService else { return }
-        isLoadingChats = true
-
-        do {
-            let dtos = try await api.fetchChats()
-            let loaded = dtos.map { dto -> Conversation in
-                Conversation(
-                    id: dto.id,
-                    title: dto.title ?? dto.firstMessage?.truncated(to: 50) ?? "Chat",
-                    messages: [],
-                    model: dto.model ?? selectedModel.id,
-                    createdAt: dto.createdAt.flatMap(Date.fromISO8601) ?? Date()
-                )
-            }
-            // Merge: keep cached messages for conversations that were already loaded
-            let serverIds = Set(loaded.map(\.id))
-            let merged = loaded.map { conv -> Conversation in
-                if let cached = conversations.first(where: { $0.id == conv.id }), !cached.messages.isEmpty {
-                    return Conversation(id: conv.id, title: conv.title,
-                                        messages: cached.messages, model: conv.model, createdAt: conv.createdAt)
-                }
-                return conv
-            }
-            // Chats the server doesn't list yet are kept only while they're genuinely local — the
-            // open chat, or one still streaming (sent moments ago). Everything else not on the server
-            // is stale (deleted elsewhere, or cached from another backend) and is dropped, here and
-            // from the cache, so it can't reappear at the next launch.
-            let localOnly = conversations.filter {
-                !serverIds.contains($0.id) && ($0.id == currentConversation?.id || hasTurnInFlight($0.id))
-            }
-            conversations = merged + localOnly
-            cacheConversations(loaded)
-            pruneCachedConversations(keeping: serverIds.union(localOnly.map(\.id)))
-            retryStuckTitles(dtos)
-        } catch {
-            // Don't surface load errors — user can still create new chats
-            print("[ChatManager] loadChats error: \(error)")
-        }
-
-        isLoadingChats = false
-    }
-
     // MARK: - Message Patching
 
     /// Patches a user message's fileUrl once an attachment upload resolves — beginUserTurn shows

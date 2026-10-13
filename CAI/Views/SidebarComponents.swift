@@ -29,6 +29,10 @@ struct SidebarConversationRow: View {
     // else — like tapping the row and flipping isSelected — forced a redraw.
     let title: String
     let isSelected: Bool
+    /// Pinned rows carry a small pin at the trailing edge (cai-ios#335).
+    var isPinned = false
+    /// Set → hovering the row (pointer only) shows a pin/unpin button in place of the pin.
+    var onTogglePin: (() -> Void)?
 
     /// Pointer hover (Mac Catalyst / iPad with a trackpad) — touch never sets
     /// this, so rows are simply selected-or-not there.
@@ -53,6 +57,26 @@ struct SidebarConversationRow: View {
                 .foregroundStyle(isSelected ? BFColor.primary : .primary)
 
             Spacer(minLength: 0)
+
+            if isHovered, let onTogglePin {
+                Button(action: onTogglePin) {
+                    Image(systemName: isPinned ? "pin.slash" : "pin")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isPinned ? "Unpin" : "Pin")
+                .accessibilityLabel(isPinned ? "Unpin" : "Pin")
+            } else if isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 10, weight: .medium))
+                    .rotationEffect(.degrees(45))
+                    .foregroundStyle(isSelected ? BFColor.primary.opacity(0.7) : Color.secondary.opacity(0.6))
+                    .frame(width: 20, height: 20)
+                    .accessibilityLabel("Pinned")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

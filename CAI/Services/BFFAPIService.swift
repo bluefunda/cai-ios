@@ -30,16 +30,29 @@ final class BFFAPIService {
 
     // MARK: - Chats
 
-    /// Up to `chatListLimit` most recent chats. Without a limit the server returns only its
-    /// default of 10, so the sidebar shrank to 10 a moment after launch (the cache shows up to
-    /// 200) — and older chats vanished from the list entirely.
-    static let chatListLimit = 200
+    /// Chats per sidebar page; more load as the list is scrolled to its end (cai-ios#370).
+    static let chatPageSize = 30
 
-    func fetchChats() async throws -> [ChatSummaryDTO] {
-        let response: ChatListResponse = try await client.get(
-            "/chats", queryItems: [URLQueryItem(name: "limit", value: String(Self.chatListLimit))]
-        )
-        return response.chats
+    /// One page of chats, newest activity first. Pass the previous page's `nextCursor` for the
+    /// next one; the first page (nil cursor) also carries every pinned chat.
+    func fetchChatPage(cursor: String?) async throws -> ChatPageResponse {
+        var items = [URLQueryItem(name: "paged", value: "true"),
+                     URLQueryItem(name: "limit", value: String(Self.chatPageSize))]
+        if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await client.get("/chats", queryItems: items)
+    }
+
+    /// Searches chat titles and message text (cai-ios#370), one page at a time.
+    func searchChats(query: String, cursor: String?) async throws -> ChatSearchResponse {
+        var items = [URLQueryItem(name: "q", value: query),
+                     URLQueryItem(name: "limit", value: "20")]
+        if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try await client.get("/chats/search", queryItems: items)
+    }
+
+    /// Pins or unpins a chat (cai-ios#335).
+    func setChatPinned(chatId: String, pinned: Bool) async throws {
+        try await client.postIgnoringResponse("/chats/\(chatId)/pin", body: ["pinned": pinned])
     }
 
     func fetchChatMessages(chatId: String) async throws -> [ChatMessageDTO] {
