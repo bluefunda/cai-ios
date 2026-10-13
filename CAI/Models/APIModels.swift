@@ -70,28 +70,6 @@ struct LLMModelDTO: Codable, Identifiable {
 
 // MARK: - Chats (/chats)
 
-/// Flexible container for /chats response.
-struct ChatListResponse: Codable {
-    let chats: [ChatSummaryDTO]
-
-    init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self),
-           let chats = try? container.decode([ChatSummaryDTO].self, forKey: .chats) {
-            self.chats = chats
-            return
-        }
-        let container = try decoder.singleValueContainer()
-        self.chats = (try? container.decode([ChatSummaryDTO].self)) ?? []
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(chats, forKey: .chats)
-    }
-
-    enum CodingKeys: String, CodingKey { case chats }
-}
-
 struct ChatSummaryDTO: Codable, Identifiable {
     let id: String
     let title: String?
@@ -100,6 +78,7 @@ struct ChatSummaryDTO: Codable, Identifiable {
     let createdAt: String?
     let updatedAt: String?
     let messageCount: Int?
+    let pinned: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id = "chatId"
@@ -109,6 +88,42 @@ struct ChatSummaryDTO: Codable, Identifiable {
         case createdAt
         case updatedAt
         case messageCount
+        case pinned
+    }
+}
+
+// MARK: - Chat List Page (/chats?paged=true, cai-ios#370/#335)
+
+/// One page of the chat list, newest activity first. `pinnedChats` comes only with the first
+/// page (no cursor). `nextCursor` is empty or absent on the last page — absent too from a
+/// backend that doesn't page yet, whose response is then read as the complete list.
+struct ChatPageResponse: Decodable {
+    let chats: [ChatSummaryDTO]
+    let pinnedChats: [ChatSummaryDTO]?
+    let nextCursor: String?
+}
+
+// MARK: - Chat Search (/chats/search, cai-ios#370)
+
+struct ChatSearchResponse: Decodable {
+    let results: [ChatSearchResultDTO]
+    let nextCursor: String?
+}
+
+struct ChatSearchResultDTO: Decodable, Identifiable {
+    let id: String
+    let title: String?
+    /// The matching text with some context either side, on one line.
+    let snippet: String
+    /// "title" or "message".
+    let matchedIn: String
+    let lastUpdatedAt: String?
+    let pinned: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "chatId"
+        case title = "chatTitle"
+        case snippet, matchedIn, lastUpdatedAt, pinned
     }
 }
 

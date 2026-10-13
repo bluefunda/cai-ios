@@ -250,8 +250,6 @@ struct SidebarContent: View {
     let onOpenSubscription: () -> Void
     let onOpenURL: (URL) -> Void
 
-    @State private var searchText = ""
-
     private let helpURL = URL(string: "https://docs.bluefunda.com/")!
 
     private var profileMenuRows: [BFDropdownRow] {
@@ -310,12 +308,6 @@ struct SidebarContent: View {
         .contentShape(Rectangle())
     }
 
-    private var filteredConversations: [Conversation] {
-        guard !searchText.isEmpty else { return chatManager.conversations }
-        return chatManager.conversations.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText)
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -339,82 +331,15 @@ struct SidebarContent: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
 
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                TextField("Search conversations", text: $searchText)
-                    .font(BFFont.sidebarItem)
-                    .textFieldStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(BFColor.surfaceSunken, in: Capsule())
-            .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
-
-            if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if filteredConversations.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 26, weight: .light))
-                        .foregroundStyle(.tertiary)
-                    Text(searchText.isEmpty ? "No conversations yet" : "No results")
-                        .font(BFFont.sidebarItem)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(groupedConversations) { group in
-                            Text(group.title)
-                                .font(BFFont.sidebarSection)
-                                .textCase(.uppercase)
-                                .kerning(0.6)
-                                .foregroundStyle(.tertiary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 14)
-                                .padding(.top, 16)
-                                .padding(.bottom, 4)
-
-                            ForEach(group.conversations) { convo in
-                                SidebarConversationRow(
-                                    title: convo.title,
-                                    isSelected: chatManager.currentConversation?.id == convo.id
-                                )
-                                .onTapGesture {
-                                    // Matches the iPhone drawer row's fix (below in this file) —
-                                    // this persistent sidebar (iPad/Mac Catalyst) has no drawer to
-                                    // close, but selectConversation is the same expensive call, so
-                                    // it needs the same "show the loader before binding" sequencing
-                                    // or the loading overlay never appears while a long
-                                    // conversation's messages are fetched/laid out.
-                                    currentMode = .chat
-                                    chatManager.isSwitchingConversation = true
-                                    Task { @MainActor in
-                                        chatManager.selectConversation(convo)
-                                    }
-                                }
-                                .bfPointerHover()
-                                .accessibilityIdentifier("conversationRow")
-                                .contextMenu {
-                                    ShareLink(item: convo.markdownExport) {
-                                        Label("Share", systemImage: "square.and.arrow.up")
-                                    }
-                                    Button(role: .destructive) {
-                                        chatManager.deleteConversation(convo)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 8)
+            SidebarConversationList { convo in
+                // This persistent sidebar (iPad/Mac Catalyst) has no drawer to close, but
+                // selectConversation is the same expensive call as the iPhone drawer's, so it
+                // needs the same "show the loader before binding" sequencing or the loading
+                // overlay never appears while a long conversation's messages load.
+                currentMode = .chat
+                chatManager.isSwitchingConversation = true
+                Task { @MainActor in
+                    chatManager.selectConversation(convo)
                 }
             }
 
@@ -478,30 +403,6 @@ struct SidebarContent: View {
         #endif
     }
 
-    private var groupedConversations: [ConversationGroup] {
-        let now = Date()
-        let cal = Calendar.current
-
-        var today: [Conversation] = []
-        var yesterday: [Conversation] = []
-        var thisWeek: [Conversation] = []
-        var older: [Conversation] = []
-
-        for c in filteredConversations {
-            let days = cal.dateComponents([.day], from: c.createdAt, to: now).day ?? 0
-            if days == 0       { today.append(c) }
-            else if days == 1  { yesterday.append(c) }
-            else if days < 7   { thisWeek.append(c) }
-            else               { older.append(c) }
-        }
-
-        var result: [ConversationGroup] = []
-        if !today.isEmpty     { result.append(.init(title: "Today",     conversations: today)) }
-        if !yesterday.isEmpty { result.append(.init(title: "Yesterday", conversations: yesterday)) }
-        if !thisWeek.isEmpty  { result.append(.init(title: "This Week", conversations: thisWeek)) }
-        if !older.isEmpty     { result.append(.init(title: "Older",     conversations: older)) }
-        return result
-    }
 }
 
 // MARK: - Hamburger
@@ -518,8 +419,6 @@ struct SidebarDrawer: View {
     let onOpenSettings: () -> Void
     let onOpenSubscription: () -> Void
     let onOpenURL: (URL) -> Void
-
-    @State private var searchText = ""
 
     private let helpURL = URL(string: "https://docs.bluefunda.com/")!
 
@@ -585,12 +484,6 @@ struct SidebarDrawer: View {
         .contentShape(Rectangle())
     }
 
-    private var filteredConversations: [Conversation] {
-        guard !searchText.isEmpty else { return chatManager.conversations }
-        return chatManager.conversations.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText)
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -615,94 +508,23 @@ struct SidebarDrawer: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
 
-            // Search
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-                TextField("Search conversations", text: $searchText)
-                    .font(BFFont.sidebarItem)
-                    .textFieldStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(BFColor.surfaceSunken, in: Capsule())
-            .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
-
-            // ── Conversation list ─────────────────────────
-            if chatManager.isLoadingChats && chatManager.conversations.isEmpty {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if filteredConversations.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.system(size: 26, weight: .light))
-                        .foregroundStyle(.tertiary)
-                    Text(searchText.isEmpty ? "No conversations yet" : "No results")
-                        .font(BFFont.sidebarItem)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(groupedConversations) { group in
-                            Text(group.title)
-                                .font(BFFont.sidebarSection)
-                                .textCase(.uppercase)
-                                .kerning(0.6)
-                                .foregroundStyle(.tertiary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 14)
-                                .padding(.top, 16)
-                                .padding(.bottom, 4)
-
-                            ForEach(group.conversations) { convo in
-                                SidebarConversationRow(
-                                    title: convo.title,
-                                    isSelected: chatManager.currentConversation?.id == convo.id
-                                )
-                                .onTapGesture {
-                                    // Order matters, and needs to be *guaranteed*, not just
-                                    // likely: close the drawer, wait for that animation to
-                                    // genuinely finish, only then show the loading spinner and
-                                    // bind the conversation. selectConversation triggers the
-                                    // expensive part (a long conversation's full List row diff);
-                                    // starting it before the drawer's dismiss has actually
-                                    // rendered/completed bundles that heavy work into the same
-                                    // transaction and blocks the drawer from visibly closing on
-                                    // time. An arbitrary sleep (e.g. one frame) is a guess that
-                                    // can still lose the race under load — completionCriteria:
-                                    // .logicallyComplete gives a real callback for exactly when
-                                    // this specific animation finishes, no guessing.
-                                    currentMode = .chat
-                                    withAnimation(.default, completionCriteria: .logicallyComplete) {
-                                        isOpen = false
-                                    } completion: {
-                                        chatManager.isSwitchingConversation = true
-                                        Task { @MainActor in
-                                            chatManager.selectConversation(convo)
-                                        }
-                                    }
-                                }
-                                .bfPointerHover()
-                                .accessibilityIdentifier("conversationRow")
-                                .contextMenu {
-                                    ShareLink(item: convo.markdownExport) {
-                                        Label("Share", systemImage: "square.and.arrow.up")
-                                    }
-                                    Button(role: .destructive) {
-                                        chatManager.deleteConversation(convo)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
+            SidebarConversationList { convo in
+                // Order matters, and needs to be *guaranteed*, not just likely: close the drawer,
+                // wait for that animation to genuinely finish, only then show the loading spinner
+                // and bind the conversation. selectConversation triggers the expensive part (a
+                // long conversation's full List row diff); starting it before the drawer's
+                // dismiss has actually rendered bundles that heavy work into the same transaction
+                // and blocks the drawer from visibly closing on time. An arbitrary sleep can still
+                // lose the race under load — completionCriteria: .logicallyComplete gives a real
+                // callback for exactly when this animation finishes.
+                currentMode = .chat
+                withAnimation(.default, completionCriteria: .logicallyComplete) {
+                    isOpen = false
+                } completion: {
+                    chatManager.isSwitchingConversation = true
+                    Task { @MainActor in
+                        chatManager.selectConversation(convo)
                     }
-                    .padding(.horizontal, 8)
                 }
             }
 
@@ -791,31 +613,6 @@ struct SidebarDrawer: View {
         .shadow(color: .black.opacity(0.10), radius: 18, x: 2, y: 0)
     }
 
-    // Group conversations by recency
-    private var groupedConversations: [ConversationGroup] {
-        let now = Date()
-        let cal = Calendar.current
-
-        var today: [Conversation] = []
-        var yesterday: [Conversation] = []
-        var thisWeek: [Conversation] = []
-        var older: [Conversation] = []
-
-        for c in filteredConversations {
-            let days = cal.dateComponents([.day], from: c.createdAt, to: now).day ?? 0
-            if days == 0       { today.append(c) }
-            else if days == 1  { yesterday.append(c) }
-            else if days < 7   { thisWeek.append(c) }
-            else               { older.append(c) }
-        }
-
-        var result: [ConversationGroup] = []
-        if !today.isEmpty     { result.append(.init(title: "Today",     conversations: today)) }
-        if !yesterday.isEmpty { result.append(.init(title: "Yesterday", conversations: yesterday)) }
-        if !thisWeek.isEmpty  { result.append(.init(title: "This Week", conversations: thisWeek)) }
-        if !older.isEmpty     { result.append(.init(title: "Older",     conversations: older)) }
-        return result
-    }
 }
 
 // MARK: - Loading View
