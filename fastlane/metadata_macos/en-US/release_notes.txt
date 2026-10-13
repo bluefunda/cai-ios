@@ -1,1 +1,3 @@
-This release includes bug fixes and performance improvements.
+New in this release:
+• Paged chat list, pinned chats, chat history search
+• Paged chat list, pinned chats, chat history search ([4f3c4c8](https://github.com/bluefunda/cai-ios/commit/4f3c4c8e6727b08566957dfd9ceece62b849fd6d)), closes [#370](https://github.com/bluefunda/cai-ios/issues/370) [#335](https://github.com/bluefunda/cai-ios/issues/335)
