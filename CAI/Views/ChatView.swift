@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+import AVFoundation
 
 /// Reports the currently-streaming message row's bottom edge, in the List's own "chatScroll"
 /// named coordinate space — that space moves with scroll content, so this value is effectively
@@ -66,6 +67,7 @@ struct ChatView: View {
     /// Keeps the camera delegate alive for the duration of an imperative
     /// presentation (see CameraCaptureCoordinator).
     @State private var cameraCoordinator: CameraCaptureCoordinator?
+    @State private var showCameraDeniedAlert = false
     /// Set when the in-flight photo pick was started via "Decode ST22 Dump"
     /// rather than the plain photo-library action (bluefunda/cai-ios#182) —
     /// read once at send time to decide whether to wrap the request prompt.
@@ -240,6 +242,16 @@ struct ChatView: View {
             Button("OK") { chatManager.error = nil }
         } message: {
             Text(chatManager.error ?? "")
+        }
+        .alert("Camera Access Needed", isPresented: $showCameraDeniedAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Allow camera access for BlueFunda AI in Settings to take a photo.")
         }
         .alert("Voice Input", isPresented: .constant(voiceInput.error != nil)) {
             if let denied = voiceInput.deniedPermission {
@@ -477,7 +489,26 @@ struct ChatView: View {
     /// image ever delivered to the completion handler. Resigning first responder
     /// and giving the keyboard a moment to actually finish dismissing before
     /// presenting avoids the corrupted transition.
+    ///
+    /// Camera permission is checked first (#369): once denied, the picker only
+    /// shows a blank capture screen with no way forward, so a denied/restricted
+    /// state gets an alert pointing to Settings instead.
     private func presentCamera() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            openCamera()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor in
+                    if granted { openCamera() }
+                }
+            }
+        default:
+            showCameraDeniedAlert = true
+        }
+    }
+
+    private func openCamera() {
         setInputFocused(false)
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil

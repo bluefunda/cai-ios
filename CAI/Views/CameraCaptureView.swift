@@ -34,29 +34,65 @@ final class CameraCaptureCoordinator: NSObject, UIImagePickerControllerDelegate,
         onCancel()
     }
 
-    /// Presents the camera on the current foreground window's root view
-    /// controller. Returns `nil` without presenting anything when no camera
-    /// is available (Simulator, or Mac Catalyst — `UIImagePickerController`'s
-    /// `.camera` source is never available there regardless of Mac hardware),
-    /// so callers should already be hiding the menu entry via the same check
-    /// rather than relying on this fallback alone.
+    /// Presents the camera on the view controller currently on screen.
+    /// Returns `nil` without presenting anything when no camera is available
+    /// (Simulator, or Mac Catalyst — `UIImagePickerController`'s `.camera`
+    /// source is never available there regardless of Mac hardware), so callers
+    /// should already be hiding the menu entry via the same check rather than
+    /// relying on this fallback alone.
+    ///
+    /// Presenting from the root view controller failed silently (#369): "Take
+    /// Photo" runs as the attach sheet closes, and UIKit refuses to present from
+    /// a controller that is still presenting — or still dismissing — something,
+    /// with only a console warning, so the camera never appeared. Presenting
+    /// from the topmost controller, after any in-flight transition completes,
+    /// doesn't depend on how long that dismissal takes.
     @discardableResult
     static func present(
         onCapture: @escaping (UIImage) -> Void,
         onCancel: @escaping () -> Void
     ) -> CameraCaptureCoordinator? {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return nil }
-        guard let rootVC = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive })?
-            .windows.first(where: \.isKeyWindow)?.rootViewController
-        else { return nil }
+        guard let top = topViewController() else {
+            print("[Camera] no foreground window to present the camera from")
+            return nil
+        }
 
         let coordinator = CameraCaptureCoordinator(onCapture: onCapture, onCancel: onCancel)
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = coordinator
-        rootVC.present(picker, animated: true)
+
+        let presentPicker = {
+            guard let presenter = topViewController() else {
+                print("[Camera] no view controller to present the camera from")
+                onCancel()
+                return
+            }
+            presenter.present(picker, animated: true)
+        }
+        // `animate` returns false when it couldn't queue the completion (the
+        // transition already ended) — present right away in that case.
+        if let transition = top.transitionCoordinator,
+           transition.animate(alongsideTransition: nil, completion: { _ in presentPicker() }) {
+            // presented from the completion
+        } else {
+            presentPicker()
+        }
         return coordinator
+    }
+
+    /// The view controller actually on screen: the key window's root, followed
+    /// down its chain of presented controllers, skipping one that is on its way
+    /// out (presenting on top of a dismissing controller is refused too).
+    private static func topViewController() -> UIViewController? {
+        var top = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }?
+            .windows.first(where: \.isKeyWindow)?.rootViewController
+        while let presented = top?.presentedViewController, !presented.isBeingDismissed {
+            top = presented
+        }
+        return top
     }
 }
