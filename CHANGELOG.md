@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.11.0](https://github.com/bluefunda/cai-ios/compare/v2.10.3...v2.11.0) (2026-10-13)
+
+
+### Features
+
+* **sidebar:** paged chat list, pinned chats, chat history search ([a804803](https://github.com/bluefunda/cai-ios/commit/a8048035df7927828d49e35da92111cb7690cba5))
+* **sidebar:** paged chat list, pinned chats, chat history search ([4f3c4c8](https://github.com/bluefunda/cai-ios/commit/4f3c4c8e6727b08566957dfd9ceece62b849fd6d)), closes [#370](https://github.com/bluefunda/cai-ios/issues/370) [#335](https://github.com/bluefunda/cai-ios/issues/335)
+
 ## [2.10.3](https://github.com/bluefunda/cai-ios/compare/v2.10.2...v2.10.3) (2026-10-13)
 
 
