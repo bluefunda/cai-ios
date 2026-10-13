@@ -14,10 +14,10 @@
 		21EAA429895EFEB8E7D89252 /* TurnTopicSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE169AA4C0BD27ADF6F87A83 /* TurnTopicSource.swift */; };
 		222D96471984E77C2E1963CF /* AntiAnnoyance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101611A0C609A0F4E0447A0C /* AntiAnnoyance.swift */; };
 		24ADB9C2EE8F8438FA451EE0 /* ChatManager+Cache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3927AA6446C9F4D589ED626C /* ChatManager+Cache.swift */; };
-		E58BD93E0814DD84C4CAE2CA /* ChatManager+ChatList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2011C3CED3F8B4BBBA4C06C8 /* ChatManager+ChatList.swift */; };
 		30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */; };
 		36DD901178353045CBE6B0C0 /* ChatManagerFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */; };
 		3A6CF33342704D719652E0FC /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */; };
+		3ADDCE06D26F6D38E792FABD /* SidebarConversationList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747A3988962566A6CB06DE76 /* SidebarConversationList.swift */; };
 		3DB1DAADFC69DF9BD254233F /* TipCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7EB4B575BA11F1A710457F8 /* TipCatalog.swift */; };
 		44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */; };
 		45AF841CB328895A9D51B352 /* ChatManagerPersonaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3574C50AA824A38FA5694A48 /* ChatManagerPersonaTests.swift */; };
@@ -102,6 +102,7 @@
 		E100001101BCDEF /* MockChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E100002101BCDEF /* MockChatService.swift */; };
 		E205E936118E358F35CAE939 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D1A595C64D9C17C89A28E571 /* Foundation.framework */; };
 		E4C274C33A70CBED2C4F023C /* InterestProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A688C3489F52A493A745B181 /* InterestProfileTests.swift */; };
+		E58BD93E0814DD84C4CAE2CA /* ChatManager+ChatList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2011C3CED3F8B4BBBA4C06C8 /* ChatManager+ChatList.swift */; };
 		E6A72825067324D318C14ECF /* Persona.swift in Sources */ = {isa = PBXBuildFile; fileRef = E69AD9A3F1811EA79D6F71AF /* Persona.swift */; };
 		E7776B2B62564A31BEFB7543 /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */; };
 		E900FE732FFC198B00881287 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E900FE722FFC198B00881287 /* StoreKit.framework */; };
@@ -113,7 +114,6 @@
 		EE000001201BCDEF /* Environment.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE000002201BCDEF /* Environment.swift */; };
 		EE2A9CDE00AA8DB357799E52 /* ChatView+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */; };
 		EE2A9CDE00AA8DB357799E53 /* SidebarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137727 /* SidebarComponents.swift */; };
-		3ADDCE06D26F6D38E792FABD /* SidebarConversationList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747A3988962566A6CB06DE76 /* SidebarConversationList.swift */; };
 		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
 		F7F26EF8687492EF9BC4B158 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22141F06B6EDC35EA631E85A /* FileStore.swift */; };
 		FA0B1791A55829AD870AE5ED /* MarkdownParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D4625865551367AF054908 /* MarkdownParsingTests.swift */; };
@@ -164,6 +164,7 @@
 		101611A0C609A0F4E0447A0C /* AntiAnnoyance.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntiAnnoyance.swift; sourceTree = "<group>"; };
 		14355763E51D404C2C5F155E /* SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		19352E75D7D0835B6D83375B /* LocalFileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalFileStore.swift; sourceTree = "<group>"; };
+		2011C3CED3F8B4BBBA4C06C8 /* ChatManager+ChatList.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatManager+ChatList.swift"; sourceTree = "<group>"; };
 		22141F06B6EDC35EA631E85A /* FileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileStore.swift; sourceTree = "<group>"; };
 		280DCA3012561F192CB19BAA /* VoiceInputManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceInputManager.swift; sourceTree = "<group>"; };
 		2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ST22DumpDetectorTests.swift; sourceTree = "<group>"; };
@@ -173,7 +174,6 @@
 		3491614DA9F8408BB6DD5B54 /* ChatManager+Connectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatManager+Connectors.swift"; sourceTree = "<group>"; };
 		3574C50AA824A38FA5694A48 /* ChatManagerPersonaTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerPersonaTests.swift; sourceTree = "<group>"; };
 		3927AA6446C9F4D589ED626C /* ChatManager+Cache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatManager+Cache.swift"; sourceTree = "<group>"; };
-		2011C3CED3F8B4BBBA4C06C8 /* ChatManager+ChatList.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatManager+ChatList.swift"; sourceTree = "<group>"; };
 		453184AEA2FCB686CF2EC574 /* AntiAnnoyanceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntiAnnoyanceTests.swift; sourceTree = "<group>"; };
 		4E1EB3DB07AC1984D4FF5461 /* TipCatalogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipCatalogTests.swift; sourceTree = "<group>"; };
 		52C4C03127B03E74AFFADA5E /* ScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
@@ -187,12 +187,12 @@
 		67A53A66E259419989BB3945 /* SettingsView+Agents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView+Agents.swift"; sourceTree = "<group>"; };
 		680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatView+Scroll.swift"; sourceTree = "<group>"; };
 		680ADF4E9FABCB5B4E137727 /* SidebarComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SidebarComponents.swift; sourceTree = "<group>"; };
-		747A3988962566A6CB06DE76 /* SidebarConversationList.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "SidebarConversationList.swift"; sourceTree = "<group>"; };
 		6A69D9A5D34028405D4D197E /* TipRewardLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipRewardLog.swift; sourceTree = "<group>"; };
 		6D3820BBB6AB9DA66D3F57CC /* BFDropdownMenu.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BFDropdownMenu.swift; sourceTree = "<group>"; };
 		71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
 		73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		73D7DD7C43BBF8C906E50131 /* CAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		747A3988962566A6CB06DE76 /* SidebarConversationList.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SidebarConversationList.swift; sourceTree = "<group>"; };
 		76EA037805BB647C0BE35070 /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
 		77BF10443BA56D0CFA142022 /* RateLimitBannerPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RateLimitBannerPreviews.swift; sourceTree = "<group>"; };
 		8CA425BE92964029B960BF7C /* SalesTrackerConnectionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SalesTrackerConnectionView.swift; sourceTree = "<group>"; };
@@ -992,7 +992,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 189;
+				CURRENT_PROJECT_VERSION = 192;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1024,7 +1024,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.10.3;
+				MARKETING_VERSION = 2.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1044,7 +1044,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 189;
+				CURRENT_PROJECT_VERSION = 192;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1076,7 +1076,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.10.3;
+				MARKETING_VERSION = 2.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1094,10 +1094,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 189;
+				CURRENT_PROJECT_VERSION = 192;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.10.3;
+				MARKETING_VERSION = 2.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1112,10 +1112,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 189;
+				CURRENT_PROJECT_VERSION = 192;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.10.3;
+				MARKETING_VERSION = 2.11.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
