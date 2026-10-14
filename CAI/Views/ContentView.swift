@@ -635,6 +635,10 @@ struct LoginView: View {
     @State private var showRealmPicker = false
     @State private var appleSignInCoordinator: AppleSignInCoordinator?
 
+    /// textTertiary in light mode; a lighter grey in dark mode so the subtitle and policy line
+    /// stay readable on the dark navy gradient.
+    private let secondaryText = Color(lightHex: "#5A5A5A", darkHex: "#9CA3AF")
+
     var body: some View {
         ZStack {
             LinearGradient(
@@ -667,13 +671,13 @@ struct LoginView: View {
                             .font(BFFont.h3)
                         Text("Your intelligent AI assistant")
                             .font(BFFont.bodySmall)
-                            .foregroundStyle(BFColor.textTertiary)
+                            .foregroundStyle(secondaryText)
                     }
 
                     VStack(spacing: 12) {
                         Text("Sign in to continue")
                             .font(BFFont.micro)
-                            .foregroundStyle(BFColor.textTertiary)
+                            .foregroundStyle(secondaryText)
                             .padding(.top, 14)
                             .padding(.bottom, 4)
 
@@ -697,6 +701,14 @@ struct LoginView: View {
                             Image(systemName: "apple.logo")
                                 .font(.system(size: 20))
                         }
+
+                        // Policies must be reachable before sign-in (App Store privacy rules).
+                        Text("By continuing, you agree to our [Terms\u{00A0}of\u{00A0}Service](https://bluefunda.com/terms/) and [Privacy\u{00A0}Policy](https://bluefunda.com/privacy/).")
+                            .font(BFFont.micro)
+                            .foregroundStyle(secondaryText)
+                            .tint(BFColor.primary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 8)
                     }
                     .frame(maxWidth: 340)
                     .padding(.horizontal, 32)
