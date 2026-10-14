@@ -327,7 +327,7 @@ struct ChatView: View {
                 onClearAttachment: { clearAttachment() },
                 onPickPhoto: BFFeatureFlags.fileUploadEnabled ? { showPhotoPicker = true } : nil,
                 onPickFile:  BFFeatureFlags.fileUploadEnabled ? { presentDocumentPicker() } : nil,
-                onPickCamera: BFFeatureFlags.fileUploadEnabled && UIImagePickerController.isSourceTypeAvailable(.camera)
+                onPickCamera: BFFeatureFlags.fileUploadEnabled && Self.canTakePhoto
                     ? { presentCamera() } : nil,
                 onPickDumpScreenshot: BFFeatureFlags.fileUploadEnabled ? {
                     attachmentIsForDumpDecode = true
@@ -477,6 +477,17 @@ struct ChatView: View {
         attachmentMIME = "image/jpeg"
         attachmentFilename = "photo_\(Int(Date().timeIntervalSince1970)).jpg"
         await persistAttachmentLocally()
+    }
+
+    /// Whether the attach sheet offers "Take Photo". Never on a Mac — Mac Catalyst or the iPad app
+    /// running on Apple silicon: `isSourceTypeAvailable(.camera)` can report true there, but the
+    /// option belongs to phones and tablets. The other attach options stay on Mac.
+    private static var canTakePhoto: Bool {
+        #if targetEnvironment(macCatalyst)
+        return false
+        #else
+        return !ProcessInfo.processInfo.isiOSAppOnMac && UIImagePickerController.isSourceTypeAvailable(.camera)
+        #endif
     }
 
     /// Presents the camera imperatively — see CameraCaptureCoordinator for
