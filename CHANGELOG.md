@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.11.1](https://github.com/bluefunda/cai-ios/compare/v2.11.0...v2.11.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **attach:** hide Take Photo on Mac ([8cb2541](https://github.com/bluefunda/cai-ios/commit/8cb2541f36b60e2264f154159b3dc28ff4d2c872))
+* **attach:** hide Take Photo on Mac ([c595745](https://github.com/bluefunda/cai-ios/commit/c595745d77faf35605117138aa17126c85d5a539))
+
 ## [2.11.0](https://github.com/bluefunda/cai-ios/compare/v2.10.3...v2.11.0) (2026-10-13)
 
 
