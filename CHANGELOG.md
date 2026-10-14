@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.2](https://github.com/bluefunda/cai-ios/compare/v2.11.1...v2.11.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* **auth:** show Terms and Privacy links on sign-in ([81fb301](https://github.com/bluefunda/cai-ios/commit/81fb301e5f09d0593c10900bdf48f384ee1245eb))
+
 ## [2.11.1](https://github.com/bluefunda/cai-ios/compare/v2.11.0...v2.11.1) (2026-10-14)
 
 
