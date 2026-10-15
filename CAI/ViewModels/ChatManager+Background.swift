@@ -67,17 +67,26 @@ extension ChatManager {
         // not that the response is done) — retry a few times before
         // concluding it's genuinely gone, matching the Android port's fix
         // for the same race (bluefunda/cai-ios#261).
+        // The server keeps generating while the app is away, and a reply that creates files can
+        // take a minute or two (several tool steps) — so keep checking for up to
+        // reconciliationWindow: quickly at first, then every reconciliationSlowDelay. Stops early
+        // if the user moves on (another send, or another stream started).
         isReconciling = true
-        for attempt in 0..<Self.reconciliationRetryAttempts {
+        let deadline = Date().addingTimeInterval(Self.reconciliationWindow)
+        var attempt = 0
+        while true {
             if await attemptReconciliation(for: id) {
                 isReconciling = false
                 return
             }
-            if attempt < Self.reconciliationRetryAttempts - 1 {
-                try? await Task.sleep(for: .milliseconds(Self.reconciliationRetryDelayMS))
-            }
+            attempt += 1
+            if Date() >= deadline || isStreaming || Task.isCancelled { break }
+            let delay = attempt < Self.reconciliationFastAttempts ? Self.reconciliationFastDelay : Self.reconciliationSlowDelay
+            try? await Task.sleep(for: delay)
         }
         isReconciling = false
+        // Another reply started meanwhile: that one owns the screen now, so don't alarm the user.
+        guard !isStreaming else { return }
         error = "Connection lost while generating a response. Please try again."
     }
 
@@ -90,6 +99,8 @@ extension ChatManager {
         return last.role == .assistant && !last.content.isEmpty
     }
 
-    private static let reconciliationRetryAttempts = 5
-    private static let reconciliationRetryDelayMS = 1500
+    private static let reconciliationWindow: TimeInterval = 120
+    private static let reconciliationFastAttempts = 5
+    private static let reconciliationFastDelay: Duration = .milliseconds(1500)
+    private static let reconciliationSlowDelay: Duration = .seconds(5)
 }

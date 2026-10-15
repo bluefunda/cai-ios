@@ -391,6 +391,10 @@ extension MessageFileMetadata {
     /// cai-llm-router also echoes the user's own upload on the reply with source "s3".
     var isGenerated: Bool { source == "generated" }
 
+    /// Stable card identity: the storage path stays the same when the download link is refreshed
+    /// or the message is reloaded from history, so the card isn't rebuilt (#371).
+    var cardID: String { s3Path ?? fileName ?? downloadURL ?? "" }
+
     init(from dto: FileMetadataDTO) {
         self.originalURL = dto.originalURL
         self.s3Path = dto.s3Path

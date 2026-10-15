@@ -76,7 +76,9 @@ extension ChatManager {
                     let filename = message.fileMetadata?.first?.fileName ?? URL(string: fileUrl)?.lastPathComponent ?? "attachment"
                     await downloadAndPersist(urlString: fileUrl, filename: filename, conversationId: conversationId, source: .userUpload)
                 }
-                for meta in message.fileMetadata ?? [] {
+                // Generated files are downloaded when their card is tapped, through a fresh link:
+                // the link saved in history expires after an hour, so pre-fetching it here fails.
+                for meta in message.fileMetadata ?? [] where !meta.isGenerated {
                     guard let remote = meta.downloadURL ?? meta.originalURL, !remote.isEmpty, !seenRemoteURLs.contains(remote) else { continue }
                     seenRemoteURLs.insert(remote)
                     let filename = meta.fileName ?? URL(string: remote)?.lastPathComponent ?? "file"
