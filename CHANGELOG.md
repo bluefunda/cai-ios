@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.12.0](https://github.com/bluefunda/cai-ios/compare/v2.11.2...v2.12.0) (2026-10-15)
+
+
+### Features
+
+* **chat:** show files the assistant creates as downloadable cards ([d8bd4ac](https://github.com/bluefunda/cai-ios/commit/d8bd4ac02b9e221e2e66bdb2ca001e1775fcee78))
+* **chat:** show files the assistant creates as downloadable cards ([fcb8e31](https://github.com/bluefunda/cai-ios/commit/fcb8e31a16312dd008d896b1c8e99eb45086eaa6))
+
+
+### Bug Fixes
+
+* **chat:** file card preview, download and reconnect fixes ([9cd9ee4](https://github.com/bluefunda/cai-ios/commit/9cd9ee445166d8d0dab65a47e54d5bfdb07e4a24))
+
 ## [2.11.2](https://github.com/bluefunda/cai-ios/compare/v2.11.1...v2.11.2) (2026-10-14)
 
 
