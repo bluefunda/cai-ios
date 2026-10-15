@@ -343,6 +343,21 @@ final class BFFChatService: ChatServiceProtocol {
             return .status(StepEvent(stepId: stepId, title: title, detail: detail, state: state,
                                      contentOffset: offset, mood: json["mood"] as? String))
 
+        // A file the assistant created (bluefunda/cai-ios#371) — metadata only; the card
+        // downloads it on demand.
+        case "stream_file":
+            guard let file = json["file"] as? [String: Any] else { return nil }
+            let meta = MessageFileMetadata(
+                originalURL: nil,
+                s3Path: file["s3_path"] as? String,
+                downloadURL: file["download_url"] as? String,
+                fileName: file["file_name"] as? String,
+                fileSize: (file["file_size"] as? NSNumber)?.int64Value,
+                source: file["source"] as? String ?? "generated"
+            )
+            guard meta.downloadURL?.isEmpty == false else { return nil }
+            return .file(meta)
+
         // Sidebar/telemetry events that happen to carry a non-empty "content" field in a
         // different encoding (e.g. live_usage_pct's content is "pct|period", not chat text).
         // These must be explicitly ignored rather than falling through to `default` — the old

@@ -193,6 +193,9 @@ enum ChatEvent {
     /// e.g. "Searching the knowledge base…" — only emitted when the backend
     /// actually runs a tool for this turn, never fabricated client-side.
     case status(StepEvent)
+    /// A file the assistant created for this turn (cai-llm-router's stream_file, from
+    /// file-generation-mcp) — shown as a downloadable card under the reply (#371).
+    case file(MessageFileMetadata)
 
     var isTerminal: Bool {
         switch self {
@@ -384,6 +387,14 @@ struct MessageFileMetadata: Codable, Equatable, Hashable {
 }
 
 extension MessageFileMetadata {
+    /// Created by the assistant (file-generation-mcp), not a file the user attached —
+    /// cai-llm-router also echoes the user's own upload on the reply with source "s3".
+    var isGenerated: Bool { source == "generated" }
+
+    /// Stable card identity: the storage path stays the same when the download link is refreshed
+    /// or the message is reloaded from history, so the card isn't rebuilt (#371).
+    var cardID: String { s3Path ?? fileName ?? downloadURL ?? "" }
+
     init(from dto: FileMetadataDTO) {
         self.originalURL = dto.originalURL
         self.s3Path = dto.s3Path

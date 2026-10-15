@@ -614,6 +614,8 @@ final class ChatManager: ObservableObject {
             var thinkingDurationSeconds: Int?
 
             var lastPublishAt = Date.distantPast
+            // Files the assistant created this turn (stream_file, #371); nil like currentSteps.
+            var currentFiles: [MessageFileMetadata]?
 
             do {
                 for try await event in service.sendMessage(request) {
@@ -644,7 +646,8 @@ final class ChatManager: ObservableObject {
                                 role: .assistant,
                                 content: finalContent,
                                 timestamp: assistantTimestamp,
-                                persona: assistantPersona,
+                                fileMetadata: currentFiles,
+                            persona: assistantPersona,
                                 steps: currentSteps,
                                 thinkingDurationSeconds: thinkingDurationSeconds,
                                 thinkingStartedAt: stepsStartedAt
@@ -662,6 +665,7 @@ final class ChatManager: ObservableObject {
                             role: .assistant,
                             content: finalContent,
                             timestamp: assistantTimestamp,
+                            fileMetadata: currentFiles,
                             persona: assistantPersona,
                             steps: currentSteps,
                             thinkingDurationSeconds: thinkingDurationSeconds,
@@ -683,6 +687,7 @@ final class ChatManager: ObservableObject {
                             role: .assistant,
                             content: finalContent,
                             timestamp: assistantTimestamp,
+                            fileMetadata: currentFiles,
                             persona: assistantPersona,
                             steps: currentSteps,
                             thinkingDurationSeconds: thinkingDurationSeconds
@@ -707,6 +712,12 @@ final class ChatManager: ObservableObject {
 
                         if !finalContent.isEmpty {
                             persistOutputFiles(from: finalContent, conversationId: conversation.id)
+                        }
+
+                    case .file(let file):
+                        // Shown with the reply's next update (its text follows the tool call).
+                        if currentFiles?.contains(where: { $0.s3Path == file.s3Path }) != true {
+                            currentFiles = (currentFiles ?? []) + [file]
                         }
 
                     case .heartbeat:
@@ -757,7 +768,8 @@ final class ChatManager: ObservableObject {
                     role: .assistant,
                     content: finalContent,
                     timestamp: assistantTimestamp,
-                    persona: assistantPersona,
+                    fileMetadata: currentFiles,
+                            persona: assistantPersona,
                     steps: currentSteps,
                     thinkingDurationSeconds: thinkingDurationSeconds
                 )
@@ -778,6 +790,7 @@ final class ChatManager: ObservableObject {
                     role: .assistant,
                     content: "I couldn't generate a response for that. Please try rephrasing or send it again.",
                     timestamp: assistantMessage.timestamp,
+                    fileMetadata: currentFiles,
                     persona: assistantMessage.persona,
                     // A turn can stream real reasoning steps and still end with no answer text
                     // (e.g. the backend's final completion came back empty) — omitting these would

@@ -55,6 +55,13 @@ final class BFFAPIService {
         try await client.postIgnoringResponse("/chats/\(chatId)/pin", body: ["pinned": pinned])
     }
 
+    /// A fresh download link for a file the assistant created in a chat (#371): the link saved
+    /// with the reply expires. 404 when the file is gone.
+    func fileLink(chatId: String, s3Path: String) async throws -> String {
+        let response: FileLinkResponse = try await client.post("/chats/\(chatId)/file-link", body: ["s3_path": s3Path])
+        return response.downloadUrl
+    }
+
     func fetchChatMessages(chatId: String) async throws -> [ChatMessageDTO] {
         let response: ChatMessagesResponse = try await client.get("/chats/\(chatId)/messages")
         return response.messages
