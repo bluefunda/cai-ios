@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLook
 import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
@@ -885,9 +886,20 @@ struct MessageView: View {
             }
 
             if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(fileMetadata, id: \.self) { meta in
-                        AttachmentChip(filename: meta.fileName ?? URL(string: meta.downloadURL ?? meta.originalURL ?? "")?.lastPathComponent ?? "File")
+                // Files the assistant created (#371): downloadable cards.
+                let generated = fileMetadata.filter(\.isGenerated)
+                if !generated.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(generated, id: \.self) { GeneratedFileCard(file: $0) }
+                    }
+                }
+                // The user's own upload, echoed on the reply by cai-llm-router.
+                let attached = fileMetadata.filter { !$0.isGenerated }
+                if !attached.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(attached, id: \.self) { meta in
+                            AttachmentChip(filename: meta.fileName ?? URL(string: meta.downloadURL ?? meta.originalURL ?? "")?.lastPathComponent ?? "File")
+                        }
                     }
                 }
             }
@@ -967,6 +979,96 @@ struct AttachmentChip: View {
         .padding(.vertical, 6)
         .background(BFColor.surfaceSunken, in: Capsule())
         .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
+    }
+}
+
+/// A file the assistant created (bluefunda/cai-ios#371): icon, name, type and size. Tapping
+/// downloads it (or reuses the saved copy) and opens Quick Look, whose share button covers
+/// Share, Save to Files and Open In.
+struct GeneratedFileCard: View {
+    let file: MessageFileMetadata
+    @EnvironmentObject private var chatManager: ChatManager
+    @State private var previewURL: URL?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    private var name: String {
+        file.fileName ?? URL(string: file.downloadURL ?? "")?.lastPathComponent ?? "File"
+    }
+
+    private var fileExtension: String { (name as NSString).pathExtension.lowercased() }
+
+    private var kind: (label: String, symbol: String) {
+        switch fileExtension {
+        case "xlsx", "xls": return ("Excel", "tablecells")
+        case "csv", "tsv": return ("CSV", "tablecells")
+        case "docx", "doc": return ("Word", "doc.text")
+        case "pptx", "ppt": return ("PowerPoint", "rectangle.on.rectangle")
+        case "pdf": return ("PDF", "doc.richtext")
+        case "png", "jpg", "jpeg", "gif", "webp", "svg": return ("Image", "photo")
+        case "zip": return ("ZIP", "doc.zipper")
+        case "json", "md", "txt", "html", "xml": return (fileExtension.uppercased(), "doc.plaintext")
+        default: return (fileExtension.isEmpty ? "File" : fileExtension.uppercased(), "doc")
+        }
+    }
+
+    private var subtitle: String {
+        guard let size = file.fileSize, size > 0 else { return kind.label }
+        return "\(kind.label) · \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button { Task { await open() } } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: kind.symbol)
+                        .font(.system(size: 20))
+                        .foregroundStyle(BFColor.primary)
+                        .frame(width: 40, height: 40)
+                        .background(BFColor.primaryTint, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(BFFont.bodySmall.weight(.medium)).lineLimit(1).truncationMode(.middle)
+                        Text(subtitle).font(BFFont.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    if isLoading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.down.circle").font(.system(size: 20)).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: 360, alignment: .leading)
+                .background(BFColor.surfaceSunken, in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
+                        .strokeBorder(BFColor.hairline, lineWidth: 0.5)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isLoading)
+            .bfPointerHover()
+            .accessibilityLabel("\(name), \(subtitle). Opens a preview.")
+
+            if let errorMessage {
+                Text(errorMessage).font(BFFont.caption).foregroundStyle(BFColor.error)
+            }
+        }
+        .quickLookPreview($previewURL)
+    }
+
+    private func open() async {
+        guard let conversationId = chatManager.currentConversation?.id else { return }
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+        do {
+            previewURL = try await chatManager.localFileURL(for: file, conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

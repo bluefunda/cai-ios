@@ -664,3 +664,8 @@ struct APIErrorDTO: Codable {
         message ?? error ?? "An unknown error occurred"
     }
 }
+
+/// POST /chats/{id}/file-link (#371).
+struct FileLinkResponse: Decodable {
+    let downloadUrl: String
+}

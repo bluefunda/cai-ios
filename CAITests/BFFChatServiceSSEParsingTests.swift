@@ -117,4 +117,22 @@ final class BFFChatServiceSSEParsingTests: XCTestCase {
         XCTAssertNil(step.contentOffset, "only stream_inline_status carries a position")
         XCTAssertEqual(step.mood, "thinking")
     }
+
+    /// A file the assistant created (#371): parsed into metadata for the reply's file card.
+    func test_streamFile_parsesGeneratedFile() {
+        let fileJSON = #"{"s3_path":"cai-files/cai/individual/u/c/generated/1/expenses.xlsx","# +
+            #""download_url":"http://127.0.0.1:9000/x?sig","file_name":"expenses.xlsx","# +
+            #""file_size":5860,"source":"generated"}"#
+        let event = BFFChatService.parseSSEEvent(sseEvent(#"{"type":"stream_file","file":"# + fileJSON + "}"))
+        guard case .file(let file)? = event else { return XCTFail("expected a file event, got \(String(describing: event))") }
+        XCTAssertEqual(file.fileName, "expenses.xlsx")
+        XCTAssertEqual(file.fileSize, 5860)
+        XCTAssertEqual(file.downloadURL, "http://127.0.0.1:9000/x?sig")
+        XCTAssertTrue(file.isGenerated)
+    }
+
+    func test_streamFile_withoutDownloadURL_isIgnored() {
+        let event = BFFChatService.parseSSEEvent(sseEvent(#"{"type":"stream_file","file":{"file_name":"a.csv","source":"generated"}}"#))
+        XCTAssertNil(event)
+    }
 }
