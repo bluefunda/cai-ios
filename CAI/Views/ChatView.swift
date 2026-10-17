@@ -283,7 +283,7 @@ struct ChatView: View {
                 RateLimitModal(
                     info: chatManager.rateLimit,
                     period: chatManager.rateLimitEventPeriod,
-                    resetLabel: chatManager.rateLimit?.resetLabel ?? chatManager.rateLimitEventResetLabel,
+                    resetLabel: chatManager.rateLimit?.bindingResetLabel ?? chatManager.rateLimitEventResetLabel,
                     onClose: { chatManager.showRateLimitModal = false },
                     onUpgrade: { chatManager.showRateLimitModal = false }
                 )
@@ -300,11 +300,21 @@ struct ChatView: View {
     @ViewBuilder
     private var inputArea: some View {
         VStack(spacing: 0) {
+            // Reload the usage when a reached limit renews; otherwise the composer stayed
+            // "Usage limit reached" until the app was relaunched. Restarts when the time changes.
+            Color.clear.frame(height: 0)
+                .task(id: chatManager.rateLimit?.refreshAt) {
+                    guard let refreshAt = chatManager.rateLimit?.refreshAt else { return }
+                    let wait = refreshAt.timeIntervalSinceNow
+                    if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+                    guard !Task.isCancelled else { return }
+                    await chatManager.loadRateLimit()
+                }
             if let info = chatManager.rateLimit, info.status != .normal {
                 RateLimitBanner(
                     status: info.status,
                     percent: max(info.hourlyPercent, info.weeklyPercent),
-                    resetLabel: info.resetLabel
+                    resetLabel: info.bindingResetLabel
                 )
             }
             if showDumpDecodeBanner {

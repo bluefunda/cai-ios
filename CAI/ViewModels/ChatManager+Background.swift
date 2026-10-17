@@ -32,8 +32,16 @@ extension ChatManager {
     /// streaming, remember its conversation so it can be reconciled with the
     /// server's copy on return to foreground (bluefunda/cai-ios#261).
     func noteBackgrounding() {
+        #if targetEnvironment(macCatalyst)
+        // On the Mac a backgrounded app (another app or window in front) keeps running and
+        // its stream stays connected. Treating it as interrupted made the return to the
+        // foreground cancel a healthy stream — the thinking steps vanished and the reply only
+        // reappeared once the server had saved it.
+        return
+        #else
         guard isStreaming, let id = currentConversation?.id else { return }
         interruptedStreamConversationID = id
+        #endif
     }
 
     /// Called by CAIApp when the scene becomes active. Generation continues

@@ -126,14 +126,19 @@ final class BFFAPIService {
         try await client.postIgnoringResponse("/mcp/select", body: ["server_id": serverId])
     }
 
+    /// Tells cai-bff which app opened a connect flow, so its result page sends the sign-in
+    /// sheet back to `cai://oauth/<connector>/done` — ASWebAuthenticationSession's callback
+    /// scheme — and the sheet closes by itself once connected.
+    private static let oauthClient = URLQueryItem(name: "client", value: "ios")
+
     // MARK: - GitHub OAuth (bluefunda/cai-llm-router#345 Phase 2)
 
-    func fetchGitHubOAuthStatus() async throws -> GitHubOAuthStatusDTO {
+    func fetchGitHubOAuthStatus() async throws -> OAuthStatusDTO {
         try await client.get("/oauth/github/status")
     }
 
     func fetchGitHubAuthorizeURL() async throws -> URL {
-        let response: GitHubOAuthAuthorizeDTO = try await client.get("/oauth/github/authorize")
+        let response: OAuthAuthorizeDTO = try await client.get("/oauth/github/authorize", queryItems: [Self.oauthClient])
         guard let url = URL(string: response.authorizeUrl) else {
             throw ChatServiceError.invalidResponse
         }
@@ -142,6 +147,24 @@ final class BFFAPIService {
 
     func disconnectGitHub() async throws {
         try await client.postIgnoringResponse("/oauth/github/disconnect", body: [:])
+    }
+
+    // MARK: - Figma OAuth (bluefunda/infra#54)
+
+    func fetchFigmaOAuthStatus() async throws -> OAuthStatusDTO {
+        try await client.get("/oauth/figma/status")
+    }
+
+    func fetchFigmaAuthorizeURL() async throws -> URL {
+        let response: OAuthAuthorizeDTO = try await client.get("/oauth/figma/authorize", queryItems: [Self.oauthClient])
+        guard let url = URL(string: response.authorizeUrl) else {
+            throw ChatServiceError.invalidResponse
+        }
+        return url
+    }
+
+    func disconnectFigma() async throws {
+        try await client.postIgnoringResponse("/oauth/figma/disconnect", body: [:])
     }
 
     // MARK: - SAP Credentials (ABAPer connector, bluefunda/cai-bff#160)
