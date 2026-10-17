@@ -1075,7 +1075,9 @@ extension ChatManager {
                 isBlocked: dto.isBlocked ?? false,
                 blockReason: dto.blockReason,
                 resetLabel: dto.resetLabel ?? RateLimitInfo.formatResetLabel(seconds: dto.resetInSeconds ?? 0),
-                hourlyResetLabel: RateLimitInfo.formatResetLabel(seconds: dto.stats?.hourlyResetSeconds ?? 0)
+                hourlyResetLabel: RateLimitInfo.formatResetLabel(seconds: dto.stats?.hourlyResetSeconds ?? 0),
+                hourlyResetsAt: dto.stats?.hourlyResetSeconds.map { Date().addingTimeInterval(TimeInterval($0)) },
+                weeklyResetsAt: dto.resetInSeconds.map { Date().addingTimeInterval(TimeInterval($0)) }
             )
         } catch {
             print("[ChatManager] loadRateLimit error: \(error)")
@@ -1237,64 +1239,5 @@ struct MCPServer: Identifiable, Hashable {
         if isSAPAnalytics { return "chart.bar.xaxis" }
         if isSalesTracker { return "chart.line.uptrend.xyaxis" }
         return "brain.head.profile"
-    }
-}
-
-enum RateLimitStatus {
-    case normal
-    case warning   // hourly or weekly >= 80%
-    case exceeded  // hourly or weekly >= 100%
-    case blocked
-}
-
-struct RateLimitInfo {
-    let planName: String
-    let hourlyUsed: Int
-    let hourlyLimit: Int
-    let weeklyUsed: Int
-    let weeklyLimit: Int
-    let isBlocked: Bool
-    let blockReason: String?
-    /// Reset countdown for whichever period is primary/exceeded — currently always weekly.
-    let resetLabel: String
-    /// The 5-hour session window's own reset countdown, independent of `resetLabel` above.
-    let hourlyResetLabel: String
-
-    var hourlyPercent: Double {
-        guard hourlyLimit > 0 else { return 0 }
-        return min(Double(hourlyUsed) / Double(hourlyLimit), 1.0)
-    }
-
-    var weeklyPercent: Double {
-        guard weeklyLimit > 0 else { return 0 }
-        return min(Double(weeklyUsed) / Double(weeklyLimit), 1.0)
-    }
-
-    var status: RateLimitStatus {
-        if isBlocked { return .blocked }
-        if hourlyPercent >= 1.0 || weeklyPercent >= 1.0 { return .exceeded }
-        if hourlyPercent >= 0.8 || weeklyPercent >= 0.8 { return .warning }
-        return .normal
-    }
-
-    /// Converts a reset countdown in seconds to a human-readable string (e.g.
-    /// "3h 20m", "2d 5h", "45s") — mirrors cai-mcp-go's FormatResetLabel.
-    /// Used whenever a server response doesn't carry a pre-formatted label of
-    /// its own (e.g. the SSE `rate_limited` stream event only sends seconds,
-    /// never a label), so the UI always shows an exact countdown instead of a
-    /// vague fallback like "soon".
-    static func formatResetLabel(seconds: Int) -> String {
-        guard seconds > 0 else { return "shortly" }
-        let days = seconds / 86400
-        let hours = (seconds % 86400) / 3600
-        let mins = (seconds % 3600) / 60
-        switch (days, hours, mins) {
-        case let (d, h, _) where d > 0 && h > 0: return "\(d)d \(h)h"
-        case let (d, _, _) where d > 0: return "\(d)d"
-        case let (_, h, m) where h > 0 && m > 0: return "\(h)h \(m)m"
-        case let (_, h, _) where h > 0: return "\(h)h"
-        case let (_, _, m) where m > 0: return "\(m)m"
-        default: return "\(seconds)s"
-        }
     }
 }
