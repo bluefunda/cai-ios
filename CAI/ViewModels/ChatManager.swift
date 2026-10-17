@@ -268,12 +268,12 @@ final class ChatManager: ObservableObject {
     @Published var availableMCPServers: [MCPServer] = []
     @Published var subscribedMCPServerIds: Set<String> = []
 
-    /// GitHub's connect status (Settings → Connectors), see
-    /// `refreshGitHubConnectionStatus()`. `nil` username means connected but
-    /// the display name hasn't resolved (or was never set) — mirrors
-    /// GitHubOAuthStatusDTO exactly.
+    /// GitHub's and Figma's connect status (Settings → Connectors, `refresh…ConnectionStatus()`);
+    /// `nil` username means connected but the display name hasn't resolved — mirrors OAuthStatusDTO.
     @Published var connectedGitHub = false
     @Published var githubUsername: String?
+    @Published var connectedFigma = false
+    @Published var figmaUsername: String?
 
     /// ABAPer's connect status (Settings → Agents), see
     /// `refreshSAPConnectionStatus()` — same real, server-verified pattern as
@@ -438,11 +438,7 @@ final class ChatManager: ObservableObject {
         subscribedMCPServerIds = []
         enabledMCPServers = []
         enabledMCPServersByConversationID = [:]
-        connectedGitHub = false
-        githubUsername = nil
-        connectedSAP = false
-        sapHost = nil
-        locallyConnectedServerIDs = []
+        resetConnectorConnections()
         personaEnabledByConversationID = [:]
         personaOverrideByConversationID = [:]
         rateLimit = nil
@@ -968,6 +964,7 @@ extension ChatManager {
             group.addTask { await self.loadGreeting() }
             group.addTask { await self.loadPersonas() }
             group.addTask { await self.refreshGitHubConnectionStatus() }
+            group.addTask { await self.refreshFigmaConnectionStatus() }
             group.addTask { await self.refreshSAPConnectionStatus() }
         }
     }
@@ -1220,6 +1217,8 @@ struct MCPServer: Identifiable, Hashable {
     /// (internal/mcp/principal.go) — the only connector with a real,
     /// working OAuth connect flow so far (Settings → Connectors).
     var isGitHub: Bool { name == "github-mcp" }
+    /// OAuth connect like GitHub's (bluefunda/infra#54); cai-mcp-go lists it only for allowed orgs.
+    var isFigma: Bool { name == "figma-mcp" }
 
     /// No OAuth or credential form for this one — "Connect" just adds this
     /// server's id to `ChatManager.locallyConnectedServerIDs`, no backend call.
@@ -1233,6 +1232,7 @@ struct MCPServer: Identifiable, Hashable {
     /// ("GitHubMark" asset) instead of a generic symbol; callers branch on
     /// `isGitHub` separately since that's a different Image initializer.
     var connectorIconName: String {
+        if isFigma { return "pencil.and.ruler" }
         if isABAPer { return "curlybraces" }
         if isSAPAnalytics { return "chart.bar.xaxis" }
         if isSalesTracker { return "chart.line.uptrend.xyaxis" }

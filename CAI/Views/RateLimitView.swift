@@ -338,6 +338,19 @@ struct ErrorRateLimitView: View {
 // rate-limit UI they belong with. Previews live in
 // RateLimitBannerPreviews.swift.
 
+// MARK: - Which limit's reset to show
+
+extension RateLimitInfo {
+    /// The reset time of the limit that's actually binding: the session (hourly) one when it is
+    /// used up or the fuller of the two, otherwise the weekly one. `resetLabel` alone is the
+    /// weekly reset, so a used-up session limit read "renews in 5d 15h" instead of "3h 53m".
+    var bindingResetLabel: String {
+        if hourlyPercent >= 1.0 { return hourlyResetLabel }
+        if weeklyPercent >= 1.0 { return resetLabel }
+        return hourlyPercent >= weeklyPercent ? hourlyResetLabel : resetLabel
+    }
+}
+
 // MARK: - Rate Limit Banner
 
 struct RateLimitBanner: View {

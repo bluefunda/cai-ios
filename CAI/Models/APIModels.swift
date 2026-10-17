@@ -398,14 +398,15 @@ struct RateLimitDTO: Codable {
 // MARK: - MCP Servers (/mcp, /mcp/user)
 
 /// Backend returns {"mcpInfo": [{server_id, name, mcp_server_url, ...}]}
-// MARK: - GitHub OAuth (bluefunda/cai-llm-router#345 Phase 2)
+// MARK: - Connector OAuth: GitHub (bluefunda/cai-llm-router#345 Phase 2), Figma (bluefunda/infra#54)
+// Both answer /oauth/<connector>/status and /authorize with the same shapes.
 
-struct GitHubOAuthStatusDTO: Codable {
+struct OAuthStatusDTO: Codable {
     let connected: Bool
     let username: String?
 }
 
-struct GitHubOAuthAuthorizeDTO: Codable {
+struct OAuthAuthorizeDTO: Codable {
     let authorizeUrl: String
 }
 

@@ -372,44 +372,80 @@ private extension String {
 
 /// Text that types itself out as it grows — the live thought text reads as being written
 /// (claude.ai) rather than jumping in whole sentences each time the router re-captions (~4x/s).
-/// Growth that extends the shown text continues from where it is; a different text (a new
-/// thought) types in from the start. Reveals any backlog within ~0.3s, so it never trails far
-/// behind the live stream. `animates: false` (finished or history steps) renders instantly.
+/// Growth that extends the shown text continues from where it is. A different text (a new
+/// thought) never cuts off the line being typed: the current line finishes, stays readable for a
+/// moment, then the newest pending thought types in (intermediate ones are skipped, so it never
+/// trails far behind the live stream). Reveals any backlog within ~0.3s.
+/// `animates: false` (finished or history steps) renders instantly.
 struct TypingText: View {
     let text: String
     var suffix: String = ""
     var animates: Bool = true
 
     @State private var shown: String?
+    /// The line being typed, and the newest thought waiting for it to finish.
+    @State private var target = ""
+    @State private var queued: String?
+    @State private var lineCompletedAt: Date?
     @State private var typingTask: Task<Void, Never>?
 
     private static let tick: Duration = .milliseconds(25)
     private static let ticksToCatchUp = 12
+    /// How long a finished line stays before the next thought replaces it.
+    private static let holdSeconds: Double = 0.6
 
     var body: some View {
         Text((animates ? shown ?? "" : text) + suffix)
-            .onChange(of: text, initial: true) { _, newText in type(toward: newText) }
+            .onChange(of: text, initial: true) { _, newText in receive(newText) }
             .onDisappear { typingTask?.cancel() }
     }
 
-    private func type(toward target: String) {
+    private func receive(_ newText: String) {
         guard animates else { return }
+        let current = shown ?? ""
+        if target.isEmpty || newText.hasPrefix(target) {
+            // The same thought grew (or the first one arrived): keep typing toward it.
+            if !newText.hasPrefix(current) { shown = "" }
+            target = newText
+            queued = nil
+        } else {
+            // A new thought: let the current line finish first.
+            queued = newText
+        }
+        run()
+    }
+
+    /// One loop for typing the current line and then moving on to a queued one. Restarting it
+    /// loses nothing: progress lives in `shown`/`target`/`queued`.
+    private func run() {
         typingTask?.cancel()
-        var current = shown ?? ""
-        if !target.hasPrefix(current) { current = "" }
-        shown = current
         typingTask = Task { @MainActor in
-            while !Task.isCancelled, current.count < target.count {
-                let step = max(1, (target.count - current.count) / Self.ticksToCatchUp)
-                var end = target.index(target.startIndex, offsetBy: min(target.count, current.count + step))
-                // Finish the word being revealed, so text appears word by word, not mid-word.
-                if let space = target[end...].firstIndex(of: " "),
-                   target.distance(from: end, to: space) <= 12 {
-                    end = space
+            while !Task.isCancelled {
+                let current = shown ?? ""
+                if current.count < target.count, target.hasPrefix(current) {
+                    let step = max(1, (target.count - current.count) / Self.ticksToCatchUp)
+                    var end = target.index(target.startIndex, offsetBy: min(target.count, current.count + step))
+                    // Finish the word being revealed, so text appears word by word, not mid-word.
+                    if let space = target[end...].firstIndex(of: " "),
+                       target.distance(from: end, to: space) <= 12 {
+                        end = space
+                    }
+                    shown = String(target[..<end])
+                    if shown == target { lineCompletedAt = Date() }
+                    try? await Task.sleep(for: Self.tick)
+                    continue
                 }
-                current = String(target[..<end])
-                shown = current
-                try? await Task.sleep(for: Self.tick)
+                guard let next = queued else { return }
+                // Leave the finished line readable for a moment before replacing it.
+                let shownFor = lineCompletedAt.map { Date().timeIntervalSince($0) } ?? Self.holdSeconds
+                if shownFor < Self.holdSeconds {
+                    try? await Task.sleep(for: .seconds(Self.holdSeconds - shownFor))
+                    if Task.isCancelled { return }
+                }
+                queued = nil
+                target = next
+                shown = ""
+                lineCompletedAt = nil
             }
         }
     }

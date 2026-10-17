@@ -1,6 +1,13 @@
 import SwiftUI
 import AuthenticationServices
 
+/// A connector's connect action in progress and its error, kept as one value so
+/// SettingsView's body stays under SwiftLint's type_body_length limit.
+struct ConnectorConnectState {
+    var isConnecting = false
+    var error: String?
+}
+
 // MARK: - Connectors (Agents)
 // Split from SettingsView's main body to stay under SwiftLint's file_length/type_body_length
 // limits (bluefunda/cai-ios#261 precedent — see ChatManager+Background.swift, ChatView+Scroll.swift).
@@ -45,6 +52,31 @@ extension SettingsView {
                             }
                             .buttonStyle(.plain)
                             .disabled(isConnectingGitHub)
+                            .bfPointerHover()
+                        }
+                    } else if server.isFigma {
+                        if chatManager.connectedFigma {
+                            // Already connected — Disconnect detail screen, mirroring GitHub.
+                            NavigationLink {
+                                FigmaConnectionView()
+                            } label: {
+                                connectorRow(server, connected: true)
+                            }
+                            .bfPointerHover()
+                        } else {
+                            // Straight to Figma's consent screen, like GitHub.
+                            Button {
+                                Task {
+                                    await connectFigma()
+                                    if chatManager.connectedFigma {
+                                        chatManager.enabledMCPServers.insert(server.id)
+                                    }
+                                }
+                            } label: {
+                                connectorRow(server, connected: false, isBusy: figmaConnect.isConnecting)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(figmaConnect.isConnecting)
                             .bfPointerHover()
                         }
                     } else if server.isSalesTracker {
@@ -136,6 +168,11 @@ extension SettingsView {
         } message: {
             Text(githubConnectError ?? "")
         }
+        .alert("Figma", isPresented: .constant(figmaConnect.error != nil)) {
+            Button("OK") { figmaConnect.error = nil }
+        } message: {
+            Text(figmaConnect.error ?? "")
+        }
     }
 
     @ViewBuilder
@@ -211,10 +248,10 @@ extension SettingsView {
         defer { isConnectingGitHub = false }
         do {
             let authorizeURL = try await api.fetchGitHubAuthorizeURL()
-            // cai-bff's callback page shows a static confirmation and does not
-            // auto-navigate anywhere — the user dismisses the sheet themselves,
-            // which this session sees as a cancellation, not a completed
-            // callback (see GitHubConnectionView's earlier equivalent).
+            // cai-bff's result page returns to cai://oauth/github/done a moment after
+            // a successful connect (?client=ios), which completes this session; a
+            // user closing the sheet first is a cancellation. Status is re-checked
+            // either way.
             _ = try await webAuthenticationSession.authenticate(
                 using: authorizeURL,
                 callbackURLScheme: "cai"
@@ -224,6 +261,27 @@ extension SettingsView {
             await chatManager.refreshGitHubConnectionStatus()
         } catch {
             githubConnectError = "Failed to connect GitHub. Please try again."
+        }
+    }
+
+    /// Same flow as connectGitHub: the result page returns to cai://oauth/figma/done
+    /// after a successful connect; the status is re-checked either way.
+    fileprivate func connectFigma() async {
+        guard let api = chatManager.apiService else { return }
+        figmaConnect.error = nil
+        figmaConnect.isConnecting = true
+        defer { figmaConnect.isConnecting = false }
+        do {
+            let authorizeURL = try await api.fetchFigmaAuthorizeURL()
+            _ = try await webAuthenticationSession.authenticate(
+                using: authorizeURL,
+                callbackURLScheme: "cai"
+            )
+            await chatManager.refreshFigmaConnectionStatus()
+        } catch is ASWebAuthenticationSessionError {
+            await chatManager.refreshFigmaConnectionStatus()
+        } catch {
+            figmaConnect.error = "Failed to connect Figma. Please try again."
         }
     }
 }

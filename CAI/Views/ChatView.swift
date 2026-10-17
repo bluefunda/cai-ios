@@ -283,7 +283,7 @@ struct ChatView: View {
                 RateLimitModal(
                     info: chatManager.rateLimit,
                     period: chatManager.rateLimitEventPeriod,
-                    resetLabel: chatManager.rateLimit?.resetLabel ?? chatManager.rateLimitEventResetLabel,
+                    resetLabel: chatManager.rateLimit?.bindingResetLabel ?? chatManager.rateLimitEventResetLabel,
                     onClose: { chatManager.showRateLimitModal = false },
                     onUpgrade: { chatManager.showRateLimitModal = false }
                 )
@@ -304,7 +304,7 @@ struct ChatView: View {
                 RateLimitBanner(
                     status: info.status,
                     percent: max(info.hourlyPercent, info.weeklyPercent),
-                    resetLabel: info.resetLabel
+                    resetLabel: info.bindingResetLabel
                 )
             }
             if showDumpDecodeBanner {
