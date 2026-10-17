@@ -681,7 +681,14 @@ private struct HeadingView: View {
     let text: String
 
     var body: some View {
-        styled(Text(LaTeXMath.sanitize(text)))
+        styled(Text(Self.inline(LaTeXMath.sanitize(text))))
+    }
+
+    /// Inline markdown inside the heading (`## **Title**`, `` `code` ``, links): models often bold a
+    /// heading's text, and as plain Text the `**` markers showed. Plain text if it doesn't parse.
+    private static func inline(_ text: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 
     private func styled(_ text: Text) -> some View {
