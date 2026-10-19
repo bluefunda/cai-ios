@@ -51,6 +51,10 @@ enum BFColor {
     static let secondarySidebar = Color(hex: "#1B1E37")
     static let secondaryAdmin = Color(hex: "#030D60")
     static let secondaryBorder = Color(hex: "#424660")
+    /// Deep Blue as structure (headings, the selected space segment, the stage-rail
+    /// track) — flips to the brand light blue in dark mode, where `#1A305F` would
+    /// vanish into the canvas. See docs/BLUEREQUESTS_INTEGRATION.md P13.
+    static let secondaryAdaptive = Color(lightHex: "#1A305F", darkHex: "#D9E2F3")
 
     // MARK: Brand Book Secondaries
 
@@ -164,6 +168,27 @@ enum BFColor {
     static let hairline = Color(lightHex: "#E4E6EA", darkHex: "#303236")
     /// Pointer-hover fill for sidebar rows and icon buttons.
     static let rowHover = Color(lightHex: "#E9ECF1", darkHex: "#26282C")
+
+    // MARK: Status Pills
+    //
+    // The only place the tertiary palette (BRAND.md §1.5) appears in product UI:
+    // light tint fill + deep text in light mode; swapped in dark mode (deep fill,
+    // light text) so the pill sits quietly on the dark canvas. One pair per status
+    // family — `ChangeRequestStatus.style` maps statuses onto them. Pills always
+    // carry their label too, never colour alone (P12).
+
+    static let statusNeutralFill = Color(lightHex: "#F3F4F6", darkHex: "#2A2C30")
+    static let statusNeutralText = Color(lightHex: "#374151", darkHex: "#D1D5DB")
+    static let statusBlueFill = Color(lightHex: "#D9E2F3", darkHex: "#1B2440")
+    static let statusBlueText = Color(lightHex: "#1A305F", darkHex: "#D9E2F3")
+    static let statusOrangeFill = Color(lightHex: "#F3E4D9", darkHex: "#5F3B1A")
+    static let statusOrangeText = Color(lightHex: "#5F3B1A", darkHex: "#F3E4D9")
+    static let statusGreenFill = Color(lightHex: "#D9F3E3", darkHex: "#1A5F36")
+    static let statusGreenText = Color(lightHex: "#1A5F36", darkHex: "#D9F3E3")
+    static let statusRedFill = Color(lightHex: "#F3D9D9", darkHex: "#5F1A1A")
+    static let statusRedText = Color(lightHex: "#5F1A1A", darkHex: "#F3D9D9")
+    static let statusPurpleFill = Color(lightHex: "#E9D9F3", darkHex: "#411A5F")
+    static let statusPurpleText = Color(lightHex: "#411A5F", darkHex: "#E9D9F3")
 
     // MARK: Text
 

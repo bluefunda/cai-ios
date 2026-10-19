@@ -1,16 +1,23 @@
 import SwiftUI
 import AuthenticationServices
 
-// MARK: - Connectors (Agents)
-// Split from SettingsView's main body to stay under SwiftLint's file_length/type_body_length
-// limits (bluefunda/cai-ios#261 precedent — see ChatManager+Background.swift, ChatView+Scroll.swift).
-extension SettingsView {
+// MARK: - Agents List
+// Every MCP connector and its connection state, with each one's Connect / Disconnect
+// flow. One view, shown in two places: Settings → Agents, and the Agents destination in
+// the sidebar (docs/BLUEREQUESTS_INTEGRATION.md P2). Whoever hosts it must provide a
+// NavigationStack — the connect/detail screens push onto it.
+
+struct AgentsListView: View {
+    @EnvironmentObject var chatManager: ChatManager
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+    @State private var isConnectingGitHub = false
+    @State private var githubConnectError: String?
+
     /// Every MCP server the backend returns — unfiltered (`availableMCPServers`,
     /// not `visibleMCPServers`, which hides ABAPer/SAP specifically for the
     /// in-chat agent picker). This screen is meant to show every connector
     /// that exists, including the ones without a working Connect flow yet.
-    @ViewBuilder
-    var connectorsDetail: some View {
+    var body: some View {
         List {
             Section {
                 ForEach(chatManager.availableMCPServers) { server in
@@ -139,39 +146,9 @@ extension SettingsView {
     }
 
     @ViewBuilder
-    fileprivate func connectorRow(_ server: MCPServer, connected: Bool, isBusy: Bool = false) -> some View {
+    private func connectorRow(_ server: MCPServer, connected: Bool, isBusy: Bool = false) -> some View {
         HStack(spacing: 14) {
-            if server.isGitHub {
-                Image("GitHubMark")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 20, height: 20)
-                    // .foregroundStyle(.primary) alone doesn't stick on Mac
-                    // Catalyst inside these List rows — the row's own tint
-                    // wins. The older .foregroundColor API overrides it.
-                    .foregroundColor(.primary)
-                    .frame(width: 22)
-            } else {
-                Image(systemName: server.connectorIconName)
-                    .font(.system(size: 16))
-                    .foregroundColor(.primary)
-                    .frame(width: 22)
-            }
-            Text(server.displayName)
-                #if targetEnvironment(macCatalyst)
-                .font(MacSettingsFont.row)
-                #else
-                .font(BFFont.body)
-                #endif
-                .foregroundColor(.primary)
-                // A longer-than-expected displayName (e.g. a backend not yet
-                // returning the short `label` field) must not wrap to a
-                // second line — that made this row taller than every other
-                // row in the list, breaking the uniform row height/alignment
-                // the whole Agents list otherwise has.
-                .lineLimit(1)
-                .truncationMode(.tail)
+            ConnectorLabel(server: server)
             Spacer()
             if isBusy {
                 ProgressView()
@@ -204,7 +181,7 @@ extension SettingsView {
         .contentShape(Rectangle())
     }
 
-    fileprivate func connectGitHub() async {
+    private func connectGitHub() async {
         guard let api = chatManager.apiService else { return }
         githubConnectError = nil
         isConnectingGitHub = true
@@ -224,6 +201,50 @@ extension SettingsView {
             await chatManager.refreshGitHubConnectionStatus()
         } catch {
             githubConnectError = "Failed to connect GitHub. Please try again."
+        }
+    }
+}
+
+// MARK: - Connector Label
+
+/// A connector's icon and name — shared by the Agents list and the composer's Agents
+/// tab, so the two can't drift apart.
+struct ConnectorLabel: View {
+    let server: MCPServer
+
+    var body: some View {
+        HStack(spacing: 14) {
+            if server.isGitHub {
+                Image("GitHubMark")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    // .foregroundStyle(.primary) alone doesn't stick on Mac
+                    // Catalyst inside these List rows — the row's own tint
+                    // wins. The older .foregroundColor API overrides it.
+                    .foregroundColor(.primary)
+                    .frame(width: 22)
+            } else {
+                Image(systemName: server.connectorIconName)
+                    .font(.system(size: 16))
+                    .foregroundColor(.primary)
+                    .frame(width: 22)
+            }
+            Text(server.displayName)
+                #if targetEnvironment(macCatalyst)
+                .font(MacSettingsFont.row)
+                #else
+                .font(BFFont.body)
+                #endif
+                .foregroundColor(.primary)
+                // A longer-than-expected displayName (e.g. a backend not yet
+                // returning the short `label` field) must not wrap to a
+                // second line — that made this row taller than every other
+                // row in the list, breaking the uniform row height/alignment
+                // the whole Agents list otherwise has.
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 }

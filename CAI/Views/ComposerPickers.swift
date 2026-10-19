@@ -248,35 +248,8 @@ struct ComposerAttachSheet: View {
                 } else {
                     ForEach(chatManager.connectedMCPServers) { server in
                         Toggle(isOn: enabledBinding(for: server)) {
-                            HStack(spacing: 14) {
-                                if server.isGitHub {
-                                    Image("GitHubMark")
-                                        .renderingMode(.template)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 20, height: 20)
-                                        // .foregroundStyle(.primary) alone
-                                        // doesn't stick on Mac Catalyst inside
-                                        // these List rows — .foregroundColor
-                                        // overrides the row's own tint.
-                                        .foregroundColor(.primary)
-                                        .frame(width: 22)
-                                } else {
-                                    Image(systemName: server.connectorIconName)
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.primary)
-                                        .frame(width: 22)
-                                }
-                                Text(server.displayName)
-                                    #if targetEnvironment(macCatalyst)
-                                    .font(MacSettingsFont.row)
-                                    #else
-                                    .font(BFFont.body)
-                                    #endif
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                            .padding(.vertical, 6)
+                            ConnectorLabel(server: server)
+                                .padding(.vertical, 6)
                         }
                         .toggleStyle(.switch)
                         .bfPointerHover()
