@@ -49,6 +49,7 @@ struct SettingsView: View {
     @State private var deleteError: String?
     @State var isConnectingGitHub = false
     @State var githubConnectError: String?
+    @State var figmaConnect = ConnectorConnectState()
     // nil (not .account) so opening Settings on a compact/iPhone layout shows the category
     // list first instead of auto-navigating straight into Account — detailContent below still
     // falls back to .account for the regular/split-view detail pane, which always needs
