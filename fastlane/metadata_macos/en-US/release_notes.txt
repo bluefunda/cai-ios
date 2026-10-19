@@ -1,4 +1,4 @@
 New in this release:
-• Show files the assistant creates as downloadable cards
+• Connect Figma; connect sheet closes itself; Mac and usage fixes
 
 Plus bug fixes and performance improvements.
