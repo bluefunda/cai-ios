@@ -23,7 +23,7 @@ final class SidebarLayoutTests: XCTestCase {
     }
 
     private func makeStore(flag: Bool, organizations: [String]) -> WorkspaceStore {
-        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { flag })
+        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { flag }, isRequestsFixturesEnabled: { false })
         store.update(organizations: organizations)
         return store
     }
@@ -86,14 +86,14 @@ final class SidebarLayoutTests: XCTestCase {
 
     func test_legacyCodeMode_migratesToCodeDestination() {
         defaults.set("code", forKey: AssistantDestination.legacyAppModeKey)
-        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false })
+        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false }, isRequestsFixturesEnabled: { false })
         XCTAssertEqual(store.assistantDestination, .code)
         XCTAssertNil(defaults.string(forKey: AssistantDestination.legacyAppModeKey))
     }
 
     func test_legacyChatMode_migratesToChats() {
         defaults.set("chat", forKey: AssistantDestination.legacyAppModeKey)
-        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false })
+        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false }, isRequestsFixturesEnabled: { false })
         XCTAssertEqual(store.assistantDestination, .chats)
         XCTAssertNil(defaults.string(forKey: AssistantDestination.legacyAppModeKey))
     }
@@ -101,7 +101,7 @@ final class SidebarLayoutTests: XCTestCase {
     func test_storedDestination_winsOverLegacyMode() {
         defaults.set("agents", forKey: WorkspaceStore.lastDestinationKey(for: .assistant))
         defaults.set("code", forKey: AssistantDestination.legacyAppModeKey)
-        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false })
+        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false }, isRequestsFixturesEnabled: { false })
         XCTAssertEqual(store.assistantDestination, .agents)
     }
 

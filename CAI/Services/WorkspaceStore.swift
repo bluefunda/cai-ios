@@ -42,6 +42,7 @@ final class WorkspaceStore: ObservableObject {
 
     let defaults: UserDefaults
     private let isRequestsFeatureEnabled: () -> Bool
+    private let isRequestsFixturesEnabled: () -> Bool
 
     static let activeSpaceKey = "workspace_active_space"
     static func lastDestinationKey(for space: AppSpace) -> String {
@@ -50,10 +51,12 @@ final class WorkspaceStore: ObservableObject {
 
     init(
         defaults: UserDefaults = .standard,
-        isRequestsFeatureEnabled: @escaping () -> Bool = { BFFeatureFlags.requestsEnabled }
+        isRequestsFeatureEnabled: @escaping () -> Bool = { BFFeatureFlags.requestsEnabled },
+        isRequestsFixturesEnabled: @escaping () -> Bool = { BFFeatureFlags.requestsFixtures }
     ) {
         self.defaults = defaults
         self.isRequestsFeatureEnabled = isRequestsFeatureEnabled
+        self.isRequestsFixturesEnabled = isRequestsFixturesEnabled
         storedSpace = defaults.string(forKey: Self.activeSpaceKey).flatMap(AppSpace.init(rawValue:)) ?? .assistant
         migrateLegacyAppMode()
     }
@@ -62,17 +65,26 @@ final class WorkspaceStore: ObservableObject {
 
     /// Assistant always; Requests only with the feature flag on AND membership
     /// in `AppConfig.requestsOrgAlias`. A personal-only user gets exactly one
-    /// space, which hides the space switcher entirely (P2, P11).
+    /// space, which hides the space switcher entirely (P2, P11). With fixtures on
+    /// (`-bf_requests_fixtures YES`, which also needs the feature flag) membership
+    /// isn't required: there's no tenant data involved, and it lets any account —
+    /// or the screenshot demo user — exercise the Requests screens.
     var availableSpaces: [AppSpace] {
         Self.availableSpaces(
             organizations: organizations,
-            requestsFeatureEnabled: isRequestsFeatureEnabled()
+            requestsFeatureEnabled: isRequestsFeatureEnabled(),
+            requestsFixturesEnabled: isRequestsFixturesEnabled()
         )
     }
 
-    static func availableSpaces(organizations: [String], requestsFeatureEnabled: Bool) -> [AppSpace] {
+    static func availableSpaces(
+        organizations: [String],
+        requestsFeatureEnabled: Bool,
+        requestsFixturesEnabled: Bool = false
+    ) -> [AppSpace] {
         var spaces: [AppSpace] = [.assistant]
-        if requestsFeatureEnabled, organizations.contains(AppConfig.requestsOrgAlias) {
+        let isMember = organizations.contains(AppConfig.requestsOrgAlias)
+        if requestsFeatureEnabled, isMember || requestsFixturesEnabled {
             spaces.append(.requests)
         }
         return spaces

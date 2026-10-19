@@ -32,10 +32,12 @@ struct SidebarView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var iapManager: IAPManager
     @EnvironmentObject var workspace: WorkspaceStore
+    @EnvironmentObject var unreadPoller: UnreadCountPoller
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let presentation: SidebarPresentation
     @ObservedObject var systemStore: SAPSystemStore
+    @ObservedObject var requestsState: RequestsState
     var searchFocus: FocusState<Bool>.Binding
     let onOpenSettings: () -> Void
     let onOpenSubscription: () -> Void
@@ -50,7 +52,11 @@ struct SidebarView: View {
             header
 
             if layout.showsSpaceSwitcher {
-                SpaceSwitcher(spaces: layout.spaces, selection: layout.activeSpace) { space in
+                SpaceSwitcher(
+                    spaces: layout.spaces,
+                    selection: layout.activeSpace,
+                    badges: spaceBadges(active: layout.activeSpace)
+                ) { space in
                     switchSpace(to: space)
                 }
                 .padding(.horizontal, 12)
@@ -120,7 +126,8 @@ struct SidebarView: View {
             ForEach(destinations) { destination in
                 SidebarDestinationRow(
                     destination: destination,
-                    isSelected: workspace.currentDestination == destination
+                    isSelected: workspace.currentDestination == destination,
+                    badge: destination == .requests(.inbox) ? unreadCount : 0
                 ) {
                     workspace.navigate(to: destination)
                     closeDrawer()
@@ -140,6 +147,11 @@ struct SidebarView: View {
             SidebarConversationList(
                 allowsSwipeActions: presentation.isDrawer,
                 searchFocus: searchFocus,
+                onStartChat: {
+                    workspace.navigate(to: .assistant(.chats))
+                    chatManager.newConversation()
+                    closeDrawer()
+                },
                 onSelect: selectConversation
             )
             .padding(.top, 10)
@@ -150,11 +162,39 @@ struct SidebarView: View {
             } onSelect: { _ in
                 closeDrawer()
             }
+        case .requests(.requests):
+            RequestsSidebarList(
+                state: requestsState,
+                recents: requestsState.recents
+            ) { filter in
+                workspace.navigate(to: .requests(.requests))
+                requestsState.requestsPath = []
+                requestsState.changeRequests?.apply(filter)
+                closeDrawer()
+            } onOpenRecent: { recent in
+                workspace.navigate(to: .requests(.requests))
+                requestsState.openRequest(id: recent.id)
+                closeDrawer()
+            }
         case .assistant(.files), .assistant(.agents), .requests:
-            // Nothing belongs here yet; Requests' quick filters and recently viewed
-            // arrive with the Requests port.
             Spacer(minLength: 0)
         }
+    }
+
+    // MARK: - Badges (P9)
+
+    /// Unread Requests activity. Zero unless the Requests space is available — the poller
+    /// never runs (and clears its counts) otherwise, so no badge for a space the user
+    /// can't open.
+    private var unreadCount: Int {
+        guard workspace.isRequestsAvailable else { return 0 }
+        return unreadPoller.counts?.totalUnreadMessages ?? 0
+    }
+
+    /// The Requests segment carries the count only while the user is in the other space;
+    /// inside Requests, the Inbox row shows it instead.
+    private func spaceBadges(active: AppSpace) -> [AppSpace: Int] {
+        active == .requests ? [:] : [.requests: unreadCount]
     }
 
     private func selectConversation(_ convo: Conversation) {

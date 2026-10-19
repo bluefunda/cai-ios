@@ -21,7 +21,7 @@ final class WorkspaceStoreTests: XCTestCase {
     }
 
     private func makeStore(flag: Bool) -> WorkspaceStore {
-        WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { flag })
+        WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { flag }, isRequestsFixturesEnabled: { false })
     }
 
     func test_availableSpaces_matrix() {
@@ -42,6 +42,17 @@ final class WorkspaceStoreTests: XCTestCase {
         )
         XCTAssertEqual(
             WorkspaceStore.availableSpaces(organizations: ["acme"], requestsFeatureEnabled: true),
+            [.assistant]
+        )
+    }
+
+    func test_fixtures_unlockRequestsWithoutMembership_onlyWithFlag() {
+        XCTAssertEqual(
+            WorkspaceStore.availableSpaces(organizations: [], requestsFeatureEnabled: true, requestsFixturesEnabled: true),
+            [.assistant, .requests]
+        )
+        XCTAssertEqual(
+            WorkspaceStore.availableSpaces(organizations: [], requestsFeatureEnabled: false, requestsFixturesEnabled: true),
             [.assistant]
         )
     }

@@ -5,7 +5,7 @@ import AuthenticationServices
 // MARK: - Settings Category
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case account, aiSettings, connectors, usage, subscription, legal, about
+    case account, aiSettings, connectors, blueRequests, usage, subscription, legal, about
 
     var id: String { rawValue }
 
@@ -14,6 +14,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .account: return "Account"
         case .aiSettings: return "AI Settings"
         case .connectors: return "Agents"
+        case .blueRequests: return "BlueRequests"
         case .usage: return "Usage"
         case .subscription: return "Subscription"
         case .legal: return "Legal"
@@ -26,6 +27,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .account: return "person.crop.circle"
         case .aiSettings: return "sparkles"
         case .connectors: return "brain.head.profile"
+        case .blueRequests: return "doc.text"
         case .usage: return "chart.bar"
         case .subscription: return "star.circle"
         case .legal: return "doc.text"
@@ -40,6 +42,7 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isRequestsAvailable) private var isRequestsAvailable
     @State private var showLogoutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
@@ -72,9 +75,16 @@ struct SettingsView: View {
         return "\(enabled.count) Selected"
     }
 
-    // Subscription is individual-realm only — trm accounts don't buy IAP.
+    // Subscription is individual-realm only — trm accounts don't buy IAP. BlueRequests
+    // only for users who have the Requests space (feature flag + `trm` org).
     private var categories: [SettingsCategory] {
-        SettingsCategory.allCases.filter { $0 != .subscription || isIndividualRealm }
+        SettingsCategory.allCases.filter { category in
+            switch category {
+            case .subscription: return isIndividualRealm
+            case .blueRequests: return isRequestsAvailable
+            default: return true
+            }
+        }
     }
 
     // Percentage-of-screen sizing (~ Copilot's desktop Settings window: about
@@ -248,6 +258,7 @@ struct SettingsView: View {
         case .account: accountDetail
         case .aiSettings: aiSettingsDetail
         case .connectors: AgentsListView()
+        case .blueRequests: RequestsSettingsSection()
         case .usage: usageDetail
         case .subscription: subscriptionDetail
         case .legal: legalDetail

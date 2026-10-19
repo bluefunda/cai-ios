@@ -71,3 +71,18 @@ extension EnvironmentValues {
         set { self[RequestsServicesKey.self] = newValue }
     }
 }
+
+/// Whether the signed-in user has the Requests space (flag + `trm` org), for views that
+/// can't take WorkspaceStore as an environment object — Settings is presented from more
+/// than one place, and a missing environment object crashes (cai-ios#254). Defaults to
+/// false, so anything that doesn't set it simply hides Requests UI.
+private struct IsRequestsAvailableKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var isRequestsAvailable: Bool {
+        get { self[IsRequestsAvailableKey.self] }
+        set { self[IsRequestsAvailableKey.self] = newValue }
+    }
+}

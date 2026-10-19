@@ -47,6 +47,7 @@ struct AppShell: View {
     @EnvironmentObject var iapManager: IAPManager
     @EnvironmentObject var workspace: WorkspaceStore
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.requestsServices) private var requestsServices
 
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
@@ -66,6 +67,10 @@ struct AppShell: View {
     @StateObject private var systemStore = SAPSystemStore()
     @State private var showSystems = false
 
+    // Requests space — view models and navigation that survive switching destinations
+    // (see RequestsState).
+    @StateObject private var requestsState = RequestsState()
+
     enum AppSheet: String, Identifiable {
         case settings, subscription
         var id: String { rawValue }
@@ -83,19 +88,39 @@ struct AppShell: View {
             }
         }
         .background {
+            let layout = SidebarLayout(workspace: workspace)
             ShellKeyboardShortcuts(
-                onDestination: { workspace.navigate(to: .assistant($0)) },
-                onFocusSearch: focusSidebarSearch
+                destinations: layout.destinations,
+                spaces: layout.spaces,
+                onDestination: { workspace.navigate(to: $0) },
+                onSpace: { workspace.activeSpace = $0 },
+                onFocusSearch: focusSidebarSearch,
+                onRefresh: refreshAction
             )
         }
+        // Rebuilds the Requests view models whenever the user or their entitlement
+        // changes; without the entitlement there are none, so nothing can call trm-gw.
+        .onChange(of: requestsConfigurationKey, initial: true) { _, _ in
+            requestsState.configure(
+                services: workspace.isRequestsAvailable ? requestsServices : nil,
+                currentUserId: authManager.currentUser?.id
+            )
+        }
+        .environment(\.isRequestsAvailable, workspace.isRequestsAvailable)
         .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
         .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
         .sheet(isPresented: $showSystems) {
             SystemManagerView(store: systemStore).environmentObject(authManager)
         }
+        // ⌘N: a new request while the Requests space is active, otherwise a new chat (P10).
         .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
-            workspace.navigate(to: .assistant(.chats))
-            chatManager.newConversation()
+            if workspace.activeSpace == .requests {
+                workspace.navigate(to: .requests(.requests))
+                requestsState.isCreatingRequest = true
+            } else {
+                workspace.navigate(to: .assistant(.chats))
+                chatManager.newConversation()
+            }
         }
     }
 
@@ -103,6 +128,7 @@ struct AppShell: View {
         SidebarView(
             presentation: presentation,
             systemStore: systemStore,
+            requestsState: requestsState,
             searchFocus: $sidebarSearchFocused,
             onOpenSettings: { activeSheet = .settings },
             onOpenSubscription: { activeSheet = .subscription },
@@ -156,6 +182,8 @@ struct AppShell: View {
                         }
                     }
                 }
+                // Toolbars are window-level on Mac Catalyst: only the mounted
+                // destination's items may exist at once, which `content` guarantees.
                 #if targetEnvironment(macCatalyst)
                 .toolbar(removing: .sidebarToggle)
                 .hidingNativeSplitViewToggle()
@@ -251,9 +279,33 @@ struct AppShell: View {
                 AgentsListView()
                     .shellNavigationControl(navigationControl)
             }
-        case .requests(let requestsDestination):
-            RequestsPlaceholderView(destination: requestsDestination, navigationControl: navigationControl)
+        // Only one Requests destination — and so one NavigationStack — is ever mounted.
+        // Several stacks under the split view's detail column broke push navigation and
+        // stacked every screen's toolbar at once on Mac Catalyst (trm-ios). State lives
+        // in RequestsState, so switching back reconnects instead of refetching.
+        case .requests(.inbox):
+            InboxView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.requests):
+            ChangeRequestListView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.projects):
+            ProjectsListView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.releases):
+            ReleasesListView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.teams):
+            TeamsListView(state: requestsState, navigationControl: navigationControl)
         }
+    }
+
+    // MARK: - Requests
+
+    private var requestsConfigurationKey: String {
+        "\(authManager.currentUser?.id ?? "")|\(workspace.isRequestsAvailable)"
+    }
+
+    /// ⌘R — only meaningful for a Requests list.
+    private var refreshAction: (() -> Void)? {
+        guard case .requests(let requestsDestination) = destination else { return nil }
+        return { Task { await requestsState.refresh(requestsDestination) } }
     }
 
     // MARK: - Keyboard
@@ -287,6 +339,8 @@ struct AppShell: View {
                 .environmentObject(authManager)
                 .environmentObject(chatManager)
                 .environmentObject(iapManager)
+                .environment(\.requestsServices, requestsServices)
+                .environment(\.isRequestsAvailable, workspace.isRequestsAvailable)
         case .subscription: SubscriptionView()
         }
     }

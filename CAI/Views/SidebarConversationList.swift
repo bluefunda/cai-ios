@@ -23,10 +23,14 @@ struct SidebarConversationList: View {
     var allowsSwipeActions = false
     /// Bound to the search field so ⌘F can focus it from anywhere in the shell.
     var searchFocus: FocusState<Bool>.Binding
+    /// The empty state's "Start a chat" action.
+    var onStartChat: (() -> Void)?
     let onSelect: (Conversation) -> Void
 
     @State private var searchText = ""
     @State private var search = SearchState()
+    /// Every delete path (swipe, hover menu, context menu) asks first (P4).
+    @State private var pendingDelete: Conversation?
 
     private var trimmedQuery: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var isSearching: Bool { trimmedQuery.count >= minSearchLength }
@@ -41,10 +45,34 @@ struct SidebarConversationList: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if chatManager.conversations.isEmpty {
-                emptyState("No conversations yet")
+                VStack(spacing: 10) {
+                    emptyStateContent("No conversations yet")
+                    if let onStartChat {
+                        Button("Start a chat", action: onStartChat)
+                            .font(BFFont.sidebarItemMed)
+                            .foregroundStyle(BFColor.primary)
+                            .bfPointerHover()
+                            .accessibilityIdentifier("sidebar.startChat")
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 conversationList
             }
+        }
+        .confirmationDialog(
+            "Delete this chat?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { convo in
+            Button("Delete", role: .destructive) {
+                chatManager.deleteConversation(convo)
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: { convo in
+            Text("\u{201C}\(convo.title)\u{201D} and its messages will be deleted.")
         }
         // Restarts on every keystroke; the sleep makes it wait for a pause in typing, and a
         // newer query cancels the older one's request.
@@ -150,7 +178,7 @@ struct SidebarConversationList: View {
                     systemImage: convo.isPinned ? "pin.slash" : "pin"
                 ) { chatManager.setPinned(convo, !convo.isPinned) },
                 BFDropdownRow("Delete", systemImage: "trash", role: .destructive) {
-                    chatManager.deleteConversation(convo)
+                    pendingDelete = convo
                 }
             ]
         )
@@ -167,7 +195,7 @@ struct SidebarConversationList: View {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
             Button(role: .destructive) {
-                chatManager.deleteConversation(convo)
+                pendingDelete = convo
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -180,12 +208,15 @@ struct SidebarConversationList: View {
             }
             .tint(BFColor.secondaryAdaptive)
         }
+        // Not `role: .destructive` — that animates the row away before the
+        // confirmation has been answered.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                chatManager.deleteConversation(convo)
+            Button {
+                pendingDelete = convo
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+            .tint(.red)
         }
     }
 
@@ -221,7 +252,7 @@ struct SidebarConversationList: View {
             if search.failed {
                 VStack(spacing: 10) {
                     emptyStateContent("Couldn't search right now")
-                    Button("Try Again") {
+                    Button("Try again") {
                         Task { await runSearch(trimmedQuery, cursor: nil) }
                     }
                     .font(BFFont.sidebarItem)
@@ -231,7 +262,14 @@ struct SidebarConversationList: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                emptyState("No results")
+                VStack(spacing: 10) {
+                    emptyStateContent("No chats match \u{201C}\(trimmedQuery)\u{201D}")
+                    Button("Clear search") { searchText = "" }
+                        .font(BFFont.sidebarItem)
+                        .foregroundStyle(BFColor.primary)
+                        .bfPointerHover()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
             ScrollView {
@@ -285,11 +323,6 @@ struct SidebarConversationList: View {
     }
 
     // MARK: - Empty states
-
-    private func emptyState(_ text: String) -> some View {
-        emptyStateContent(text)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 
     private func emptyStateContent(_ text: String) -> some View {
         VStack(spacing: 10) {

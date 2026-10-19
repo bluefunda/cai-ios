@@ -12,12 +12,13 @@ import SwiftUI
 struct SpaceSwitcher: View {
     let spaces: [AppSpace]
     let selection: AppSpace
+    var badges: [AppSpace: Int] = [:]
     let onSelect: (AppSpace) -> Void
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(spaces) { space in
-                SpaceSegment(space: space, isSelected: space == selection) {
+                SpaceSegment(space: space, isSelected: space == selection, badge: badges[space] ?? 0) {
                     onSelect(space)
                 }
             }
@@ -33,6 +34,7 @@ struct SpaceSwitcher: View {
 private struct SpaceSegment: View {
     let space: AppSpace
     let isSelected: Bool
+    var badge = 0
     let action: () -> Void
 
     @State private var isHovered = false
@@ -45,20 +47,46 @@ private struct SpaceSegment: View {
 
     var body: some View {
         Button(action: action) {
-            Text(space.title)
-                .font(isSelected ? BFFont.sidebarItemMed : BFFont.sidebarItem)
-                .foregroundStyle(isSelected ? BFColor.surfaceCanvas : Color.secondary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(fill, in: Capsule())
-                .contentShape(Capsule())
+            HStack(spacing: 5) {
+                Text(space.title)
+                    .font(isSelected ? BFFont.sidebarItemMed : BFFont.sidebarItem)
+                    .foregroundStyle(isSelected ? BFColor.surfaceCanvas : Color.secondary)
+                    .lineLimit(1)
+                if badge > 0 {
+                    UnreadBadge(count: badge)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(fill, in: Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(badge > 0 ? "\(badge) unread" : "")
         .accessibilityIdentifier("sidebar.space.\(space.rawValue)")
         .onHover { isHovered = $0 }
         .bfPointerHover()
+    }
+}
+
+// MARK: - Unread Badge
+
+/// Happy Blue count capsule — attention is one of the few places the accent belongs
+/// (P13). Caps at 99+ so it never stretches the row.
+struct UnreadBadge: View {
+    let count: Int
+
+    var body: some View {
+        Text(count > 99 ? "99+" : "\(count)")
+            .font(.system(size: 10, weight: .bold))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(BFColor.primary, in: Capsule())
+            .fixedSize()
+            .accessibilityHidden(true)
     }
 }
 
@@ -70,6 +98,7 @@ private struct SpaceSegment: View {
 struct SidebarDestinationRow: View {
     let destination: SidebarDestination
     let isSelected: Bool
+    var badge = 0
     let action: () -> Void
 
     @State private var isHovered = false
@@ -89,6 +118,9 @@ struct SidebarDestinationRow: View {
                 Text(destination.title)
                     .font(isSelected ? BFFont.sidebarItemMed : BFFont.sidebarItem)
                 Spacer(minLength: 0)
+                if badge > 0 {
+                    UnreadBadge(count: badge)
+                }
             }
             .foregroundStyle(isSelected ? BFColor.secondaryAdaptive : Color.primary)
             .padding(.horizontal, 14)
@@ -98,6 +130,7 @@ struct SidebarDestinationRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(badge > 0 ? "\(badge) unread" : "")
         .accessibilityIdentifier(destination.accessibilityIdentifier)
         .animation(BFMotion.easingDefault, value: isHovered)
         .onHover { isHovered = $0 }

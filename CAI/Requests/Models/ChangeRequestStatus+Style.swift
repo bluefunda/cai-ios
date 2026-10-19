@@ -30,6 +30,19 @@ struct RQStatusStyle: Equatable {
         }
     }
 
+    /// The saturated mark for the stage rail's current segment and timeline dots — a
+    /// pill's tint fill is too pale to read as a 4 pt bar on the light canvas.
+    var mark: Color {
+        switch family {
+        case .neutral, .muted: return BFColor.neutral400
+        case .blue: return BFColor.secondaryAdaptive
+        case .orange: return BFColor.happyOrange
+        case .green: return BFColor.success
+        case .red: return BFColor.happyRed
+        case .purple: return BFColor.happyPurple
+        }
+    }
+
     var text: Color {
         switch family {
         case .neutral: return BFColor.statusNeutralText

@@ -88,6 +88,16 @@ final class ChangeRequestListViewModel: ObservableObject {
         self.projectId = projectId
     }
 
+    /// True once a load has finished (success or failure) — screens call
+    /// `loadIfNeeded()` on appear, so switching back to a destination reconnects to
+    /// data already on screen instead of refetching it (see RequestsState).
+    @Published private(set) var hasLoaded = false
+
+    func loadIfNeeded() async {
+        guard !hasLoaded, !isLoading else { return }
+        await load()
+    }
+
     func load() async {
         isLoading = true
         error = nil
@@ -119,5 +129,6 @@ final class ChangeRequestListViewModel: ObservableObject {
         }
         guard !Task.isCancelled else { return }
         isLoading = false
+        hasLoaded = true
     }
 }
