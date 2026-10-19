@@ -281,6 +281,8 @@ final class ChatManager: ObservableObject {
     /// `locallyConnectedServerIDs` below uses for connectors with no backend.
     @Published var connectedSAP = false
     @Published var sapHost: String?
+    /// The OData connector's own system (separate from ABAPer's), same pattern.
+    @Published var odataConnection: ODataConnectionStatusDTO?
 
     /// Server ids "connected" via a simple local flip — no OAuth, no
     /// credentials, just a Connect tap (e.g. Sales Tracker today; reusable
@@ -966,6 +968,7 @@ extension ChatManager {
             group.addTask { await self.refreshGitHubConnectionStatus() }
             group.addTask { await self.refreshFigmaConnectionStatus() }
             group.addTask { await self.refreshSAPConnectionStatus() }
+            group.addTask { await self.refreshODataConnectionStatus() }
         }
     }
 
@@ -1228,6 +1231,8 @@ struct MCPServer: Identifiable, Hashable {
 
     var isABAPer: Bool { displayName.lowercased() == "abaper" }
     var isSAPAnalytics: Bool { displayName.lowercased() == "sap analytics" }
+    /// odata-mcp (labelled "SAP Analytics"): connected with its own host/credentials form.
+    var isOData: Bool { name == "cai-odata-cache" }
 
     /// SF Symbol for connector rows (Settings → Agents, composer's Agents
     /// tab) — every connector except GitHub, which uses a real brand mark

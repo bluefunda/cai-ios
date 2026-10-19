@@ -135,6 +135,25 @@ extension SettingsView {
                             }
                             .bfPointerHover()
                         }
+                    } else if server.isOData {
+                        // Its own system and credentials, like ABAPer: connected →
+                        // the detail screen, otherwise the connect form.
+                        if chatManager.odataConnection?.connected == true {
+                            NavigationLink {
+                                ODataConnectionView()
+                            } label: {
+                                connectorRow(server, connected: true)
+                            }
+                            .bfPointerHover()
+                        } else {
+                            // Hidden NavigationLink: no chevron, same as ABAPer's row.
+                            ZStack {
+                                NavigationLink(destination: ODataConnectFormView()) { EmptyView() }
+                                    .opacity(0)
+                                connectorRow(server, connected: false)
+                            }
+                            .bfPointerHover()
+                        }
                     } else {
                         // No connect flow yet for this one (e.g. SAP
                         // Analytics) — shown so every connector is visible,
