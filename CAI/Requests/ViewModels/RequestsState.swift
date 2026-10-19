@@ -32,8 +32,10 @@ final class RequestsState: ObservableObject {
     private(set) var services: RequestsServices?
     private(set) var currentUserId: String?
 
-    init(recents: RecentRequestsStore = RecentRequestsStore()) {
-        self.recents = recents
+    /// `nil` builds the standard store here rather than in a default argument — default
+    /// arguments are evaluated outside the main actor, and the store is main-actor bound.
+    init(recents: RecentRequestsStore? = nil) {
+        self.recents = recents ?? RecentRequestsStore()
     }
 
     /// Builds the view models for this user. Cheap — nothing loads until a screen asks.
