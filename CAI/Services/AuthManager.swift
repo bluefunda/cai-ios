@@ -607,11 +607,11 @@ final class AuthManager: NSObject, ObservableObject {
 
         if var user = decodeJWT(response.accessToken) {
             if user.name.isEmpty, let name = appleFullName {
-                user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles, organization: user.organization)
+                user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles, organizations: user.organizations)
                 needsProfileSync = true
             }
             if user.email.isEmpty, let email = appleEmail {
-                user = User(id: user.id, email: email, name: user.name, roles: user.roles, organization: user.organization)
+                user = User(id: user.id, email: email, name: user.name, roles: user.roles, organizations: user.organizations)
                 needsProfileSync = true
             }
             currentUser = user
@@ -759,22 +759,38 @@ extension AuthManager {
             email: json["email"] as? String ?? "",
             name:  Self.displayName(from: json),
             roles: (json["realm_access"] as? [String: Any])?["roles"] as? [String] ?? [],
-            organization: Self.firstOrganization(from: json)
+            organizations: Self.organizations(from: json)
         )
     }
 
     /// Mirrors cai-bff's extractOrganization (internal/transport/http/handler.go) —
-    /// Keycloak's `organization` claim is a bare string for single-org users, or a
-    /// JSON array when a user belongs to multiple orgs. Only the first entry is
-    /// ever used as the effective org, same as the backend.
-    private static func firstOrganization(from json: [String: Any]) -> String? {
-        if let orgs = json["organization"] as? [String] {
-            return orgs.first
+    /// only the first entry is ever used as the effective org, same as the backend.
+    nonisolated static func firstOrganization(from json: [String: Any]) -> String? {
+        organizations(from: json).first
+    }
+
+    /// Every org alias in Keycloak's `organization` claim, which comes in three
+    /// shapes: a bare string for single-org users, a JSON array when a user
+    /// belongs to multiple orgs, and an object keyed by org alias when the org
+    /// mapper also includes attributes or IDs (`{"trm": {"id": "…"}}`). Object
+    /// keys arrive unordered, so they're sorted to keep `first` deterministic.
+    /// BlueRequests entitlement (`WorkspaceStore`) checks membership across all
+    /// of them, not just the first.
+    nonisolated static func organizations(from json: [String: Any]) -> [String] {
+        let raw: [String]
+        switch json["organization"] {
+        case let org as String:
+            raw = [org]
+        case let orgs as [Any]:
+            raw = orgs.compactMap { $0 as? String }
+        case let orgs as [String: Any]:
+            raw = orgs.keys.sorted()
+        default:
+            raw = []
         }
-        if let org = json["organization"] as? String, !org.isEmpty {
-            return org
-        }
-        return nil
+        return raw
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     /// Derives the user's display name from JWT claims, preferring real name
@@ -843,12 +859,17 @@ struct User: Codable, Identifiable {
     let email: String
     let name: String
     let roles: [String]
+    /// Every Keycloak Organization alias in the token's `organization` claim
+    /// (see `AuthManager.organizations(from:)`). Membership in `trm` unlocks
+    /// the BlueRequests space (`WorkspaceStore`).
+    var organizations: [String] = []
+
     /// Effective Keycloak Organization context, if any (bluefunda/cai-bff#166).
     /// Mirrors cai-bff's extractOrganization: when a user belongs to multiple
-    /// orgs the token's `organization` claim is a JSON array and only the
-    /// first entry is ever used as the effective org — shown here for the
-    /// same reason it's picked there, so the user can see which one won.
-    var organization: String? = nil
+    /// orgs only the first entry is ever used as the effective org — shown
+    /// here for the same reason it's picked there, so the user can see which
+    /// one won.
+    var organization: String? { organizations.first }
 
     var isAdmin: Bool { roles.contains("admin") }
 }
