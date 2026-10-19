@@ -6,6 +6,9 @@ import UniformTypeIdentifiers
 struct StorageView: View {
     @EnvironmentObject var chatManager: ChatManager
     @StateObject private var viewModel = StorageViewModel()
+    /// Set when shown as the sidebar's Files destination rather than a sheet — see
+    /// ShellNavigationControl.
+    var navigationControl: ShellNavigationControl = .none
 
     @State private var showCreateFolder = false
     @State private var newFolderName = ""
@@ -32,10 +35,11 @@ struct StorageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
             }
-            .navigationTitle("Cloud Storage")
+            .navigationTitle("Files")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $viewModel.searchText, prompt: "Search files")
             .toolbar { toolbarContent }
+            .shellNavigationControl(navigationControl)
             .alert("New Folder", isPresented: $showCreateFolder) {
                 TextField("Folder name", text: $newFolderName)
                 Button("Create") { createFolder() }

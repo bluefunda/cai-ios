@@ -40,7 +40,7 @@ final class WorkspaceStore: ObservableObject {
         didSet { defaults.set(storedSpace.rawValue, forKey: Self.activeSpaceKey) }
     }
 
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
     private let isRequestsFeatureEnabled: () -> Bool
 
     static let activeSpaceKey = "workspace_active_space"
@@ -55,6 +55,7 @@ final class WorkspaceStore: ObservableObject {
         self.defaults = defaults
         self.isRequestsFeatureEnabled = isRequestsFeatureEnabled
         storedSpace = defaults.string(forKey: Self.activeSpaceKey).flatMap(AppSpace.init(rawValue:)) ?? .assistant
+        migrateLegacyAppMode()
     }
 
     // MARK: - Entitlement

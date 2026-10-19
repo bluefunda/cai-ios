@@ -40,15 +40,10 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
-    // Not private — SettingsView+Agents.swift (a separate extension file, split out to stay
-    // under SwiftLint's file_length/type_body_length limits) reads/writes these.
-    @Environment(\.webAuthenticationSession) var webAuthenticationSession
     @State private var showLogoutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var deleteError: String?
-    @State var isConnectingGitHub = false
-    @State var githubConnectError: String?
     // nil (not .account) so opening Settings on a compact/iPhone layout shows the category
     // list first instead of auto-navigating straight into Account — detailContent below still
     // falls back to .account for the regular/split-view detail pane, which always needs
@@ -252,7 +247,7 @@ struct SettingsView: View {
         switch selectedCategory ?? .account {
         case .account: accountDetail
         case .aiSettings: aiSettingsDetail
-        case .connectors: connectorsDetail
+        case .connectors: AgentsListView()
         case .usage: usageDetail
         case .subscription: subscriptionDetail
         case .legal: legalDetail
@@ -419,7 +414,7 @@ struct SettingsView: View {
     }
 
     // MARK: - Connectors
-    // connectorsDetail, connectorRow, connectGitHub moved to SettingsView+Agents.swift
+    // Agents: AgentsListView (AgentsListView.swift), shared with the sidebar's Agents destination
     // (bluefunda/cai-ios#261 precedent) to stay under SwiftLint's file_length/type_body_length
     // limits — no behavior change, purely a structural split.
 

@@ -1,11 +1,12 @@
 import SwiftUI
 
-// The sidebar's search field and conversation list, shared by both sidebars — SidebarContent
-// (iPad/Mac split view) and SidebarDrawer (iPhone overlay drawer), which only differ in what
-// happens around selecting a chat (`onSelect`).
+// The sidebar's search field and conversation list — the Chats destination's context list
+// in SidebarView (layer 3b), on every platform. The split-view column and the iPhone drawer
+// only differ in what happens around selecting a chat (`onSelect`) and in row actions.
 //
-// - Pinned chats in their own section on top, then Today / Yesterday / This Week / Older
-//   (cai-ios#335). Pin and unpin from the row's context menu.
+// - Pinned chats in their own section on top, then Today / Yesterday / This week / Older
+//   (cai-ios#335). Pin and unpin from the row's context menu, its hover `···` menu
+//   (pointer), or a swipe (iPhone drawer).
 // - The list is paged: the next page loads as the end of the list scrolls into view
 //   (cai-ios#370).
 // - Typing searches chat titles and message text on the server, a moment after typing stops,
@@ -16,6 +17,12 @@ private let minSearchLength = 2
 
 struct SidebarConversationList: View {
     @EnvironmentObject var chatManager: ChatManager
+    /// iPhone drawer: rows swipe to pin (leading) and delete (trailing). Swipe actions
+    /// only exist inside a List, so this switches the container; the split-view column
+    /// keeps its ScrollView and offers the hover `···` menu instead.
+    var allowsSwipeActions = false
+    /// Bound to the search field so ⌘F can focus it from anywhere in the shell.
+    var searchFocus: FocusState<Bool>.Binding
     let onSelect: (Conversation) -> Void
 
     @State private var searchText = ""
@@ -63,6 +70,8 @@ struct SidebarConversationList: View {
                 .font(BFFont.sidebarItem)
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
+                .focused(searchFocus)
+                .accessibilityIdentifier("sidebar.search")
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -85,38 +94,65 @@ struct SidebarConversationList: View {
 
     // MARK: - Conversation list
 
+    @ViewBuilder
     private var conversationList: some View {
-        ScrollView {
-            LazyVStack(spacing: 2) {
-                let pinned = chatManager.conversations.filter(\.isPinned)
-                if !pinned.isEmpty {
-                    sectionHeader("Pinned")
-                    ForEach(pinned) { row(for: $0) }
-                }
-
-                ForEach(groupedConversations(chatManager.conversations.filter { !$0.isPinned })) { group in
-                    sectionHeader(group.title)
-                    ForEach(group.conversations) { row(for: $0) }
-                }
-
-                if chatManager.chatListNextCursor != nil {
-                    // Coming into view near the end of the list loads the next page.
-                    ProgressView()
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity)
-                        .onAppear { Task { await chatManager.loadMoreChats() } }
-                }
+        if allowsSwipeActions {
+            List {
+                Group { listRows }
+                    .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
-            .padding(.horizontal, 8)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 2) { listRows }
+                    .padding(.horizontal, 8)
+            }
+        }
+    }
+
+    /// Shared by both containers; the List-only row modifiers above are no-ops in the
+    /// LazyVStack.
+    @ViewBuilder
+    private var listRows: some View {
+        let pinned = chatManager.conversations.filter(\.isPinned)
+        if !pinned.isEmpty {
+            SidebarSectionHeader(title: "Pinned")
+            ForEach(pinned) { row(for: $0) }
+        }
+
+        ForEach(groupedConversations(chatManager.conversations.filter { !$0.isPinned })) { group in
+            SidebarSectionHeader(title: group.title)
+            ForEach(group.conversations) { row(for: $0) }
+        }
+
+        if chatManager.chatListNextCursor != nil {
+            // Coming into view near the end of the list loads the next page.
+            ProgressView()
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .onAppear { Task { await chatManager.loadMoreChats() } }
         }
     }
 
     private func row(for convo: Conversation) -> some View {
         SidebarConversationRow(
             title: convo.title,
+            meta: convo.createdAt.formatted(.relative(presentation: .named)),
             isSelected: chatManager.currentConversation?.id == convo.id,
             isPinned: convo.isPinned,
-            onTogglePin: { chatManager.setPinned(convo, !convo.isPinned) }
+            hoverMenuRows: [
+                BFDropdownRow(
+                    convo.isPinned ? "Unpin" : "Pin",
+                    systemImage: convo.isPinned ? "pin.slash" : "pin"
+                ) { chatManager.setPinned(convo, !convo.isPinned) },
+                BFDropdownRow("Delete", systemImage: "trash", role: .destructive) {
+                    chatManager.deleteConversation(convo)
+                }
+            ]
         )
         .onTapGesture { onSelect(convo) }
         .bfPointerHover()
@@ -136,18 +172,21 @@ struct SidebarConversationList: View {
                 Label("Delete", systemImage: "trash")
             }
         }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(BFFont.sidebarSection)
-            .textCase(.uppercase)
-            .kerning(0.6)
-            .foregroundStyle(.tertiary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.top, 16)
-            .padding(.bottom, 4)
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                chatManager.setPinned(convo, !convo.isPinned)
+            } label: {
+                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash" : "pin")
+            }
+            .tint(BFColor.secondaryAdaptive)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                chatManager.deleteConversation(convo)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     /// Groups by recency of creation, in list order.
@@ -169,7 +208,7 @@ struct SidebarConversationList: View {
             }
         }
 
-        return [("Today", today), ("Yesterday", yesterday), ("This Week", thisWeek), ("Older", older)]
+        return [("Today", today), ("Yesterday", yesterday), ("This week", thisWeek), ("Older", older)]
             .filter { !$0.1.isEmpty }
             .map { ConversationGroup(title: $0.0, conversations: $0.1) }
     }

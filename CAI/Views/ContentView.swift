@@ -29,21 +29,25 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Authenticated Root (Chat / </>Code mode switch)
+// MARK: - Authenticated Root
 
 struct AuthenticatedRoot: View {
     var body: some View { AppShell() }
 }
 
-// MARK: - App Shell (unified Chat + Code shell)
+// MARK: - App Shell
+// Space → Destination navigation (docs/BLUEREQUESTS_INTEGRATION.md P2): one SidebarView,
+// presented as a persistent split-view column on iPad/Mac or an overlay drawer on iPhone,
+// and the current destination in the detail area. The current space and destination live
+// in WorkspaceStore, persisted per space.
 
 struct AppShell: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var iapManager: IAPManager
+    @EnvironmentObject var workspace: WorkspaceStore
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    @AppStorage("app_mode") private var modeRaw = AppMode.chat.rawValue
     @State private var sidebarOpen = false
     @State private var activeSheet: AppSheet?
     @State private var safariURL: URL?
@@ -56,21 +60,18 @@ struct AppShell: View {
     // `.automatic`). .doubleColumn/.detailOnly are the two canonical states
     // the toggle button switches between for a 2-column split (cai-ios#256).
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
+    @FocusState private var sidebarSearchFocused: Bool
 
-    // Code mode
+    // Code destination
     @StateObject private var systemStore = SAPSystemStore()
     @State private var showSystems = false
 
     enum AppSheet: String, Identifiable {
-        case storage, settings, subscription
+        case settings, subscription
         var id: String { rawValue }
     }
 
-    private var mode: AppMode { AppMode(rawValue: modeRaw) ?? .chat }
-    private var modeBinding: Binding<AppMode> {
-        Binding(get: { mode }, set: { modeRaw = $0.rawValue })
-    }
-
+    private var destination: SidebarDestination { workspace.currentDestination }
     private var isRegular: Bool { sizeClass == .regular }
 
     var body: some View {
@@ -81,57 +82,77 @@ struct AppShell: View {
                 iPhoneLayout
             }
         }
+        .background {
+            ShellKeyboardShortcuts(
+                onDestination: { workspace.navigate(to: .assistant($0)) },
+                onFocusSearch: focusSidebarSearch
+            )
+        }
         .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
         .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
         .sheet(isPresented: $showSystems) {
             SystemManagerView(store: systemStore).environmentObject(authManager)
         }
         .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
-            modeRaw = AppMode.chat.rawValue
+            workspace.navigate(to: .assistant(.chats))
             chatManager.newConversation()
         }
+    }
+
+    private func sidebar(_ presentation: SidebarPresentation) -> some View {
+        SidebarView(
+            presentation: presentation,
+            systemStore: systemStore,
+            searchFocus: $sidebarSearchFocused,
+            onOpenSettings: { activeSheet = .settings },
+            onOpenSubscription: { activeSheet = .subscription },
+            onOpenURL: { safariURL = $0 },
+            onManageSystems: { showSystems = true }
+        )
     }
 
     // MARK: - iPad: NavigationSplitView
 
     private var iPadLayout: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarContent(
-                currentMode: modeBinding,
-                columnVisibility: $columnVisibility,
-                onOpenStorage: { activeSheet = .storage },
-                onOpenSettings: { activeSheet = .settings },
-                onOpenSubscription: { activeSheet = .subscription },
-                onOpenURL: { safariURL = $0 }
-            )
-            #if targetEnvironment(macCatalyst)
-            .toolbar(removing: .sidebarToggle)
-            .hidingNativeSplitViewToggle()
-            #endif
-            // Pin sidebar to a desktop-comfortable width; the detail column
-            // gets the rest, which is where the 800-pt chat column lives.
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+            sidebar(.split(columnVisibility: $columnVisibility))
+                #if targetEnvironment(macCatalyst)
+                .toolbar(removing: .sidebarToggle)
+                .hidingNativeSplitViewToggle()
+                #endif
+                // Pin sidebar to a desktop-comfortable width; the detail column
+                // gets the rest, which is where the 800-pt chat column lives.
+                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
             // An empty title (Mac's actual window-title text is separately
             // hidden in CAIApp.swift) removes the redundant "BlueFunda AI"
             // that duplicated the sidebar's own header (cai-ios#253).
-            content
-                .navigationTitle(mode == .code ? "Code" : "")
+            content(navigationControl: splitNavigationControl)
+                .navigationTitle(destination == .assistant(.code) ? "Code" : "")
                 .toolbar {
+                    // The shell's single toolbar group, per destination. Files, Agents
+                    // and Requests own a NavigationStack and place their controls inside
+                    // it (see ShellNavigationControl).
                     ToolbarItemGroup(placement: .primaryAction) {
-                        #if targetEnvironment(macCatalyst)
-                        SidebarToggleButton(columnVisibility: $columnVisibility)
-                        #endif
-                        switch mode {
-                        case .chat:
+                        switch destination {
+                        case .assistant(.chats):
+                            #if targetEnvironment(macCatalyst)
+                            SidebarToggleButton(columnVisibility: $columnVisibility)
+                            #endif
                             AttachmentButton(conversationId: chatManager.currentConversation?.id)
                             NewChatButton(action: { chatManager.newConversation() })
-                        case .code:
+                        case .assistant(.code):
+                            #if targetEnvironment(macCatalyst)
+                            SidebarToggleButton(columnVisibility: $columnVisibility)
+                            #endif
                             Button(action: { showSystems = true }) {
                                 Image(systemName: "server.rack")
                                     .font(.system(size: BFFont.toolbarIconPt))
                             }
+                            .accessibilityLabel("SAP systems")
                             .bfPointerHover()
+                        case .assistant(.files), .assistant(.agents), .requests:
+                            EmptyView()
                         }
                     }
                 }
@@ -153,13 +174,23 @@ struct AppShell: View {
         .navigationSplitViewStyle(.balanced)
     }
 
+    /// Mac Catalyst keeps its sidebar toggle in the detail toolbar (the sidebar header
+    /// can't host it there); iPad's lives in the sidebar header instead.
+    private var splitNavigationControl: ShellNavigationControl {
+        #if targetEnvironment(macCatalyst)
+        return .sidebarToggle(columnVisibility: $columnVisibility)
+        #else
+        return .none
+        #endif
+    }
+
     // MARK: - iPhone: ZStack drawer
 
     private var iPhoneLayout: some View {
         ZStack(alignment: .leading) {
             VStack(spacing: 0) {
                 topBar
-                content
+                content(navigationControl: .drawer(isOpen: $sidebarOpen))
             }
             .zIndex(0)
 
@@ -173,18 +204,11 @@ struct AppShell: View {
                     .transition(.opacity)
             }
 
-            SidebarDrawer(
-                isOpen: $sidebarOpen,
-                currentMode: modeBinding,
-                onOpenStorage: { activeSheet = .storage },
-                onOpenSettings: { activeSheet = .settings },
-                onOpenSubscription: { activeSheet = .subscription },
-                onOpenURL: { safariURL = $0 }
-            )
-            .frame(width: 300)
-            .offset(x: sidebarOpen ? 0 : -310)
-            .animation(.spring(duration: 0.3, bounce: 0.1), value: sidebarOpen)
-            .zIndex(2)
+            sidebar(.drawer(isOpen: $sidebarOpen))
+                .frame(width: 300)
+                .offset(x: sidebarOpen ? 0 : -310)
+                .animation(.spring(duration: 0.3, bounce: 0.1), value: sidebarOpen)
+                .zIndex(2)
         }
         .animation(.default, value: sidebarOpen)
         .onChange(of: sidebarOpen) { _, open in
@@ -197,30 +221,61 @@ struct AppShell: View {
         }
     }
 
+    /// Chats and Code draw their own compact bar; the destinations that own a
+    /// NavigationStack get the hamburger in their navigation bar instead.
     @ViewBuilder
     private var topBar: some View {
-        switch mode {
-        case .chat:
+        switch destination {
+        case .assistant(.chats):
             ChatTopBar(sidebarOpen: $sidebarOpen, onNewChat: { chatManager.newConversation() })
-        case .code:
+        case .assistant(.code):
             CodeTopBar(sidebarOpen: $sidebarOpen, onSystems: { showSystems = true })
+        case .assistant(.files), .assistant(.agents), .requests:
+            EmptyView()
         }
     }
 
+    // MARK: - Destination Content
+
     @ViewBuilder
-    private var content: some View {
-        switch mode {
-        case .chat:
+    private func content(navigationControl: ShellNavigationControl) -> some View {
+        switch destination {
+        case .assistant(.chats):
             ChatView()
-        case .code:
+        case .assistant(.code):
             CodeContent(systemStore: systemStore, onConnect: { showSystems = true })
+        case .assistant(.files):
+            StorageView(navigationControl: navigationControl)
+        case .assistant(.agents):
+            NavigationStack {
+                AgentsListView()
+                    .shellNavigationControl(navigationControl)
+            }
+        case .requests(let requestsDestination):
+            RequestsPlaceholderView(destination: requestsDestination, navigationControl: navigationControl)
+        }
+    }
+
+    // MARK: - Keyboard
+
+    /// ⌘F: jump to Chats, show the sidebar, then focus its search field once the
+    /// sidebar is on screen to receive focus.
+    private func focusSidebarSearch() {
+        workspace.navigate(to: .assistant(.chats))
+        if isRegular {
+            withAnimation { columnVisibility = .doubleColumn }
+        } else {
+            withAnimation(.spring(duration: 0.25)) { sidebarOpen = true }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            sidebarSearchFocused = true
         }
     }
 
     @ViewBuilder
     private func sheetView(_ sheet: AppSheet) -> some View {
         switch sheet {
-        case .storage: StorageView()
         case .settings:
             // Explicit re-injection: SettingsView's NavigationSplitView is
             // the root of this sheet, and on Mac Catalyst that split view's
@@ -235,384 +290,6 @@ struct AppShell: View {
         case .subscription: SubscriptionView()
         }
     }
-}
-
-// MARK: - Sidebar Content (shared between iPad split view and iPhone drawer)
-
-struct SidebarContent: View {
-    @EnvironmentObject var chatManager: ChatManager
-    @EnvironmentObject var authManager: AuthManager
-    @EnvironmentObject var iapManager: IAPManager
-    @Binding var currentMode: AppMode
-    @Binding var columnVisibility: NavigationSplitViewVisibility
-    let onOpenStorage: () -> Void
-    let onOpenSettings: () -> Void
-    let onOpenSubscription: () -> Void
-    let onOpenURL: (URL) -> Void
-
-    private let helpURL = URL(string: "https://docs.bluefunda.com/")!
-
-    private var profileMenuRows: [BFDropdownRow] {
-        var rows = [BFDropdownRow("Settings", systemImage: "gear", action: onOpenSettings)]
-        if authManager.realm == "individual" {
-            rows.append(BFDropdownRow(
-                iapManager.hasActiveSubscription ? "Manage Subscription" : "Upgrade to Pro",
-                systemImage: iapManager.hasActiveSubscription ? "checkmark.seal" : "sparkles",
-                action: onOpenSubscription
-            ))
-        }
-        rows.append(BFDropdownRow("Help & Support", systemImage: "questionmark.circle") {
-            onOpenURL(helpURL)
-        })
-        return rows
-    }
-
-    /// Shared trigger content for the profile row's dropdown — same view either way, only the
-    /// container around it (BFDropdownMenu vs. Menu) differs by platform.
-    private var profileTriggerLabel: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(BFColor.primary.gradient)
-                .frame(width: 30, height: 30)
-                .overlay {
-                    Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                        .font(BFFont.sidebarItemMed).foregroundStyle(.white)
-                }
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(authManager.currentUser?.name ?? "Account")
-                        .font(BFFont.sidebarItemMed)
-                        .foregroundStyle(.primary).lineLimit(1)
-                    if iapManager.hasActiveSubscription {
-                        Text("Pro")
-                            .font(BFFont.micro.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(BFColor.primary, in: Capsule())
-                    }
-                }
-                if let email = authManager.currentUser?.email {
-                    Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            Spacer()
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(Color.primary.opacity(0.0001))
-        .contentShape(Rectangle())
-    }
-
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // ── Sidebar header: brand ────────
-            // New Chat lives in the top toolbar (NewChatButton) now, not
-            // duplicated here (cai-ios#256). The sidebar-collapse toggle lives
-            // here (not the detail pane's own toolbar) so there's exactly one
-            // control for it, not two — it previously also appeared in the
-            // detail toolbar's trailing group, reading as a redundant second
-            // icon floating over the chat content.
-            HStack(spacing: 0) {
-                Text("BlueFunda AI")
-                    .font(BFFont.sidebarHeader)
-                    .foregroundStyle(.primary)
-                Spacer()
-                #if !targetEnvironment(macCatalyst)
-                SidebarToggleButton(columnVisibility: $columnVisibility)
-                #endif
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
-
-            SidebarConversationList { convo in
-                // This persistent sidebar (iPad/Mac Catalyst) has no drawer to close, but
-                // selectConversation is the same expensive call as the iPhone drawer's, so it
-                // needs the same "show the loader before binding" sequencing or the loading
-                // overlay never appears while a long conversation's messages load.
-                currentMode = .chat
-                chatManager.isSwitchingConversation = true
-                Task { @MainActor in
-                    chatManager.selectConversation(convo)
-                }
-            }
-
-            BFHairline()
-
-            VStack(spacing: 0) {
-                SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
-                    currentMode = .code
-                }
-            }
-
-            BFHairline()
-
-            // Upgrade to Pro — individual free users only. Also gated on
-            // hasCheckedSubscriptionStatus so an actual Pro user doesn't see this flash briefly
-            // while hasActiveSubscription still holds its default false, before the real check
-            // (local entitlements + backend sync) completes.
-            if authManager.realm == "individual" && iapManager.hasCheckedSubscriptionStatus
-                && !iapManager.hasActiveSubscription {
-                Button(action: onOpenSubscription) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 14))
-                            .frame(width: 20)
-                        Text("Upgrade to Pro")
-                            .font(BFFont.sidebarItemMed)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(BFColor.primaryTint, in: Capsule())
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(BFColor.primary)
-                .accessibilityIdentifier("upgradeToProButton")
-                .bfPointerHover()
-            }
-
-            // Profile row — bottom left, menu contains Settings + Help. BFDropdownMenu, not
-            // Menu — SidebarContent is used for BOTH iPad and Mac Catalyst (routed by size
-            // class, not platform — see AppShell.body's isRegular check), and native Menu turned
-            // out to have a second bug beyond missing hover: opening it from inside a
-            // NavigationSplitView's sidebar column collapses that sidebar entirely on iPadOS
-            // (confirmed via live-device screenshots — bluefunda/cai-ios#292/#293). Mac
-            // Catalyst's own version of this same struct didn't show that collapse once switched
-            // to BFDropdownMenu, so this now applies to both rather than just Mac Catalyst. Not
-            // used for ModeModelPicker/PersonaComposerControl or the attach menu, which have
-            // their own documented reasons to stay on Menu (cai-ios#257).
-            BFDropdownMenu(rows: profileMenuRows) { profileTriggerLabel }
-                .accessibilityIdentifier("profileMenuButton")
-        }
-        .background(BFColor.surfaceSidebar)
-        .toolbar(.hidden, for: .navigationBar)
-        #if targetEnvironment(macCatalyst)
-        .toolbar(removing: .sidebarToggle)
-        #endif
-    }
-
-}
-
-// MARK: - Hamburger
-
-// MARK: - Sidebar Drawer
-
-struct SidebarDrawer: View {
-    @EnvironmentObject var chatManager: ChatManager
-    @EnvironmentObject var authManager: AuthManager
-    @EnvironmentObject var iapManager: IAPManager
-    @Binding var isOpen: Bool
-    @Binding var currentMode: AppMode
-    let onOpenStorage: () -> Void
-    let onOpenSettings: () -> Void
-    let onOpenSubscription: () -> Void
-    let onOpenURL: (URL) -> Void
-
-    private let helpURL = URL(string: "https://docs.bluefunda.com/")!
-
-    private var profileMenuRows: [BFDropdownRow] {
-        var rows = [BFDropdownRow("Settings", systemImage: "gear") {
-            withAnimation { isOpen = false }
-            onOpenSettings()
-        }]
-        if authManager.realm == "individual" {
-            rows.append(BFDropdownRow(
-                iapManager.hasActiveSubscription ? "Manage Subscription" : "Upgrade to Pro",
-                systemImage: iapManager.hasActiveSubscription ? "checkmark.seal" : "sparkles"
-            ) {
-                withAnimation { isOpen = false }
-                onOpenSubscription()
-            })
-        }
-        rows.append(BFDropdownRow("Help & Support", systemImage: "questionmark.circle") {
-            withAnimation { isOpen = false }
-            onOpenURL(helpURL)
-        })
-        return rows
-    }
-
-    /// Shared trigger content for the profile row's dropdown — same view either way, only the
-    /// container around it (BFDropdownMenu vs. Menu) differs by platform.
-    private var profileTriggerLabel: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(BFColor.primary.gradient)
-                .frame(width: 30, height: 30)
-                .overlay {
-                    Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                        .font(BFFont.sidebarItemMed).foregroundStyle(.white)
-                }
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(authManager.currentUser?.name ?? "Account")
-                        .font(BFFont.sidebarItemMed)
-                        .foregroundStyle(.primary).lineLimit(1)
-                    if iapManager.hasActiveSubscription {
-                        Text("Pro")
-                            .font(BFFont.micro.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(BFColor.primary, in: Capsule())
-                    }
-                }
-                if let email = authManager.currentUser?.email {
-                    Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            Spacer()
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(Color.primary.opacity(0.0001))
-        .contentShape(Rectangle())
-    }
-
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // ── Sidebar header: brand + new chat ────────
-            HStack(spacing: 0) {
-                Text("BlueFunda AI")
-                    .font(BFFont.sidebarHeader)
-                    .foregroundStyle(.primary)
-                Spacer()
-                Button {
-                    currentMode = .chat
-                    chatManager.newConversation()
-                    withAnimation { isOpen = false }
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: BFFont.toolbarIconPt - 2))
-                        .foregroundStyle(BFColor.primary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
-
-            SidebarConversationList { convo in
-                // Order matters, and needs to be *guaranteed*, not just likely: close the drawer,
-                // wait for that animation to genuinely finish, only then show the loading spinner
-                // and bind the conversation. selectConversation triggers the expensive part (a
-                // long conversation's full List row diff); starting it before the drawer's
-                // dismiss has actually rendered bundles that heavy work into the same transaction
-                // and blocks the drawer from visibly closing on time. An arbitrary sleep can still
-                // lose the race under load — completionCriteria: .logicallyComplete gives a real
-                // callback for exactly when this animation finishes.
-                currentMode = .chat
-                withAnimation(.default, completionCriteria: .logicallyComplete) {
-                    isOpen = false
-                } completion: {
-                    chatManager.isSwitchingConversation = true
-                    Task { @MainActor in
-                        chatManager.selectConversation(convo)
-                    }
-                }
-            }
-
-            BFHairline()
-
-            // ── Bottom nav ────────────────────────────────
-            VStack(spacing: 0) {
-                SidebarNavButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code") {
-                    currentMode = .code
-                    withAnimation { isOpen = false }
-                }
-            }
-
-            BFHairline()
-
-            // Upgrade to Pro — individual free users only. Also gated on
-            // hasCheckedSubscriptionStatus so an actual Pro user doesn't see this flash briefly
-            // while hasActiveSubscription still holds its default false, before the real check
-            // (local entitlements + backend sync) completes.
-            if authManager.realm == "individual" && iapManager.hasCheckedSubscriptionStatus
-                && !iapManager.hasActiveSubscription {
-                Button {
-                    withAnimation { isOpen = false }
-                    onOpenSubscription()
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 14))
-                            .frame(width: 20)
-                        Text("Upgrade to Pro")
-                            .font(BFFont.sidebarItemMed)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(BFColor.primaryTint, in: Capsule())
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(BFColor.primary)
-                .accessibilityIdentifier("upgradeToProButton")
-                .bfPointerHover()
-            }
-
-            // Profile row — bottom left, menu contains Settings + Help. Plain native Menu — this
-            // struct (SidebarDrawer) is iPhone-only (a ZStack overlay drawer, no
-            // NavigationSplitView), so neither the missing-hover nor the sidebar-collapse-on-open
-            // issues that pushed SidebarContent's version to BFDropdownMenu apply here: hover is
-            // meaningless for touch, and there's no split-view sidebar to collapse.
-            Menu {
-                Button {
-                    withAnimation { isOpen = false }
-                    onOpenSettings()
-                } label: {
-                    Label("Settings", systemImage: "gear")
-                }
-                if authManager.realm == "individual" {
-                    Button {
-                        withAnimation { isOpen = false }
-                        onOpenSubscription()
-                    } label: {
-                        Label(
-                            iapManager.hasActiveSubscription ? "Manage Subscription" : "Upgrade to Pro",
-                            systemImage: iapManager.hasActiveSubscription ? "checkmark.seal" : "sparkles"
-                        )
-                    }
-                }
-                Button {
-                    withAnimation { isOpen = false }
-                    onOpenURL(helpURL)
-                } label: {
-                    Label("Help & Support", systemImage: "questionmark.circle")
-                }
-            } label: {
-                profileTriggerLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("profileMenuButton")
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(BFColor.surfaceSidebar)
-        .shadow(color: .black.opacity(0.10), radius: 18, x: 2, y: 0)
-    }
-
 }
 
 // MARK: - Loading View
