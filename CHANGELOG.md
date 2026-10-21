@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.13.1](https://github.com/bluefunda/cai-ios/compare/v2.13.0...v2.13.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **mac:** select and copy your own prompt ([b889525](https://github.com/bluefunda/cai-ios/commit/b889525d362366db922cc99e5a4adc7c55fb74d4))
+* **mac:** select and copy your own prompt ([0fd5117](https://github.com/bluefunda/cai-ios/commit/0fd51177a64fb8598ad66eebec90a9a22a494ac7)), closes [#401](https://github.com/bluefunda/cai-ios/issues/401)
+
 ## [2.13.0](https://github.com/bluefunda/cai-ios/compare/v2.12.0...v2.13.0) (2026-10-19)
 
 
