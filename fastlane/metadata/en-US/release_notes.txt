@@ -1,4 +1,1 @@
-New in this release:
-• Connect Figma; connect sheet closes itself; Mac and usage fixes
-
-Plus bug fixes and performance improvements.
+This release includes bug fixes and performance improvements.
