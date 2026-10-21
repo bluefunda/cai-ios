@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.0](https://github.com/bluefunda/cai-ios/compare/v2.13.1...v2.14.0) (2026-10-21)
+
+
+### Features
+
+* **connectors:** connect SAP Analytics (OData); Figma and ABAPer logos ([8fd1955](https://github.com/bluefunda/cai-ios/commit/8fd1955e397d8cd457973f5203d3796af59577f0))
+
 ## [2.13.1](https://github.com/bluefunda/cai-ios/compare/v2.13.0...v2.13.1) (2026-10-21)
 
 
