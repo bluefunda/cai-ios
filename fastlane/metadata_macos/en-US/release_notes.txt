@@ -1,1 +1,2 @@
-This release includes bug fixes and performance improvements.
+New in this release:
+• Connect SAP Analytics (OData); Figma and ABAPer logos
