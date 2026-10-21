@@ -208,6 +208,21 @@ extension SettingsView {
                     // wins. The older .foregroundColor API overrides it.
                     .foregroundColor(.primary)
                     .frame(width: 22)
+            } else if server.isFigma {
+                // Figma's own multi-colour mark (FigmaMark asset), like GitHub's — kept in its
+                // brand colours rather than tinted.
+                Image("FigmaMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .frame(width: 22)
+            } else if server.isABAPer {
+                // ABAPer's own logo (ABAPerMark — the same tile as the web app's Apps list).
+                Image("ABAPerMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .frame(width: 22)
             } else {
                 Image(systemName: server.connectorIconName)
                     .font(.system(size: 16))

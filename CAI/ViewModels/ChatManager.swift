@@ -1235,13 +1235,15 @@ struct MCPServer: Identifiable, Hashable {
     var isOData: Bool { name == "cai-odata-cache" }
 
     /// SF Symbol for connector rows (Settings → Agents, composer's Agents
-    /// tab) — every connector except GitHub, which uses a real brand mark
-    /// ("GitHubMark" asset) instead of a generic symbol; callers branch on
-    /// `isGitHub` separately since that's a different Image initializer.
+    /// tab) — every connector except GitHub, Figma and ABAPer, which use their real
+    /// marks ("GitHubMark", "FigmaMark", "ABAPerMark" assets) instead of a generic
+    /// symbol; callers branch on `isGitHub`/`isFigma`/`isABAPer` separately since
+    /// that's a different Image initializer. Their symbols below are only fallbacks.
     var connectorIconName: String {
         if isFigma { return "pencil.and.ruler" }
         if isABAPer { return "curlybraces" }
-        if isSAPAnalytics { return "chart.bar.xaxis" }
+        // "Reports from your system" — a neutral symbol, not SAP's logo (trademark).
+        if isOData || isSAPAnalytics { return "chart.bar.doc.horizontal" }
         if isSalesTracker { return "chart.line.uptrend.xyaxis" }
         return "brain.head.profile"
     }

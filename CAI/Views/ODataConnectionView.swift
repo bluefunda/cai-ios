@@ -26,7 +26,7 @@ struct ODataConnectionView: View {
                             .font(MacSettingsFont.row)
                             #endif
                     } icon: {
-                        Image(systemName: "chart.bar.xaxis")
+                        Image(systemName: "chart.bar.doc.horizontal")
                             .font(.system(size: 16))
                             .foregroundStyle(.primary)
                     }
