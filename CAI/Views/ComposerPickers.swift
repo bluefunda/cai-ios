@@ -261,6 +261,18 @@ struct ComposerAttachSheet: View {
                                         // overrides the row's own tint.
                                         .foregroundColor(.primary)
                                         .frame(width: 22)
+                                } else if server.isFigma {
+                                    Image("FigmaMark")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        .frame(width: 22)
+                                } else if server.isABAPer {
+                                    Image("ABAPerMark")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        .frame(width: 22)
                                 } else {
                                     Image(systemName: server.connectorIconName)
                                         .font(.system(size: 16))

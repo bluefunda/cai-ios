@@ -184,6 +184,20 @@ final class BFFAPIService {
         try await client.postIgnoringResponse("/sap/disconnect", body: [:])
     }
 
+    // MARK: - OData connection (OData connector, cai-bff odatacreds)
+
+    func fetchODataConnectionStatus() async throws -> ODataConnectionStatusDTO {
+        try await client.get("/odata/status")
+    }
+
+    func connectOData(_ request: ODataConnectRequest) async throws {
+        let _: StatusAckDTO = try await client.post("/odata/connect", body: request)
+    }
+
+    func disconnectOData() async throws {
+        try await client.postIgnoringResponse("/odata/disconnect", body: [:])
+    }
+
     // MARK: - Personas
 
     func fetchPersonas() async throws -> [Persona] {

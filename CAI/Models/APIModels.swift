@@ -426,6 +426,26 @@ struct SAPCredentialsConnectRequest: Encodable {
     let password: String
 }
 
+// MARK: - OData connection (OData connector — its own system, separate from ABAPer's)
+
+struct ODataConnectionStatusDTO: Codable {
+    let connected: Bool
+    let host: String?
+    let client: String?
+    let username: String?
+    let services: [String]?
+}
+
+/// `client` and `services` are optional: empty client for non-SAP OData, empty
+/// services lets odata-mcp list them from the system's gateway catalog.
+struct ODataConnectRequest: Encodable {
+    let host: String
+    let client: String
+    let username: String
+    let password: String
+    let services: [String]
+}
+
 /// Decodes cai-bff's plain `{"status": "..."}` acknowledgment — connect and
 /// disconnect both return this shape, with nothing else worth modeling.
 struct StatusAckDTO: Decodable {

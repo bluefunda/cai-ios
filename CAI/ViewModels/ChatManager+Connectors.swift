@@ -15,7 +15,7 @@ extension ChatManager {
     /// Every *connected* server's tools, enabled by default for a new
     /// conversation (Settings → Connectors' composer-popup toggle can still
     /// turn individual ones off per-chat — see `enabledMCPServersByConversationID`).
-    /// GitHub and Figma (OAuth) and ABAPer (credentials) have real connect flows —
+    /// GitHub and Figma (OAuth) and ABAPer and OData (credentials) have real connect flows —
     /// every other connector has
     /// no backing mechanism yet (Settings → Connectors shows them but their
     /// "Connect" does nothing), so it can never count as connected until its
@@ -32,6 +32,7 @@ extension ChatManager {
             if server.isGitHub { return connectedGitHub }
             if server.isFigma { return connectedFigma }
             if server.isABAPer { return connectedSAP }
+            if server.isOData { return odataConnection?.connected == true }
             return locallyConnectedServerIDs.contains(server.id)
         }
     }
@@ -74,6 +75,7 @@ extension ChatManager {
         figmaUsername = nil
         connectedSAP = false
         sapHost = nil
+        odataConnection = nil
         locallyConnectedServerIDs = []
     }
 
@@ -88,6 +90,17 @@ extension ChatManager {
             sapHost = status.host
         } catch {
             print("[ChatManager] refreshSAPConnectionStatus error: \(error)")
+        }
+    }
+
+    /// The OData connector's status, same pattern as ABAPer's. A backend
+    /// without OData connections answers 404, which leaves it not connected.
+    func refreshODataConnectionStatus() async {
+        guard let api = apiService else { return }
+        do {
+            odataConnection = try await api.fetchODataConnectionStatus()
+        } catch {
+            print("[ChatManager] refreshODataConnectionStatus error: \(error)")
         }
     }
 

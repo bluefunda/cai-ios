@@ -135,6 +135,25 @@ extension SettingsView {
                             }
                             .bfPointerHover()
                         }
+                    } else if server.isOData {
+                        // Its own system and credentials, like ABAPer: connected →
+                        // the detail screen, otherwise the connect form.
+                        if chatManager.odataConnection?.connected == true {
+                            NavigationLink {
+                                ODataConnectionView()
+                            } label: {
+                                connectorRow(server, connected: true)
+                            }
+                            .bfPointerHover()
+                        } else {
+                            // Hidden NavigationLink: no chevron, same as ABAPer's row.
+                            ZStack {
+                                NavigationLink(destination: ODataConnectFormView()) { EmptyView() }
+                                    .opacity(0)
+                                connectorRow(server, connected: false)
+                            }
+                            .bfPointerHover()
+                        }
                     } else {
                         // No connect flow yet for this one (e.g. SAP
                         // Analytics) — shown so every connector is visible,
@@ -188,6 +207,21 @@ extension SettingsView {
                     // Catalyst inside these List rows — the row's own tint
                     // wins. The older .foregroundColor API overrides it.
                     .foregroundColor(.primary)
+                    .frame(width: 22)
+            } else if server.isFigma {
+                // Figma's own multi-colour mark (FigmaMark asset), like GitHub's — kept in its
+                // brand colours rather than tinted.
+                Image("FigmaMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .frame(width: 22)
+            } else if server.isABAPer {
+                // ABAPer's own logo (ABAPerMark — the same tile as the web app's Apps list).
+                Image("ABAPerMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
                     .frame(width: 22)
             } else {
                 Image(systemName: server.connectorIconName)
