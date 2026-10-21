@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.13.0](https://github.com/bluefunda/cai-ios/compare/v2.12.0...v2.13.0) (2026-10-19)
+
+
+### Features
+
+* **connectors:** connect Figma; connect sheet closes itself; Mac and usage fixes ([13c488f](https://github.com/bluefunda/cai-ios/commit/13c488fa6ff37defe012551ae463ad47f3397a4c))
+* **connectors:** connect Figma; connect sheet closes itself; Mac and usage fixes ([6d24337](https://github.com/bluefunda/cai-ios/commit/6d2433786c2179c517c0a68604630fb3e31c1c22))
+
+
+### Bug Fixes
+
+* **markdown:** parse inline markdown inside headings ([963721a](https://github.com/bluefunda/cai-ios/commit/963721af5f6b9b9528fad11c2a66c81d33ccb4c9)), closes [#392](https://github.com/bluefunda/cai-ios/issues/392)
+* **usage:** leave restricted mode when a reached limit renews ([9d70046](https://github.com/bluefunda/cai-ios/commit/9d7004644f246db596cc223033d6046a4915b403))
+
 ## [2.12.0](https://github.com/bluefunda/cai-ios/compare/v2.11.2...v2.12.0) (2026-10-15)
 
 
