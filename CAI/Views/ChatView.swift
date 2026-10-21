@@ -747,6 +747,8 @@ struct MessageView: View {
     /// after the network side (isThisMessageStreaming) has already finished.
     var onRevealingChanged: (Bool) -> Void = { _ in }
     @State private var didCopy = false
+    /// Mac: the prompt's Copy button shows while the pointer is over the prompt.
+    @State private var isHoveringPrompt = false
 
     /// Rendered on demand (not cached) since it's only needed when the user
     /// actually taps "Share as Card" — recomputing per tap is cheap for a
@@ -824,9 +826,33 @@ struct MessageView: View {
                             BFColor.primary.opacity(0.12),
                             in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
                         )
+                        // Mac: a context menu takes the click, so the prompt couldn't be
+                        // selected at all (cai-ios#401); there it gets a Copy button instead.
+                        #if !targetEnvironment(macCatalyst)
                         .contextMenu { messageActions }
+                        #endif
                 }
                 HStack(spacing: 6) {
+                    #if targetEnvironment(macCatalyst)
+                    if !message.content.isEmpty {
+                        Button {
+                            UIPasteboard.general.string = message.content
+                            didCopy = true
+                            Task {
+                                try? await Task.sleep(for: .seconds(1.5))
+                                didCopy = false
+                            }
+                        } label: {
+                            Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                                .labelStyle(.iconOnly)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(didCopy ? BFColor.primary : .secondary)
+                        .help("Copy")
+                        .opacity(isHoveringPrompt || didCopy ? 1 : 0)
+                        .bfPointerHover()
+                    }
+                    #endif
                     personaBadge
                     Text(message.timestamp, style: .time)
                 }
@@ -835,6 +861,7 @@ struct MessageView: View {
             }
             #if targetEnvironment(macCatalyst)
             .frame(maxWidth: 620, alignment: .trailing)
+            .onHover { isHoveringPrompt = $0 }
             #else
             .frame(maxWidth: 600, alignment: .trailing)
             #endif
