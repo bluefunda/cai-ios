@@ -241,6 +241,13 @@ struct AnswerWithInlineStepsView: View {
     let isStreaming: Bool
     let wasStopped: Bool
     let onRevealingChanged: (Bool) -> Void
+    @EnvironmentObject private var liveAnswer: LiveAnswerText
+
+    /// While streaming, the live text (ChatManager.liveAnswer) — ahead of the conversation,
+    /// which is republished only once a second.
+    private var content: String {
+        isStreaming ? liveAnswer.text(for: message.id, fallback: message.content) : message.content
+    }
 
     /// Inline steps grouped by position, in order (steps at the same position share a group).
     private var groups: [(offset: Int, steps: [MessageStep])] {
@@ -259,10 +266,11 @@ struct AnswerWithInlineStepsView: View {
 
     var body: some View {
         let groups = groups
+        let content = content
         if groups.isEmpty {
-            paced(id: message.id, text: message.content, live: true)
+            paced(id: message.id, text: content, live: true)
         } else {
-            let units = Array(message.content.utf16)
+            let units = Array(content.utf16)
             let bounds = groups.map { min(max(0, $0.offset), units.count) }
             VStack(alignment: .leading, spacing: BFSpacing._3) {
                 ForEach(Array(groups.enumerated()), id: \.offset) { index, group in

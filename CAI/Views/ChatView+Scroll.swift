@@ -141,6 +141,16 @@ extension ChatView {
         }
     }
 
+    /// Keeps the end of a streaming answer in view once the user has scrolled down to it — see
+    /// WeakScrollViewBox.followsStreaming. Never while they're touching the list.
+    func followStreamingAnswer() {
+        guard chatManager.isStreaming, listScrollView.followsStreaming,
+              let scrollView = listScrollView.scrollView,
+              !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating
+        else { return }
+        Self.pinToBottom(scrollView)
+    }
+
     private static func bottomOffsetY(_ scrollView: UIScrollView) -> CGFloat {
         let maxY = scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
         return max(-scrollView.adjustedContentInset.top, maxY)
@@ -169,6 +179,7 @@ extension ChatView {
     }
 
     func scheduleNewPromptPositioning(id: String, proxy: ScrollViewProxy) {
+        listScrollView.followsStreaming = false
         if let messages = chatManager.currentConversation?.messages,
            let index = messages.firstIndex(where: { $0.id == id }), index + 1 < messages.count {
             roomForReplyID = messages[index + 1].id
@@ -423,6 +434,7 @@ extension ChatView {
                         guard let newID, chatManager.isStreaming else { return }
                         scheduleNewPromptPositioning(id: newID, proxy: proxy)
                     }
+                    .background(LiveAnswerFollower(onGrow: followStreamingAnswer))
                     // EXPERIMENT .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
                     .onChange(of: chatManager.currentConversation?.id) { _, _ in
                         // Guarded on hasMessages: for a brand-new empty conversation (New Chat),
@@ -565,6 +577,7 @@ extension ChatView {
                 guard let newID, chatManager.isStreaming else { return }  // sends only — see iOS path
                 scheduleNewPromptPositioning(id: newID, proxy: proxy)
             }
+            .background(LiveAnswerFollower(onGrow: followStreamingAnswer))
             // EXPERIMENT .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
             .onChange(of: chatManager.currentConversation?.id) { _, _ in
                 roomForReplyID = nil
@@ -637,10 +650,38 @@ private extension UIView {
 }
 #endif
 
+/// Calls `onGrow` as the streaming answer grows (every ~20 characters). Its own small view, so
+/// observing ChatManager.liveAnswer re-renders only this, not the chat.
+private struct LiveAnswerFollower: View {
+    @EnvironmentObject private var liveAnswer: LiveAnswerText
+    let onGrow: () -> Void
+
+    var body: some View {
+        Color.clear.onChange(of: liveAnswer.text.count / 20) { _, _ in onGrow() }
+    }
+}
+
 /// Weak handle to the chat List's backing UIScrollView, shared between the row probes that find
 /// it and scrollToBottom that drives it. A class so a probe can fill it without a state change.
 final class WeakScrollViewBox {
-    weak var scrollView: UIScrollView?
+    weak var scrollView: UIScrollView? {
+        didSet { if scrollView !== oldValue { observeUserScrolls() } }
+    }
+
+    /// True once the user — not the app — has scrolled to the end of the chat since the last
+    /// prompt was pinned to the top: the streaming answer is then followed as it grows (like
+    /// claude.ai). Scrolling back up turns it off; scheduleNewPromptPositioning resets it.
+    var followsStreaming = false
+    private var offsetObservation: NSKeyValueObservation?
+
+    private func observeUserScrolls() {
+        offsetObservation = scrollView?.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
+            // Only the user's own scrolls (a drag, trackpad or wheel, and its deceleration).
+            guard scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating else { return }
+            let bottomY = scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+            self?.followsStreaming = scrollView.contentOffset.y >= bottomY - 80
+        }
+    }
 }
 
 /// Zero-size, non-interactive view placed in a List row that records the List's backing

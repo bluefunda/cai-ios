@@ -56,6 +56,19 @@ extension ChatManager {
         }
     }
 
+    /// Replaces one message's text by id — unlike updateLastMessage, safe from a turn that may
+    /// no longer be the last one (a stopped stream whose task ends after a new send).
+    func updateMessage(id: String, content: String, in conversationId: String) {
+        guard var conversation = conversations.first(where: { $0.id == conversationId }),
+              let index = conversation.messages.firstIndex(where: { $0.id == id }),
+              conversation.messages[index].content != content else { return }
+        conversation.messages[index].content = content
+        updateConversation(conversation)
+        if currentConversation?.id == conversationId {
+            currentConversation = conversation
+        }
+    }
+
     func updateLastMessage(_ message: ChatMessage, in conversationId: String) {
         guard var conversation = conversations.first(where: { $0.id == conversationId }),
               !conversation.messages.isEmpty else { return }

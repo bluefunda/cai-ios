@@ -21,6 +21,7 @@ struct CAIApp: App {
                 .modelContainer(container)
                 .environmentObject(authManager)
                 .environmentObject(chatManager)
+                .environmentObject(chatManager.liveAnswer)
                 .environmentObject(iapManager)
                 // Allow the window to shrink only so far on Mac.
                 // Never set an explicit frame here — it fights the window manager

@@ -279,8 +279,16 @@ final class ChatManager: ObservableObject {
     /// `refreshSAPConnectionStatus()` — same real, server-verified pattern as
     /// GitHub (cai-bff#160's /sap/status), not the local-only flip
     /// `locallyConnectedServerIDs` below uses for connectors with no backend.
-    /// How often a streaming reply's text is republished (see the `.chunk` handler).
-    static let chunkPublishInterval: TimeInterval = 0.25
+    /// How often a streaming reply's text is republished into the conversation (see the `.chunk`
+    /// handler). Each republish re-renders the whole chat — a ~50ms stall on the Mac — so the
+    /// answer itself is fed from `liveAnswer` instead, about 30 times a second.
+    static let chunkPublishInterval: TimeInterval = 1.0
+    /// How often `liveAnswer` takes the streamed text: close to the web app's continuous flow.
+    static let liveAnswerInterval: TimeInterval = 0.033
+
+    /// The streaming answer's text as it arrives — observed only by the answer view (and the
+    /// follow-to-bottom scroll), so new text reaches the screen without re-rendering the chat.
+    let liveAnswer = LiveAnswerText()
 
     /// What every failed request shows, whatever went wrong on the server ("LLM error", a
     /// timeout, a 500…): raw backend messages meant nothing to users. The raw error is logged.
@@ -620,6 +628,7 @@ final class ChatManager: ObservableObject {
             var thinkingDurationSeconds: Int?
 
             var lastPublishAt = Date.distantPast
+            var lastLiveAt = Date.distantPast
             // Files the assistant created this turn (stream_file, #371); nil like currentSteps.
             var currentFiles: [MessageFileMetadata]?
 
@@ -645,10 +654,13 @@ final class ChatManager: ObservableObject {
                             lastPublishAt = .distantPast
                         }
                         let now = Date()
-                        // ~4 republishes/s, not ~33: each one re-checks the whole conversation in
-                        // SwiftUI, which on a fast model (600+ chunks in 2s) starved the main
-                        // thread — the reply then showed at ~20 chars/s. PacedMarkdownView paces the
-                        // text smoothly between updates, so it still reads word by word.
+                        if now.timeIntervalSince(lastLiveAt) >= Self.liveAnswerInterval {
+                            lastLiveAt = now
+                            liveAnswer.update(messageID: assistantId, text: finalContent)
+                        }
+                        // Once a second, not per chunk: each republish re-renders the whole chat,
+                        // which on a fast model (600+ chunks in 2s) starved the main thread. The
+                        // answer view reads liveAnswer meanwhile.
                         if now.timeIntervalSince(lastPublishAt) >= Self.chunkPublishInterval {
                             lastPublishAt = now
                             let interimMessage = ChatMessage(
@@ -818,6 +830,12 @@ final class ChatManager: ObservableObject {
             if !Task.isCancelled {
                 recordCompletedTurnForTipEngine(assistantPersona: assistantPersona, wasRateLimited: wasRateLimited)
             }
+
+            // A stopped stream's text so far, which the last once-a-second republish may not have.
+            if Task.isCancelled, !finalContent.isEmpty {
+                updateMessage(id: assistantId, content: finalContent, in: conversation.id)
+            }
+            liveAnswer.clear(messageID: assistantId)
 
             isStreaming = false
             // Guarded on identity: if the user stopped this stream and immediately sent another
@@ -1260,5 +1278,31 @@ struct MCPServer: Identifiable, Hashable {
         if isOData || isSAPAnalytics { return "chart.bar.doc.horizontal" }
         if isSalesTracker { return "chart.line.uptrend.xyaxis" }
         return "brain.head.profile"
+    }
+}
+
+/// The text of the answer being streamed, published apart from the conversation — see
+/// `ChatManager.liveAnswer`.
+final class LiveAnswerText: ObservableObject {
+    @Published private(set) var messageID: String?
+    @Published private(set) var text = ""
+
+    func update(messageID: String, text: String) {
+        if self.messageID != messageID { self.messageID = messageID }
+        self.text = text
+    }
+
+    /// Clears it only if it's still this message's (a new turn may already have started).
+    func clear(messageID: String) {
+        guard self.messageID == messageID else { return }
+        self.messageID = nil
+        text = ""
+    }
+
+    /// The text to show for `messageID`: the live text while it's this message's and ahead of
+    /// what the conversation holds, else `fallback`.
+    func text(for messageID: String, fallback: String) -> String {
+        guard self.messageID == messageID, text.count > fallback.count, text.hasPrefix(fallback) else { return fallback }
+        return text
     }
 }
