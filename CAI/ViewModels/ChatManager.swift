@@ -1280,29 +1280,3 @@ struct MCPServer: Identifiable, Hashable {
         return "brain.head.profile"
     }
 }
-
-/// The text of the answer being streamed, published apart from the conversation — see
-/// `ChatManager.liveAnswer`.
-final class LiveAnswerText: ObservableObject {
-    @Published private(set) var messageID: String?
-    @Published private(set) var text = ""
-
-    func update(messageID: String, text: String) {
-        if self.messageID != messageID { self.messageID = messageID }
-        self.text = text
-    }
-
-    /// Clears it only if it's still this message's (a new turn may already have started).
-    func clear(messageID: String) {
-        guard self.messageID == messageID else { return }
-        self.messageID = nil
-        text = ""
-    }
-
-    /// The text to show for `messageID`: the live text while it's this message's and ahead of
-    /// what the conversation holds, else `fallback`.
-    func text(for messageID: String, fallback: String) -> String {
-        guard self.messageID == messageID, text.count > fallback.count, text.hasPrefix(fallback) else { return fallback }
-        return text
-    }
-}
