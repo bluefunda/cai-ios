@@ -279,6 +279,21 @@ final class ChatManager: ObservableObject {
     /// `refreshSAPConnectionStatus()` — same real, server-verified pattern as
     /// GitHub (cai-bff#160's /sap/status), not the local-only flip
     /// `locallyConnectedServerIDs` below uses for connectors with no backend.
+    /// How often a streaming reply's text is republished into the conversation (see the `.chunk`
+    /// handler). Each republish re-renders the whole chat — a ~50ms stall on the Mac — so the
+    /// answer itself is fed from `liveAnswer` instead, about 30 times a second.
+    static let chunkPublishInterval: TimeInterval = 1.0
+    /// How often `liveAnswer` takes the streamed text: close to the web app's continuous flow.
+    static let liveAnswerInterval: TimeInterval = 0.033
+
+    /// The streaming answer's text as it arrives — observed only by the answer view (and the
+    /// follow-to-bottom scroll), so new text reaches the screen without re-rendering the chat.
+    let liveAnswer = LiveAnswerText()
+
+    /// What every failed request shows, whatever went wrong on the server ("LLM error", a
+    /// timeout, a 500…): raw backend messages meant nothing to users. The raw error is logged.
+    /// Rate limits and an expired sign-in keep their own flows.
+    static let serverErrorMessage = "Internal server error. Please try again later."
     @Published var connectedSAP = false
     @Published var sapHost: String?
     /// The OData connector's own system (separate from ABAPer's), same pattern.
@@ -425,8 +440,9 @@ final class ChatManager: ObservableObject {
             await loadInitialData()
 
         } catch {
-            self.error = error.localizedDescription
-            connectionStatus = .error(error.localizedDescription)
+            print("[ChatManager] connect error: \(error)")
+            self.error = Self.serverErrorMessage
+            connectionStatus = .error(Self.serverErrorMessage)
         }
     }
 
@@ -612,6 +628,7 @@ final class ChatManager: ObservableObject {
             var thinkingDurationSeconds: Int?
 
             var lastPublishAt = Date.distantPast
+            var lastLiveAt = Date.distantPast
             // Files the assistant created this turn (stream_file, #371); nil like currentSteps.
             var currentFiles: [MessageFileMetadata]?
 
@@ -637,7 +654,14 @@ final class ChatManager: ObservableObject {
                             lastPublishAt = .distantPast
                         }
                         let now = Date()
-                        if now.timeIntervalSince(lastPublishAt) >= 0.03 {
+                        if now.timeIntervalSince(lastLiveAt) >= Self.liveAnswerInterval {
+                            lastLiveAt = now
+                            liveAnswer.update(messageID: assistantId, text: finalContent)
+                        }
+                        // Once a second, not per chunk: each republish re-renders the whole chat,
+                        // which on a fast model (600+ chunks in 2s) starved the main thread. The
+                        // answer view reads liveAnswer meanwhile.
+                        if now.timeIntervalSince(lastPublishAt) >= Self.chunkPublishInterval {
                             lastPublishAt = now
                             let interimMessage = ChatMessage(
                                 id: assistantId,
@@ -727,7 +751,8 @@ final class ChatManager: ObservableObject {
                         // permanently empty response bubble (no spinner, since isStreaming
                         // is about to end; no text, since none ever arrived).
                         removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
-                        self.error = message
+                        print("[ChatManager] stream error: \(message)")
+                        self.error = Self.serverErrorMessage
 
                     case .rateLimited(let period, let resetLabel):
                         removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
@@ -752,7 +777,8 @@ final class ChatManager: ObservableObject {
                 // was slipping past the check above and surfacing "cancelled" as a raw, confusing
                 // error alert on every user-initiated Stop instead of being treated the same way.
                 if (error as? URLError)?.code != .cancelled {
-                    self.error = error.localizedDescription
+                    print("[ChatManager] stream failed: \(error)")
+                    self.error = Self.serverErrorMessage
                 }
             }
 
@@ -804,6 +830,12 @@ final class ChatManager: ObservableObject {
             if !Task.isCancelled {
                 recordCompletedTurnForTipEngine(assistantPersona: assistantPersona, wasRateLimited: wasRateLimited)
             }
+
+            // A stopped stream's text so far, which the last once-a-second republish may not have.
+            if Task.isCancelled, !finalContent.isEmpty {
+                updateMessage(id: assistantId, content: finalContent, in: conversation.id)
+            }
+            liveAnswer.clear(messageID: assistantId)
 
             isStreaming = false
             // Guarded on identity: if the user stopped this stream and immediately sent another

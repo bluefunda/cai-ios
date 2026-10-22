@@ -376,20 +376,13 @@ private final class MarkdownParseCache {
 
 struct MarkdownView: View {
     let content: String
-    /// True only while this is the single assistant message currently being streamed into —
-    /// gates InlineMarkdownText's trailing opacity fade on the *last* block only, matching
-    /// cai-android's Markdown.kt (`blockIsStreaming = isPacingActive && index == blocks.lastIndex`).
-    /// That fade — the newest ~60 characters ramping from 40% to full opacity — is the actual
-    /// mechanism behind Android's smooth flowing look; it's not a cosmetic extra.
-    var isStreaming: Bool = false
     private let blocks: [MarkdownBlock]
 
     /// `cacheKey` (typically the message id) opts into `MarkdownParseCache`'s incremental
     /// re-parse — pass it for actively-streaming content; omit it for static/one-shot content
     /// (share cards, previews) where there's nothing to amortize across repeated calls.
-    init(content: String, isStreaming: Bool = false, cacheKey: String? = nil) {
+    init(content: String, cacheKey: String? = nil) {
         self.content = content
-        self.isStreaming = isStreaming
         if let cacheKey {
             self.blocks = MarkdownParseCache.shared.parse(content, cacheKey: cacheKey)
         } else {
@@ -413,12 +406,12 @@ struct MarkdownView: View {
     }
 
     var body: some View {
-        let lastIndex = segments.count - 1
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                 switch segment {
                 case .single(let block):
-                    MarkdownBlockView(block: block, isRevealing: isStreaming && index == lastIndex)
+                    MarkdownBlockView(block: block)
+                        .equatable()
                 case .summaryCard(let title, let block):
                     SummaryCardView(title: title, block: block)
                 }
@@ -438,22 +431,24 @@ struct MarkdownView: View {
 
 // MARK: - Block Dispatcher
 
-private struct MarkdownBlockView: View {
+// Equatable (synthesized) + `.equatable()` at the call site: while an answer streams, every
+// reveal tick re-renders the message, and without this each finished block — a table's cards
+// above all — was rebuilt and laid out again, stalling the Mac 100–200ms a tick (cai-ios#409).
+private struct MarkdownBlockView: View, Equatable {
     let block: MarkdownBlock
-    var isRevealing: Bool = false
 
     var body: some View {
         switch block {
         case .paragraph(let text):
-            InlineMarkdownText(text: text, isRevealing: isRevealing).equatable()
+            InlineMarkdownText(text: text).equatable()
         case .heading(let level, let text):
             HeadingView(level: level, text: text)
         case .codeBlock(let language, let code):
             CodeBlockView(language: language, code: code)
         case .list(let items):
-            ListItemsView(items: items, isRevealing: isRevealing)
+            ListItemsView(items: items)
         case .blockquote(let text):
-            BlockquoteView(text: text, isRevealing: isRevealing)
+            BlockquoteView(text: text)
         case .horizontalRule:
             Divider()
         case .table(let headers, let rows):
@@ -587,10 +582,10 @@ private enum LaTeXMath {
 
 // MARK: - Inline Markdown Text
 
-// Equatable (synthesized — text/font/fillWidth/isRevealing are all Equatable) so `.equatable()`
+// Equatable (synthesized — text/font/fillWidth are all Equatable) so `.equatable()`
 // at each call site can tell SwiftUI to skip re-invoking body when nothing actually changed.
 // Without this, every already-finished block's baseText (a real AttributedString(markdown:)
-// parse, plus applyTrailingFade's per-character loop when isRevealing) got re-run on every
+// parse) got re-run on every
 // single reveal tick regardless of whether its own text had changed — MarkdownParseCache already
 // keeps earlier blocks' *values* stable tick over tick, but nothing told SwiftUI that stability
 // meant it could skip re-rendering them, since a plain (non-equatable) struct View gives it no
@@ -600,7 +595,6 @@ private struct InlineMarkdownText: View, Equatable {
     let text: String
     var font: Font = BFFont.responseBody
     var fillWidth: Bool = true
-    var isRevealing: Bool = false
 
     private var baseText: Text {
         let sanitized = LaTeXMath.sanitize(text)
@@ -610,45 +604,7 @@ private struct InlineMarkdownText: View, Equatable {
         ) else {
             return Text(sanitized)
         }
-        if isRevealing {
-            applyTrailingFade(to: &attr)
-        }
         return Text(attr)
-    }
-
-    /// Fades in the tail of actively-streaming text — the newest character sits at 40% opacity,
-    /// ramping up to fully opaque `fadeWindow` characters back — instead of every revealed
-    /// character snapping straight to full opacity. Ported directly from cai-android's
-    /// `inlineAnnotated` (Markdown.kt): this gradient, not the pacing/boundary-snapping (already
-    /// equivalent on both platforms), is the actual mechanism behind Android's smooth flowing
-    /// look — it was previously removed here by mistake alongside the streaming cursor, which is
-    /// a separate, unrelated thing that genuinely did need removing.
-    private func applyTrailingFade(to attr: inout AttributedString) {
-        let totalLength = attr.characters.count
-        guard totalLength >= 16 else { return }
-        // Kept as a genuine Double, not `min(60, totalLength / 3)` truncated to an Int: as
-        // totalLength grows by one character per tick, integer division only changes every
-        // ~3 characters, so the alpha ratio below (which divides by this) would hold flat for a
-        // couple of ticks and then jump when it finally increments — a small but visible
-        // stairstep in what should be a continuous fade, reading as a flicker/blink at the
-        // 8ms-tick update rate this runs at. A continuous denominator makes every character's
-        // alpha change smoothly and monotonically tick over tick instead.
-        let fadeWindow = min(60.0, Double(totalLength) / 2.0)
-        guard fadeWindow > 0 else { return }
-        let startCheck = totalLength - Int(fadeWindow.rounded(.up))
-
-        var position = 0
-        var index = attr.startIndex
-        while index < attr.endIndex {
-            let next = attr.characters.index(after: index)
-            if position >= startCheck {
-                let distanceFromEnd = totalLength - 1 - position
-                let alpha = 0.4 + (Double(distanceFromEnd) / fadeWindow) * 0.6
-                attr[index..<next].foregroundColor = Color.primary.opacity(min(alpha, 1.0))
-            }
-            index = next
-            position += 1
-        }
     }
 
     var body: some View {
@@ -850,7 +806,6 @@ private func bulletGlyph(forDepth depth: Int) -> String {
 
 private struct ListItemsView: View {
     let items: [MarkdownListEntry]
-    var isRevealing: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -866,7 +821,7 @@ private struct ListItemsView: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 14, alignment: .center)
                     }
-                    InlineMarkdownText(text: item.text, isRevealing: isRevealing && index == items.count - 1)
+                    InlineMarkdownText(text: item.text)
                         .equatable()
                 }
                 .padding(.leading, CGFloat(item.depth) * 20)
@@ -879,14 +834,13 @@ private struct ListItemsView: View {
 
 private struct BlockquoteView: View {
     let text: String
-    var isRevealing: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color.secondary.opacity(0.4))
                 .frame(width: 3)
-            InlineMarkdownText(text: text, isRevealing: isRevealing)
+            InlineMarkdownText(text: text)
                 .equatable()
                 .foregroundStyle(.secondary)
         }

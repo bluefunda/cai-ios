@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A branded, fixed-size card rendered to an image for one-tap sharing
 /// (bluefunda/cai-ios#197) — e.g. to LinkedIn, WhatsApp, or a text message.
@@ -43,5 +44,26 @@ struct ShareableAnswerCard: View {
         .padding(BFSpacing._6)
         .frame(width: cardWidth, alignment: .leading)
         .background(Color.white)
+    }
+}
+
+/// A ShareableAnswerCard shared as a PNG, rendered when the share happens rather than when the
+/// share button is drawn.
+struct ShareableAnswerCardImage: Transferable {
+    let question: String?
+    let answer: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) { item in
+            guard let data = await item.pngData() else { throw CocoaError(.fileWriteUnknown) }
+            return data
+        }
+    }
+
+    @MainActor
+    func pngData() -> Data? {
+        let renderer = ImageRenderer(content: ShareableAnswerCard(question: question, answer: answer))
+        renderer.scale = UIScreen.main.scale
+        return renderer.uiImage?.pngData()
     }
 }
