@@ -279,6 +279,13 @@ final class ChatManager: ObservableObject {
     /// `refreshSAPConnectionStatus()` — same real, server-verified pattern as
     /// GitHub (cai-bff#160's /sap/status), not the local-only flip
     /// `locallyConnectedServerIDs` below uses for connectors with no backend.
+    /// How often a streaming reply's text is republished (see the `.chunk` handler).
+    static let chunkPublishInterval: TimeInterval = 0.25
+
+    /// What every failed request shows, whatever went wrong on the server ("LLM error", a
+    /// timeout, a 500…): raw backend messages meant nothing to users. The raw error is logged.
+    /// Rate limits and an expired sign-in keep their own flows.
+    static let serverErrorMessage = "Internal server error. Please try again later."
     @Published var connectedSAP = false
     @Published var sapHost: String?
     /// The OData connector's own system (separate from ABAPer's), same pattern.
@@ -425,8 +432,9 @@ final class ChatManager: ObservableObject {
             await loadInitialData()
 
         } catch {
-            self.error = error.localizedDescription
-            connectionStatus = .error(error.localizedDescription)
+            print("[ChatManager] connect error: \(error)")
+            self.error = Self.serverErrorMessage
+            connectionStatus = .error(Self.serverErrorMessage)
         }
     }
 
@@ -637,7 +645,11 @@ final class ChatManager: ObservableObject {
                             lastPublishAt = .distantPast
                         }
                         let now = Date()
-                        if now.timeIntervalSince(lastPublishAt) >= 0.03 {
+                        // ~4 republishes/s, not ~33: each one re-checks the whole conversation in
+                        // SwiftUI, which on a fast model (600+ chunks in 2s) starved the main
+                        // thread — the reply then showed at ~20 chars/s. PacedMarkdownView paces the
+                        // text smoothly between updates, so it still reads word by word.
+                        if now.timeIntervalSince(lastPublishAt) >= Self.chunkPublishInterval {
                             lastPublishAt = now
                             let interimMessage = ChatMessage(
                                 id: assistantId,
@@ -727,7 +739,8 @@ final class ChatManager: ObservableObject {
                         // permanently empty response bubble (no spinner, since isStreaming
                         // is about to end; no text, since none ever arrived).
                         removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
-                        self.error = message
+                        print("[ChatManager] stream error: \(message)")
+                        self.error = Self.serverErrorMessage
 
                     case .rateLimited(let period, let resetLabel):
                         removeTrailingEmptyAssistantPlaceholder(in: conversation.id)
@@ -752,7 +765,8 @@ final class ChatManager: ObservableObject {
                 // was slipping past the check above and surfacing "cancelled" as a raw, confusing
                 // error alert on every user-initiated Stop instead of being treated the same way.
                 if (error as? URLError)?.code != .cancelled {
-                    self.error = error.localizedDescription
+                    print("[ChatManager] stream failed: \(error)")
+                    self.error = Self.serverErrorMessage
                 }
             }
 

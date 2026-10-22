@@ -116,10 +116,26 @@ enum BFFont {
         case .light: name = "GeneralSans-Light"
         default: name = "GeneralSans-Regular"
         }
-        if UIFont(name: name, size: size) != nil {
+        if isRegistered(name) {
             return .custom(name, size: size)
         }
         return nil
+    }
+
+    // Whether a bundled font is registered never changes while the app runs, but looking a font
+    // up by name is slow (CoreText descriptor matching). The tokens above are computed, so
+    // re-rendering e.g. the sidebar on every streamed chunk asked again for each row: a fifth of
+    // the main thread while streaming on the Mac, and the stalls in the answer's reveal.
+    private static var registeredFonts: [String: Bool] = [:]
+    private static let registeredFontsLock = NSLock()
+
+    private static func isRegistered(_ name: String) -> Bool {
+        registeredFontsLock.lock()
+        defer { registeredFontsLock.unlock() }
+        if let known = registeredFonts[name] { return known }
+        let known = UIFont(name: name, size: 12) != nil
+        registeredFonts[name] = known
+        return known
     }
 }
 

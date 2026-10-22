@@ -40,21 +40,6 @@ extension ChatView {
         return conversation.messagesLoaded && conversation.messages.isEmpty
     }
 
-    /// Bucketed (not raw) streaming content length, so `.onChange(of:)` below fires roughly every
-    /// 20 characters instead of on every single token — following the growing response closely
-    /// enough to read as smooth, without re-scrolling so often it costs real render time or reads
-    /// as jittery. Needed because a growing row that's currently scrolled *out of* the viewport
-    /// doesn't just silently extend the scrollable content below like it does in cai-android's
-    /// LazyColumn — SwiftUI's List can let it visibly disturb whatever's currently on screen,
-    /// which is what read as content "sticking to the top" with a hidden, growing gap above it
-    /// and empty space below once the user scrolled away from the bottom.
-    var streamingContentBucket: Int {
-        guard chatManager.isStreaming,
-              let id = chatManager.streamingMessageId,
-              let content = chatManager.currentConversation?.messages.first(where: { $0.id == id })?.content
-        else { return 0 }
-        return content.count / 20
-    }
 
     /// List's underlying UITableView/UICollectionView can scroll directly to a row regardless of
     /// whether it's been measured yet (unlike the LazyVStack this replaced) — matches cai-
@@ -176,11 +161,22 @@ extension ChatView {
     /// re-run once `isStreaming` actually flips true (see that `.onChange` for why a truly cold
     /// app launch's slow first List layout can need this run twice — the first pass can settle on
     /// the row's height before it's fully reflowed).
+    /// The minimum height of a message row: the reply to the prompt just sent takes at least
+    /// most of the screen, so the prompt can sit at the top while the answer streams in below it,
+    /// and stays there after the answer ends (like the web app). A long answer outgrows it.
+    func replyRoom(for messageID: String, viewportHeight: CGFloat) -> CGFloat? {
+        messageID == roomForReplyID ? viewportHeight * 0.65 : nil
+    }
+
     func scheduleNewPromptPositioning(id: String, proxy: ScrollViewProxy) {
+        if let messages = chatManager.currentConversation?.messages,
+           let index = messages.firstIndex(where: { $0.id == id }), index + 1 < messages.count {
+            roomForReplyID = messages[index + 1].id
+        }
         // Cancel any in-flight scrollSettleTask (from .onChange(of: hasMessages), which fires for
         // this same transition on the very first message) — that loop keeps re-anchoring to the
-        // "bottom" sentinel for ~160ms after send, and once isStreaming's spacer appears mid-loop
-        // it starts landing past the spacer instead of on this row, overriding this positioning
+        // "bottom" sentinel for ~160ms after send, and once the reply's room appears mid-loop
+        // it starts landing past it instead of on this row, overriding this positioning
         // with a stale write moments after it lands.
         //
         // That cancellation can also land on an in-flight conversation-switch task (.onAppear /
@@ -189,10 +185,6 @@ extension ChatView {
         // on forever. Real content (the message just sent/streaming) is about to render regardless,
         // so it's always correct to drop the switching overlay here too.
         chatManager.isSwitchingConversation = false
-        // Stale from whatever the previous turn's response ended on — nil defaults the
-        // streaming follow-scroll gate to "always catch up" until this new turn's own row
-        // reports a real position, which is exactly the behavior wanted for a fresh send.
-        streamingRowBottomY = nil
         scrollSettleTask?.cancel()
         let convoID = chatManager.currentConversation?.id
         scrollSettleTask = Task { @MainActor in
@@ -214,9 +206,6 @@ extension ChatView {
             withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(id, anchor: .top)
             }
-            // Only now — after this positioning has actually run — can the follow-scroll safely
-            // start for this turn without overriding it.
-            hasSettledInitialScrollFor = chatManager.streamingMessageId
         }
     }
 
@@ -291,38 +280,12 @@ extension ChatView {
                                         ? { chatManager.isRevealingLastMessage = $0 }
                                         : { _ in }
                                 )
+                                .frame(minHeight: replyRoom(for: message.id, viewportHeight: outer.size.height), alignment: .top)
                                 .id(message.id)
                                 .background(ListScrollViewProbe(box: listScrollView))
-                                .background {
-                                    // Tracks the streaming row's bottom edge relative to the
-                                    // List's own viewport (named coordinate space, not the
-                                    // window) — lets the follow-scroll below tell whether the
-                                    // user is already looking at the bottom of the growing
-                                    // response versus having scrolled up to reread an earlier
-                                    // part of it, matching cai-android's isScrolledToEnd()-gated
-                                    // auto-scroll instead of forcing the view back down regardless.
-                                    if isThisMessageStreaming {
-                                        GeometryReader { rowGeo in
-                                            Color.clear.preference(
-                                                key: StreamingRowBottomKey.self,
-                                                value: rowGeo.frame(in: .named("chatScroll")).maxY
-                                            )
-                                        }
-                                    }
-                                }
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
-                            }
-                            // Reserves room below the last message while streaming, so
-                            // scrolling the user's prompt to the top of the viewport (below)
-                            // has somewhere to go instead of snapping back — matches
-                            // cai-android's MessageList bottom spacer.
-                            if chatManager.isStreaming {
-                                Color.clear.frame(height: outer.size.height * 0.65)
-                                    .listRowSeparator(.hidden)
-                                    .listRowInsets(EdgeInsets())
-                                    .listRowBackground(Color.clear)
                             }
                         } else if isConfirmedEmptyConversation {
                             NoMessagesView()
@@ -407,7 +370,7 @@ extension ChatView {
                         // A fresh send into an empty chat also flips hasMessages — that's the
                         // new-prompt case, not "opened an existing chat": scroll the prompt to the
                         // top like every later send. Scrolling to the bottom here (past the
-                        // streaming spacer) raced scheduleNewPromptPositioning, cancelled it, and
+                        // reply's room) raced scheduleNewPromptPositioning, cancelled it, and
                         // pushed the user's first prompt off-screen.
                         if chatManager.isStreaming, let id = latestUserMessageID {
                             scheduleNewPromptPositioning(id: id, proxy: proxy)
@@ -449,9 +412,9 @@ extension ChatView {
                         // block). A prior version skipped this for the very first message on the
                         // assumption its "natural" top offset was already correct, but that offset
                         // comes from scrollToBottom's anchor: .bottom on the "bottom" sentinel —
-                        // once isStreaming reserves its 65%-height spacer ahead of that sentinel,
+                        // once the reply reserves its 65%-height room ahead of that sentinel,
                         // anchoring there pushes the actual (short) message content off-screen
-                        // above, leaving the spacer's blank space visible below: the prompt reads
+                        // above, leaving the room's blank space visible below: the prompt reads
                         // as cut off under the header on a cold launch + first message.
                         // Only for an actual send. Opening a chat also changes this id (nil ->
                         // its last user message, once history loads) — positioning there
@@ -460,34 +423,6 @@ extension ChatView {
                         guard let newID, chatManager.isStreaming else { return }
                         scheduleNewPromptPositioning(id: newID, proxy: proxy)
                     }
-                    // Keeps a growing response from disturbing wherever the user has scrolled to —
-                    // see streamingContentBucket's declaration for why this is needed at all (a
-                    // growing off-screen row in SwiftUI's List isn't as inert as in cai-android's
-                    // LazyColumn). Gated on hasSettledInitialScrollFor so it never fires before
-                    // this turn's "scroll the new prompt to the top" positioning above has had its
-                    // own chance to run — starting earlier would just override that with an
-                    // unwanted scroll to the bottom instead.
-                    .onChange(of: streamingContentBucket) { _, _ in
-                        guard chatManager.isStreaming,
-                              let id = chatManager.streamingMessageId,
-                              hasSettledInitialScrollFor == id
-                        else { return }
-                        // Only auto-follow if the user hasn't scrolled away from the bottom of
-                        // the growing response to reread an earlier part of it — matches
-                        // cai-android's isScrolledToEnd()-gated auto-scroll. Without this, any
-                        // manual scroll-up mid-stream got yanked back down on every ~20-char
-                        // growth tick regardless of what the user was doing.
-                        let viewportBottom = outer.size.height
-                        let scrollAwayTolerance: CGFloat = 80
-                        if let rowBottomY = streamingRowBottomY,
-                           rowBottomY > viewportBottom + scrollAwayTolerance {
-                            return
-                        }
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo(id, anchor: .bottom)
-                        }
-                    }
-                    .onPreferenceChange(StreamingRowBottomKey.self) { streamingRowBottomY = $0 }
                     // EXPERIMENT .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
                     .onChange(of: chatManager.currentConversation?.id) { _, _ in
                         // Guarded on hasMessages: for a brand-new empty conversation (New Chat),
@@ -495,6 +430,7 @@ extension ChatView {
                         // scrolling to it anchors that spacer at the viewport's bottom edge and
                         // pushes the ~300pt-tall greeting entirely above the visible area, reading
                         // as a blank screen until the user manually scrolls up to find it.
+                        roomForReplyID = nil
                         guard hasMessages else { return }
                         chatManager.isSwitchingConversation = true
                         bottomSentinelY = nil
@@ -574,29 +510,14 @@ extension ChatView {
                                 ? { chatManager.isRevealingLastMessage = $0 }
                                 : { _ in }
                         )
+                        .frame(minHeight: replyRoom(for: message.id, viewportHeight: outer.size.height), alignment: .top)
                         .frame(maxWidth: maxChatWidth)
                         .frame(maxWidth: .infinity)
                         .id(message.id)
                         .background(ListScrollViewProbe(box: listScrollView))
-                        .background {
-                            if isThisMessageStreaming {
-                                GeometryReader { rowGeo in
-                                    Color.clear.preference(
-                                        key: StreamingRowBottomKey.self,
-                                        value: rowGeo.frame(in: .named("chatScroll")).maxY
-                                    )
-                                }
-                            }
-                        }
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
-                    }
-                    if chatManager.isStreaming {
-                        Color.clear.frame(height: outer.size.height * 0.65)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
                     }
                 }
                 Color.clear.frame(height: 1).id(bottomSentinelID)
@@ -644,24 +565,9 @@ extension ChatView {
                 guard let newID, chatManager.isStreaming else { return }  // sends only — see iOS path
                 scheduleNewPromptPositioning(id: newID, proxy: proxy)
             }
-            .onChange(of: streamingContentBucket) { _, _ in
-                guard chatManager.isStreaming,
-                      let id = chatManager.streamingMessageId,
-                      hasSettledInitialScrollFor == id
-                else { return }
-                let viewportBottom = outer.size.height
-                let scrollAwayTolerance: CGFloat = 80
-                if let rowBottomY = streamingRowBottomY,
-                   rowBottomY > viewportBottom + scrollAwayTolerance {
-                    return
-                }
-                withAnimation(.easeOut(duration: 0.15)) {
-                    proxy.scrollTo(id, anchor: .bottom)
-                }
-            }
-            .onPreferenceChange(StreamingRowBottomKey.self) { streamingRowBottomY = $0 }
             // EXPERIMENT .onPreferenceChange(BottomSentinelYKey.self) { bottomSentinelY = $0 }
             .onChange(of: chatManager.currentConversation?.id) { _, _ in
+                roomForReplyID = nil
                 guard hasMessages else { return }
                 chatManager.isSwitchingConversation = true
                 bottomSentinelY = nil

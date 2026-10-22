@@ -86,92 +86,37 @@ struct SidebarConversationList: View {
     // MARK: - Conversation list
 
     private var conversationList: some View {
+        // The rows are an equatable snapshot: ChatManager publishes on every streamed chunk, and
+        // rebuilding each row then (fonts, context menus) held the main thread ~200ms at a time
+        // on the Mac — the stalls in the answer's reveal. Now the rows only redraw when a title,
+        // a pin, the selection or the paging state actually changes.
         ScrollView {
-            LazyVStack(spacing: 2) {
-                let pinned = chatManager.conversations.filter(\.isPinned)
-                if !pinned.isEmpty {
-                    sectionHeader("Pinned")
-                    ForEach(pinned) { row(for: $0) }
-                }
-
-                ForEach(groupedConversations(chatManager.conversations.filter { !$0.isPinned })) { group in
-                    sectionHeader(group.title)
-                    ForEach(group.conversations) { row(for: $0) }
-                }
-
-                if chatManager.chatListNextCursor != nil {
-                    // Coming into view near the end of the list loads the next page.
-                    ProgressView()
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity)
-                        .onAppear { Task { await chatManager.loadMoreChats() } }
-                }
-            }
-            .padding(.horizontal, 8)
+            SidebarConversationRows(
+                rows: chatManager.conversations.map(SidebarRowItem.init),
+                selectedId: chatManager.currentConversation?.id,
+                hasMorePages: chatManager.chatListNextCursor != nil,
+                actions: SidebarRowActions(
+                    select: { id in
+                        if let convo = chatManager.conversations.first(where: { $0.id == id }) { onSelect(convo) }
+                    },
+                    setPinned: { id, pinned in
+                        if let convo = chatManager.conversations.first(where: { $0.id == id }) {
+                            chatManager.setPinned(convo, pinned)
+                        }
+                    },
+                    markdownExport: { id in
+                        chatManager.conversations.first(where: { $0.id == id })?.markdownExport ?? ""
+                    },
+                    delete: { id in
+                        if let convo = chatManager.conversations.first(where: { $0.id == id }) {
+                            chatManager.deleteConversation(convo)
+                        }
+                    },
+                    loadMore: { Task { await chatManager.loadMoreChats() } }
+                )
+            )
+            .equatable()
         }
-    }
-
-    private func row(for convo: Conversation) -> some View {
-        SidebarConversationRow(
-            title: convo.title,
-            isSelected: chatManager.currentConversation?.id == convo.id,
-            isPinned: convo.isPinned,
-            onTogglePin: { chatManager.setPinned(convo, !convo.isPinned) }
-        )
-        .onTapGesture { onSelect(convo) }
-        .bfPointerHover()
-        .accessibilityIdentifier("conversationRow")
-        .contextMenu {
-            Button {
-                chatManager.setPinned(convo, !convo.isPinned)
-            } label: {
-                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash" : "pin")
-            }
-            ShareLink(item: convo.markdownExport) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-            Button(role: .destructive) {
-                chatManager.deleteConversation(convo)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(BFFont.sidebarSection)
-            .textCase(.uppercase)
-            .kerning(0.6)
-            .foregroundStyle(.tertiary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.top, 16)
-            .padding(.bottom, 4)
-    }
-
-    /// Groups by recency of creation, in list order.
-    private func groupedConversations(_ conversations: [Conversation]) -> [ConversationGroup] {
-        let now = Date()
-        let cal = Calendar.current
-
-        var today: [Conversation] = []
-        var yesterday: [Conversation] = []
-        var thisWeek: [Conversation] = []
-        var older: [Conversation] = []
-
-        for conversation in conversations {
-            switch cal.dateComponents([.day], from: conversation.createdAt, to: now).day ?? 0 {
-            case ...0: today.append(conversation)
-            case 1: yesterday.append(conversation)
-            case 2..<7: thisWeek.append(conversation)
-            default: older.append(conversation)
-            }
-        }
-
-        return [("Today", today), ("Yesterday", yesterday), ("This Week", thisWeek), ("Older", older)]
-            .filter { !$0.1.isEmpty }
-            .map { ConversationGroup(title: $0.0, conversations: $0.1) }
     }
 
     // MARK: - Search results
@@ -330,5 +275,130 @@ struct SidebarSearchResultRow: View {
         .contentShape(Rectangle())
         .animation(BFMotion.easingDefault, value: isHovered)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Conversation rows
+
+/// What a sidebar row shows — compared by value, unlike Conversation (whose == compares only id).
+struct SidebarRowItem: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let isPinned: Bool
+    let createdAt: Date
+
+    init(_ conversation: Conversation) {
+        id = conversation.id
+        title = conversation.title
+        isPinned = conversation.isPinned
+        createdAt = conversation.createdAt
+    }
+}
+
+/// The row actions, kept out of SidebarConversationRows' == so new closures each render don't
+/// count as a change.
+struct SidebarRowActions {
+    let select: (String) -> Void
+    let setPinned: (String, Bool) -> Void
+    let markdownExport: (String) -> String
+    let delete: (String) -> Void
+    let loadMore: () -> Void
+}
+
+private struct SidebarConversationRows: View, Equatable {
+    let rows: [SidebarRowItem]
+    let selectedId: String?
+    let hasMorePages: Bool
+    let actions: SidebarRowActions
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.rows == rhs.rows && lhs.selectedId == rhs.selectedId && lhs.hasMorePages == rhs.hasMorePages
+    }
+
+    var body: some View {
+        LazyVStack(spacing: 2) {
+            let pinned = rows.filter(\.isPinned)
+            if !pinned.isEmpty {
+                sectionHeader("Pinned")
+                ForEach(pinned) { row(for: $0) }
+            }
+
+            ForEach(groupedRows(rows.filter { !$0.isPinned }), id: \.title) { group in
+                sectionHeader(group.title)
+                ForEach(group.rows) { row(for: $0) }
+            }
+
+            if hasMorePages {
+                // Coming into view near the end of the list loads the next page.
+                ProgressView()
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .onAppear { actions.loadMore() }
+            }
+        }
+        .padding(.horizontal, 8)
+    }
+
+    private func row(for item: SidebarRowItem) -> some View {
+        SidebarConversationRow(
+            title: item.title,
+            isSelected: selectedId == item.id,
+            isPinned: item.isPinned,
+            onTogglePin: { actions.setPinned(item.id, !item.isPinned) }
+        )
+        .onTapGesture { actions.select(item.id) }
+        .bfPointerHover()
+        .accessibilityIdentifier("conversationRow")
+        .contextMenu {
+            Button {
+                actions.setPinned(item.id, !item.isPinned)
+            } label: {
+                Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
+            }
+            ShareLink(item: actions.markdownExport(item.id)) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(role: .destructive) {
+                actions.delete(item.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(BFFont.sidebarSection)
+            .textCase(.uppercase)
+            .kerning(0.6)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.top, 16)
+            .padding(.bottom, 4)
+    }
+
+    /// Groups by recency of creation, in list order.
+    private func groupedRows(_ rows: [SidebarRowItem]) -> [(title: String, rows: [SidebarRowItem])] {
+        let now = Date()
+        let cal = Calendar.current
+
+        var today: [SidebarRowItem] = []
+        var yesterday: [SidebarRowItem] = []
+        var thisWeek: [SidebarRowItem] = []
+        var older: [SidebarRowItem] = []
+
+        for row in rows {
+            switch cal.dateComponents([.day], from: row.createdAt, to: now).day ?? 0 {
+            case ...0: today.append(row)
+            case 1: yesterday.append(row)
+            case 2..<7: thisWeek.append(row)
+            default: older.append(row)
+            }
+        }
+
+        return [("Today", today), ("Yesterday", yesterday), ("This Week", thisWeek), ("Older", older)]
+            .filter { !$0.1.isEmpty }
+            .map { (title: $0.0, rows: $0.1) }
     }
 }
