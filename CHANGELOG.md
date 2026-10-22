@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.15.0](https://github.com/bluefunda/cai-ios/compare/v2.14.0...v2.15.0) (2026-10-22)
+
+
+### Features
+
+* **chat:** feed the streaming answer live; follow it once scrolled to the end ([3049c97](https://github.com/bluefunda/cai-ios/commit/3049c97a37c589d496da63c057fa6ed8153f0d89))
+* **chat:** stream answers like the web app; thinking steps type in live ([76713fe](https://github.com/bluefunda/cai-ios/commit/76713fead4f543cc95fb60189505877d129fd1d0))
+* **chat:** stream answers like the web app; thinking steps type in live ([032d04b](https://github.com/bluefunda/cai-ios/commit/032d04b71cf0ec2e2b5491caf2ecb90f1168a414))
+
 ## [2.14.0](https://github.com/bluefunda/cai-ios/compare/v2.13.1...v2.14.0) (2026-10-21)
 
 
