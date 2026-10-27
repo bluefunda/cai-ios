@@ -4,22 +4,8 @@ import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
 
-/// Reports the currently-streaming message row's bottom edge, in the List's own "chatScroll"
-/// named coordinate space — that space moves with scroll content, so this value is effectively
-/// "how far below the viewport's bottom edge is this row's bottom" (negative-ish/near zero once
-/// it's back in view). Lets the streaming follow-scroll tell whether the user is already at the
-/// bottom of the growing response or has scrolled away to reread an earlier part of it.
-// Not `private` — referenced from ChatView+Scroll.swift (messageScrollArea moved there).
-struct StreamingRowBottomKey: PreferenceKey {
-    static var defaultValue: CGFloat?
-    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
-        value = nextValue() ?? value
-    }
-}
-
-/// Reports the trailing "bottom" sentinel's top edge, in the same "chatScroll" named coordinate
-/// space as StreamingRowBottomKey above (a separate key so the two don't get merged into one
-/// value by PreferenceKey's reduce). Lets scrollToBottom's settle loop confirm it actually
+/// Reports the trailing "bottom" sentinel's top edge, in the "chatScroll" named coordinate
+/// space. Lets scrollToBottom's settle loop confirm it actually
 /// reached the end instead of trusting a fixed pass count — needed because how many passes that
 /// takes isn't a fixed number: a wider/taller window (Mac Catalyst) has more rows visible at once
 /// needing measurement than a narrow iPhone screen, so a count tuned for one under-shoots on the
@@ -103,17 +89,8 @@ struct ChatView: View {
     // Not `private` — referenced from ChatView+Scroll.swift (split out to stay under SwiftLint's
     // type_body_length/file_length limits; see that file's header comment).
     @State var scrollSettleTask: Task<Void, Never>?
-    /// The streamingMessageId this turn's initial "scroll the new prompt to the top of the
-    /// viewport" positioning has already run for. A follow-scroll that starts too early — before
-    /// that one-time animated scroll has had its own window to complete — fights it for the same
-    /// ScrollViewProxy and can override where it lands. Comparing against this (set once that
-    /// positioning's own delay/animation finishes) instead of a fixed guess lets the follow-scroll
-    /// wait for exactly the right turn's positioning, not an arbitrary duration.
-    @State var hasSettledInitialScrollFor: String?
-    /// The streaming row's bottom edge, in the List's own "chatScroll" coordinate space (so it
-    /// reflects the current scroll offset, not a fixed on-screen position) — see
-    /// StreamingRowBottomKey's attachment point for why this is needed at all.
-    @State var streamingRowBottomY: CGFloat?
+    /// The reply whose row keeps room below the prompt just sent — see replyRoom(for:viewportHeight:).
+    @State var roomForReplyID: String?
     /// The trailing "bottom" sentinel's position — see BottomSentinelYKey's declaration for why
     /// scrollToBottom's settle loop needs this instead of trusting a fixed pass count.
     @State var bottomSentinelY: CGFloat?
@@ -206,9 +183,9 @@ struct ChatView: View {
             // enough that the same positioning fired from .onChange(of: latestUserMessageID) —
             // which runs immediately on send, before the row's true (possibly still-reflowing)
             // height is settled — lands a little short, leaving the prompt's top edge under the
-            // header until something else nudges it. This gives it a second, deliberate chance
-            // instead of relying on the streaming follow-scroll to paper over it once 20 real
-            // characters have streamed in (the "self-correcting" jump reported on cold launch).
+            // header until something else nudges it. This gives it a second, deliberate chance:
+            // nothing later corrects it, since the answer streams in below a prompt that stays
+            // put (like the web app), with no follow-scroll.
             if let id = latestUserMessageID, let proxy = scrollProxy {
                 scheduleNewPromptPositioning(id: id, proxy: proxy)
             }
@@ -283,7 +260,7 @@ struct ChatView: View {
                 RateLimitModal(
                     info: chatManager.rateLimit,
                     period: chatManager.rateLimitEventPeriod,
-                    resetLabel: chatManager.rateLimit?.resetLabel ?? chatManager.rateLimitEventResetLabel,
+                    resetLabel: chatManager.rateLimit?.bindingResetLabel ?? chatManager.rateLimitEventResetLabel,
                     onClose: { chatManager.showRateLimitModal = false },
                     onUpgrade: { chatManager.showRateLimitModal = false }
                 )
@@ -300,11 +277,21 @@ struct ChatView: View {
     @ViewBuilder
     private var inputArea: some View {
         VStack(spacing: 0) {
+            // Reload the usage when a reached limit renews; otherwise the composer stayed
+            // "Usage limit reached" until the app was relaunched. Restarts when the time changes.
+            Color.clear.frame(height: 0)
+                .task(id: chatManager.rateLimit?.refreshAt) {
+                    guard let refreshAt = chatManager.rateLimit?.refreshAt else { return }
+                    let wait = refreshAt.timeIntervalSinceNow
+                    if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+                    guard !Task.isCancelled else { return }
+                    await chatManager.loadRateLimit()
+                }
             if let info = chatManager.rateLimit, info.status != .normal {
                 RateLimitBanner(
                     status: info.status,
                     percent: max(info.hourlyPercent, info.weeklyPercent),
-                    resetLabel: info.resetLabel
+                    resetLabel: info.bindingResetLabel
                 )
             }
             if showDumpDecodeBanner {
@@ -737,16 +724,14 @@ struct MessageView: View {
     /// after the network side (isThisMessageStreaming) has already finished.
     var onRevealingChanged: (Bool) -> Void = { _ in }
     @State private var didCopy = false
+    /// Mac: the prompt's Copy button shows while the pointer is over the prompt.
+    @State private var isHoveringPrompt = false
 
-    /// Rendered on demand (not cached) since it's only needed when the user
-    /// actually taps "Share as Card" — recomputing per tap is cheap for a
-    /// single small card image.
-    private var cardImage: UIImage? {
-        guard !message.content.isEmpty else { return nil }
-        let card = ShareableAnswerCard(question: precedingQuestion, answer: message.content)
-        let renderer = ImageRenderer(content: card)
-        renderer.scale = UIScreen.main.scale
-        return renderer.uiImage
+    /// The "Share as Card" item. It renders the card image only when the share is performed:
+    /// building it in `body` rendered the whole answer to an image on every re-render, for every
+    /// answer in the chat — while an answer streamed, 100–200ms a time on the Mac (cai-ios#409).
+    private var shareCard: ShareableAnswerCardImage {
+        ShareableAnswerCardImage(question: precedingQuestion, answer: message.content)
     }
 
     var body: some View {
@@ -814,9 +799,33 @@ struct MessageView: View {
                             BFColor.primary.opacity(0.12),
                             in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
                         )
+                        // Mac: a context menu takes the click, so the prompt couldn't be
+                        // selected at all (cai-ios#401); there it gets a Copy button instead.
+                        #if !targetEnvironment(macCatalyst)
                         .contextMenu { messageActions }
+                        #endif
                 }
                 HStack(spacing: 6) {
+                    #if targetEnvironment(macCatalyst)
+                    if !message.content.isEmpty {
+                        Button {
+                            UIPasteboard.general.string = message.content
+                            didCopy = true
+                            Task {
+                                try? await Task.sleep(for: .seconds(1.5))
+                                didCopy = false
+                            }
+                        } label: {
+                            Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                                .labelStyle(.iconOnly)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(didCopy ? BFColor.primary : .secondary)
+                        .help("Copy")
+                        .opacity(isHoveringPrompt || didCopy ? 1 : 0)
+                        .bfPointerHover()
+                    }
+                    #endif
                     personaBadge
                     Text(message.timestamp, style: .time)
                 }
@@ -825,6 +834,7 @@ struct MessageView: View {
             }
             #if targetEnvironment(macCatalyst)
             .frame(maxWidth: 620, alignment: .trailing)
+            .onHover { isHoveringPrompt = $0 }
             #else
             .frame(maxWidth: 600, alignment: .trailing)
             #endif
@@ -936,10 +946,10 @@ struct MessageView: View {
                     .foregroundStyle(.secondary)
                     .bfPointerHover()
 
-                    if let cardImage {
+                    if !message.content.isEmpty {
                         ShareLink(
-                            item: Image(uiImage: cardImage),
-                            preview: SharePreview("BlueFunda AI Answer", image: Image(uiImage: cardImage))
+                            item: shareCard,
+                            preview: SharePreview("BlueFunda AI Answer", image: Image("LogoSymbol"))
                         ) {
                             Label("Share as Card", systemImage: "photo.badge.arrow.down.fill")
                                 .messageActionGlyph()

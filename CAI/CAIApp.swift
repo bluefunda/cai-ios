@@ -36,6 +36,7 @@ struct CAIApp: App {
                 .modelContainer(container)
                 .environmentObject(authManager)
                 .environmentObject(chatManager)
+                .environmentObject(chatManager.liveAnswer)
                 .environmentObject(iapManager)
                 .environmentObject(workspaceStore)
                 .environmentObject(unreadPoller)
@@ -116,6 +117,10 @@ struct CAIApp: App {
                         Task {
                             await authManager.refreshOnForeground()
                             await chatManager.reconcileAfterBackground()
+                            // A limit may have renewed while the app was away (or asleep).
+                            if let status = chatManager.rateLimit?.status, status != .normal {
+                                await chatManager.loadRateLimit()
+                            }
                         }
                     case .background:
                         chatManager.noteBackgrounding()

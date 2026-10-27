@@ -1,6 +1,13 @@
 import SwiftUI
 import AuthenticationServices
 
+/// A connector's connect action in progress and its error, kept as one value so
+/// SettingsView's body stays under SwiftLint's type_body_length limit.
+struct ConnectorConnectState {
+    var isConnecting = false
+    var error: String?
+}
+
 // MARK: - Agents List
 // Every MCP connector and its connection state, with each one's Connect / Disconnect
 // flow. One view, shown in two places: Settings → Agents, and the Agents destination in
@@ -12,6 +19,7 @@ struct AgentsListView: View {
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @State private var isConnectingGitHub = false
     @State private var githubConnectError: String?
+    @State private var figmaConnect = ConnectorConnectState()
 
     /// Every MCP server the backend returns — unfiltered (`availableMCPServers`,
     /// not `visibleMCPServers`, which hides ABAPer/SAP specifically for the
@@ -52,6 +60,31 @@ struct AgentsListView: View {
                             }
                             .buttonStyle(.plain)
                             .disabled(isConnectingGitHub)
+                            .bfPointerHover()
+                        }
+                    } else if server.isFigma {
+                        if chatManager.connectedFigma {
+                            // Already connected — Disconnect detail screen, mirroring GitHub.
+                            NavigationLink {
+                                FigmaConnectionView()
+                            } label: {
+                                connectorRow(server, connected: true)
+                            }
+                            .bfPointerHover()
+                        } else {
+                            // Straight to Figma's consent screen, like GitHub.
+                            Button {
+                                Task {
+                                    await connectFigma()
+                                    if chatManager.connectedFigma {
+                                        chatManager.enabledMCPServers.insert(server.id)
+                                    }
+                                }
+                            } label: {
+                                connectorRow(server, connected: false, isBusy: figmaConnect.isConnecting)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(figmaConnect.isConnecting)
                             .bfPointerHover()
                         }
                     } else if server.isSalesTracker {
@@ -110,6 +143,25 @@ struct AgentsListView: View {
                             }
                             .bfPointerHover()
                         }
+                    } else if server.isOData {
+                        // Its own system and credentials, like ABAPer: connected →
+                        // the detail screen, otherwise the connect form.
+                        if chatManager.odataConnection?.connected == true {
+                            NavigationLink {
+                                ODataConnectionView()
+                            } label: {
+                                connectorRow(server, connected: true)
+                            }
+                            .bfPointerHover()
+                        } else {
+                            // Hidden NavigationLink: no chevron, same as ABAPer's row.
+                            ZStack {
+                                NavigationLink(destination: ODataConnectFormView()) { EmptyView() }
+                                    .opacity(0)
+                                connectorRow(server, connected: false)
+                            }
+                            .bfPointerHover()
+                        }
                     } else {
                         // No connect flow yet for this one (e.g. SAP
                         // Analytics) — shown so every connector is visible,
@@ -142,6 +194,11 @@ struct AgentsListView: View {
             Button("OK") { githubConnectError = nil }
         } message: {
             Text(githubConnectError ?? "")
+        }
+        .alert("Figma", isPresented: .constant(figmaConnect.error != nil)) {
+            Button("OK") { figmaConnect.error = nil }
+        } message: {
+            Text(figmaConnect.error ?? "")
         }
     }
 
@@ -188,10 +245,10 @@ struct AgentsListView: View {
         defer { isConnectingGitHub = false }
         do {
             let authorizeURL = try await api.fetchGitHubAuthorizeURL()
-            // cai-bff's callback page shows a static confirmation and does not
-            // auto-navigate anywhere — the user dismisses the sheet themselves,
-            // which this session sees as a cancellation, not a completed
-            // callback (see GitHubConnectionView's earlier equivalent).
+            // cai-bff's result page returns to cai://oauth/github/done a moment after
+            // a successful connect (?client=ios), which completes this session; a
+            // user closing the sheet first is a cancellation. Status is re-checked
+            // either way.
             _ = try await webAuthenticationSession.authenticate(
                 using: authorizeURL,
                 callbackURLScheme: "cai"
@@ -201,6 +258,27 @@ struct AgentsListView: View {
             await chatManager.refreshGitHubConnectionStatus()
         } catch {
             githubConnectError = "Failed to connect GitHub. Please try again."
+        }
+    }
+
+    /// Same flow as connectGitHub: the result page returns to cai://oauth/figma/done
+    /// after a successful connect; the status is re-checked either way.
+    fileprivate func connectFigma() async {
+        guard let api = chatManager.apiService else { return }
+        figmaConnect.error = nil
+        figmaConnect.isConnecting = true
+        defer { figmaConnect.isConnecting = false }
+        do {
+            let authorizeURL = try await api.fetchFigmaAuthorizeURL()
+            _ = try await webAuthenticationSession.authenticate(
+                using: authorizeURL,
+                callbackURLScheme: "cai"
+            )
+            await chatManager.refreshFigmaConnectionStatus()
+        } catch is ASWebAuthenticationSessionError {
+            await chatManager.refreshFigmaConnectionStatus()
+        } catch {
+            figmaConnect.error = "Failed to connect Figma. Please try again."
         }
     }
 }
@@ -224,6 +302,21 @@ struct ConnectorLabel: View {
                     // Catalyst inside these List rows — the row's own tint
                     // wins. The older .foregroundColor API overrides it.
                     .foregroundColor(.primary)
+                    .frame(width: 22)
+            } else if server.isFigma {
+                // Figma's own multi-colour mark (FigmaMark asset), like GitHub's — kept in its
+                // brand colours rather than tinted.
+                Image("FigmaMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .frame(width: 22)
+            } else if server.isABAPer {
+                // ABAPer's own logo (ABAPerMark — the same tile as the web app's Apps list).
+                Image("ABAPerMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
                     .frame(width: 22)
             } else {
                 Image(systemName: server.connectorIconName)

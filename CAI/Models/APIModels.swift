@@ -398,14 +398,15 @@ struct RateLimitDTO: Codable {
 // MARK: - MCP Servers (/mcp, /mcp/user)
 
 /// Backend returns {"mcpInfo": [{server_id, name, mcp_server_url, ...}]}
-// MARK: - GitHub OAuth (bluefunda/cai-llm-router#345 Phase 2)
+// MARK: - Connector OAuth: GitHub (bluefunda/cai-llm-router#345 Phase 2), Figma (bluefunda/infra#54)
+// Both answer /oauth/<connector>/status and /authorize with the same shapes.
 
-struct GitHubOAuthStatusDTO: Codable {
+struct OAuthStatusDTO: Codable {
     let connected: Bool
     let username: String?
 }
 
-struct GitHubOAuthAuthorizeDTO: Codable {
+struct OAuthAuthorizeDTO: Codable {
     let authorizeUrl: String
 }
 
@@ -423,6 +424,26 @@ struct SAPCredentialsConnectRequest: Encodable {
     let client: String
     let username: String
     let password: String
+}
+
+// MARK: - OData connection (OData connector — its own system, separate from ABAPer's)
+
+struct ODataConnectionStatusDTO: Codable {
+    let connected: Bool
+    let host: String?
+    let client: String?
+    let username: String?
+    let services: [String]?
+}
+
+/// `client` and `services` are optional: empty client for non-SAP OData, empty
+/// services lets odata-mcp list them from the system's gateway catalog.
+struct ODataConnectRequest: Encodable {
+    let host: String
+    let client: String
+    let username: String
+    let password: String
+    let services: [String]
 }
 
 /// Decodes cai-bff's plain `{"status": "..."}` acknowledgment — connect and

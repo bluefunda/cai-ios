@@ -63,8 +63,7 @@ struct PacedMarkdownView: View {
     @State private var lastRenderPublish = ContinuousClock.now
     @State private var latestTarget: String = ""
     @State private var revealTask: Task<Void, Never>?
-    // Drives MarkdownView's trailing opacity fade — matches cai-android's `isPacingActive`
-    // (network streaming OR the local reveal hasn't caught up yet), not raw network isStreaming.
+    // Whether the reveal task is running — see showsStreamingLook.
     @State private var isActivelyRevealing = false
     // Sticky, independent of the `wasStopped` prop: ChatView.swift only sets that true for
     // whichever message is currently *last* in the conversation, so it flips back to false for
@@ -113,6 +112,7 @@ struct PacedMarkdownView: View {
     // word" is keeping the *tick interval* small (paceDelay) so each individual update is only a
     // couple of characters — well under one word — regardless of the overall chars/sec rate.
     private static let paceDelay: Duration = .milliseconds(8)
+    private static let paceSeconds: Double = 0.008
     // Adaptive rate (was a fixed 460 chars/s): aim to drain whatever has arrived but isn't shown
     // yet within `catchUpSeconds`. A fast model (e.g. Groq) builds a big backlog, so the reveal
     // speeds up instead of trailing seconds behind a finished stream; a slow model leaves a small
@@ -121,13 +121,18 @@ struct PacedMarkdownView: View {
     // never crawls or dumps a wall of text in one tick.
     private static let catchUpSeconds: Double = 0.6
     private static let minCharsPerSecond: Double = 90
-    private static let maxCharsPerSecond: Double = 2400
+    // The fastest a reveal goes, only while catching up on a backlog bigger than maxLagSeconds
+    // at the steady pace — so a long fast answer still never trails far behind the stream.
+    private static let maxCharsPerSecond: Double = 1200
+    // The pace a fast stream is shown at — claude.ai-like, word by word rather than a dump. Only
+    // a reveal trailing more than maxLagSeconds behind what has arrived goes faster.
+    private static let steadyCharsPerSecond: Double = 500
     // Pace to the stream's measured ARRIVAL rate (smoothed), not just "drain the backlog in
     // 0.6s". A provider that sends few, large chunks (Gemini: hundreds of chars ~once a second)
     // otherwise revealed each chunk in a 0.6s burst and then sat idle until the next — fast and
     // stop-and-go. Matching the arrival rate spreads each chunk across the gap to the next one.
     // `maxLagSeconds` still bounds how far the reveal may trail what has arrived.
-    private static let maxLagSeconds: Double = 1.5
+    private static let maxLagSeconds: Double = 3
     private static let arrivalSmoothing: Double = 0.15
     private static let maxCharsPerTick = 60
     private static let boundarySnapSlack = 8
@@ -136,7 +141,13 @@ struct PacedMarkdownView: View {
     // several words at once); an OPEN code block keeps the slower interval, because re-parsing and
     // re-highlighting a growing fenced block costs O(block length) per render.
     private static let renderInterval: Duration = .milliseconds(16)
-    private static let codeBlockRenderInterval: Duration = .milliseconds(60)
+    private static let codeBlockRenderInterval: Duration = .milliseconds(33)
+
+    /// True when `text` has a markdown table row. Tables render as cards, which costs far more per
+    /// redraw than plain text, so they get the slower render interval like an open code block.
+    private static func containsTable(_ text: String) -> Bool {
+        text.hasPrefix("|") || text.contains("\n|")
+    }
 
     /// True when `text` ends inside an unclosed ``` fence — an odd number of fences so far.
     private static func endsInsideCodeBlock(_ text: String) -> Bool {
@@ -149,17 +160,29 @@ struct PacedMarkdownView: View {
         return count % 2 == 1
     }
 
+    /// Half-typed markdown stays hidden for as long as the network is streaming or the reveal is
+    /// still catching up, as cai-android's `isPacingActive`. Keyed on the reveal alone, it switched
+    /// off each time the reveal caught up between two updates (several times a second), so a lone
+    /// "**" or "##" could flash in and out.
+    private var showsStreamingLook: Bool {
+        (isStreaming && !wasStopped && !hasFrozen) || isActivelyRevealing
+    }
+
     var body: some View {
         MarkdownView(
-            content: isActivelyRevealing
+            content: showsStreamingLook
                 ? StreamingMarkdown.displayable(renderedContent, insideCodeBlock: Self.endsInsideCodeBlock(renderedContent))
                 : renderedContent,
-            isStreaming: isActivelyRevealing,
             cacheKey: messageId
         )
             .onChange(of: targetContent, initial: true) { _, newTarget in
                 recordArrival(newTarget)
-                latestTarget = newTarget
+                // Native UTF-8: the streamed text can arrive bridged from NSString, and the reveal
+                // loop walks it (count, hasPrefix, index(offsetBy:)) every 8ms tick — on a bridged
+                // string that's character-by-character and a large share of the main thread.
+                var native = newTarget
+                native.makeContiguousUTF8()
+                latestTarget = native
 
                 if pacedContent.isEmpty {
                     if isStreaming {
@@ -265,14 +288,23 @@ struct PacedMarkdownView: View {
         revealTask = Task { @MainActor in
             var lastTick = ContinuousClock.now
             while !Task.isCancelled {
+                guard pacedContent.count < latestTarget.count else { break }
+                guard latestTarget.hasPrefix(pacedContent) else {
+                    publish(latestTarget)
+                    break
+                }
+
+                try? await Task.sleep(for: Self.paceDelay)
+                // Re-checked after the sleep, not before it: the stream can end (or the text be
+                // replaced) while this tick sleeps, and pacedContent can then be longer than a
+                // target read before the sleep — offsetting by it went past the end and crashed
+                // ("String index is out of bounds" in the index(_:offsetBy:) below).
                 let target = latestTarget
                 guard pacedContent.count < target.count else { break }
                 guard target.hasPrefix(pacedContent) else {
                     publish(target)
                     break
                 }
-
-                try? await Task.sleep(for: Self.paceDelay)
                 let now = ContinuousClock.now
                 let elapsed = now - lastTick
                 lastTick = now
@@ -289,11 +321,16 @@ struct PacedMarkdownView: View {
                 // Also after the stream ends: keep the measured pace and finish within maxLagSeconds,
                 // instead of rushing the remainder out in catchUpSeconds (a visible end burst).
                 let desiredRate = arrivalRate > 0
-                    ? max(arrivalRate, backlog / Self.maxLagSeconds)
+                    ? max(min(arrivalRate, Self.steadyCharsPerSecond), backlog / Self.maxLagSeconds)
                     : backlog / Self.catchUpSeconds
                 let charsPerSecond = min(max(desiredRate, Self.minCharsPerSecond), Self.maxCharsPerSecond)
                 let rawChars = Int((elapsedSeconds * charsPerSecond).rounded())
-                let charsToReveal = min(max(rawChars, 1), Self.maxCharsPerTick)
+                // maxCharsPerTick caps one planned paceDelay step. A tick that ran long (rendering
+                // a table as cards is slow on the Mac) covers several steps, so it may reveal
+                // proportionally more — a fixed cap held the reveal to ~60 chars/s exactly when
+                // rendering was slow, so tables appeared a row every few seconds.
+                let stepsElapsed = max(1, Int(elapsedSeconds / Self.paceSeconds))
+                let charsToReveal = min(max(rawChars, 1), Self.maxCharsPerTick * stepsElapsed)
 
                 // Recomputed fresh against *this* tick's `target` every time — a String.Index
                 // cached from a previous tick is not safe to reuse here. `target` is re-read from
@@ -337,8 +374,9 @@ struct PacedMarkdownView: View {
                 // response doesn't sit briefly stale right when it finishes.
                 let sinceLastRender = now - lastRenderPublish
                 let interval = sinceLastRender >= Self.codeBlockRenderInterval
-                    ? Self.renderInterval // already overdue for either case — skip the fence scan
-                    : (Self.endsInsideCodeBlock(pacedContent) ? Self.codeBlockRenderInterval : Self.renderInterval)
+                    ? Self.renderInterval // already overdue for either case — skip the scans
+                    : (Self.endsInsideCodeBlock(pacedContent) || Self.containsTable(pacedContent)
+                        ? Self.codeBlockRenderInterval : Self.renderInterval)
                 if sinceLastRender >= interval || pacedContent.count >= target.count {
                     renderedContent = pacedContent
                     lastRenderPublish = now

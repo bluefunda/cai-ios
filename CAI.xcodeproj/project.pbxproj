@@ -19,6 +19,7 @@
 		16441F7F47880166B4F7CF3A /* ReferenceDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46896EA3DF69AB1578B3A89A /* ReferenceDataService.swift */; };
 		17955A76F1024BFCF2F53639 /* ReleasesListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E581609D04E20CB4FF28C75 /* ReleasesListViewModel.swift */; };
 		17EA319547E245BCDC7424EC /* ListScreenHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8FC57828D92A7EACAF7BF79 /* ListScreenHeader.swift */; };
+		17E8C1D53E1849629E865C14 /* ODataConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6EE1CF58794098BE5FEA13 /* ODataConnectionView.swift */; };
 		1842E9E8551C4687B3174592 /* SalesTrackerConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA425BE92964029B960BF7C /* SalesTrackerConnectionView.swift */; };
 		1DC4A13684F2854777BCF877 /* RateLimitBannerPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77BF10443BA56D0CFA142022 /* RateLimitBannerPreviews.swift */; };
 		21EAA429895EFEB8E7D89252 /* TurnTopicSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE169AA4C0BD27ADF6F87A83 /* TurnTopicSource.swift */; };
@@ -30,6 +31,7 @@
 		30FA672BBEA9957A0DDD7D14 /* DocumentPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71274A8FE1C29917466CFB83 /* DocumentPickerView.swift */; };
 		36DD901178353045CBE6B0C0 /* ChatManagerFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7693367568C63D1452ECF38 /* ChatManagerFileTests.swift */; };
 		382A79D977B2637039DB0EA9 /* CommentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083763CB619B8C86652958E5 /* CommentService.swift */; };
+		3763D89448054805BA97EE90 /* ODataConnectFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B50B43032E8649A8BED0E48F /* ODataConnectFormView.swift */; };
 		3A6CF33342704D719652E0FC /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73CC7BE93E4A4E0AAC40DD2F /* ChatInputView.swift */; };
 		3ADDCE06D26F6D38E792FABD /* SidebarConversationList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747A3988962566A6CB06DE76 /* SidebarConversationList.swift */; };
 		3DB1DAADFC69DF9BD254233F /* TipCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7EB4B575BA11F1A710457F8 /* TipCatalog.swift */; };
@@ -73,6 +75,7 @@
 		83BB536B4B990DE7C8A23210 /* ChatToolbarButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */; };
 		8541FDCEB6A5180CF43F0AC6 /* ProjectsListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE785E0228D7634474DBA84B /* ProjectsListViewModel.swift */; };
 		854D2D8892EC65C61983A091 /* TipEngineDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8CC8C2B2FDCBC989964DC80 /* TipEngineDebugView.swift */; };
+		867A12B33F50F0A773DBE22D /* FigmaConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 152003FF07104F53C671B4DC /* FigmaConnectionView.swift */; };
 		88222B9DC515A5F81EE222E0 /* GitHubConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FB959FE38C1F5150194748 /* GitHubConnectionView.swift */; };
 		8A3C5B6E3E8A598BE0D8EA84 /* ChangeRequestDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303A292E3DC99791D748886B /* ChangeRequestDetailViewModel.swift */; };
 		8EFDB51DA5C51ED7C24CC4D8 /* ChangeRequestListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9396945463332F1ED59C56DB /* ChangeRequestListView.swift */; };
@@ -230,6 +233,7 @@
 		0E581609D04E20CB4FF28C75 /* ReleasesListViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReleasesListViewModel.swift; sourceTree = "<group>"; };
 		101611A0C609A0F4E0447A0C /* AntiAnnoyance.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntiAnnoyance.swift; sourceTree = "<group>"; };
 		14355763E51D404C2C5F155E /* SnapshotHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
+		152003FF07104F53C671B4DC /* FigmaConnectionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FigmaConnectionView.swift; sourceTree = "<group>"; };
 		19352E75D7D0835B6D83375B /* LocalFileStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalFileStore.swift; sourceTree = "<group>"; };
 		2011C3CED3F8B4BBBA4C06C8 /* ChatManager+ChatList.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatManager+ChatList.swift"; sourceTree = "<group>"; };
 		212B570F645F96E9F0322F75 /* ChangeRequestListViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChangeRequestListViewModel.swift; sourceTree = "<group>"; };
@@ -297,6 +301,7 @@
 		8CA425BE92964029B960BF7C /* SalesTrackerConnectionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SalesTrackerConnectionView.swift; sourceTree = "<group>"; };
 		8CBEEE43BF02398BFA3653C9 /* ShareCardFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCardFormatter.swift; sourceTree = "<group>"; };
 		8D55F190BC846CFD0BF8EEB0 /* NewChangeRequestViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewChangeRequestViewModel.swift; sourceTree = "<group>"; };
+		8D6EE1CF58794098BE5FEA13 /* ODataConnectionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ODataConnectionView.swift; sourceTree = "<group>"; };
 		90A9A767808271F509EF46E2 /* TipRewardLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipRewardLogTests.swift; sourceTree = "<group>"; };
 		933A53904E6D4ED767BE8750 /* ToolbarComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ToolbarComponents.swift; sourceTree = "<group>"; };
 		9396945463332F1ED59C56DB /* ChangeRequestListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChangeRequestListView.swift; sourceTree = "<group>"; };
@@ -340,6 +345,7 @@
 		B1000005201BCDEF /* RateLimitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitView.swift; sourceTree = "<group>"; };
 		B1000006201BCDEF /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		B355E56C168401FCCF508D76 /* ChatManager+TipEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ChatManager+TipEngine.swift"; sourceTree = "<group>"; };
+		B50B43032E8649A8BED0E48F /* ODataConnectFormView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ODataConnectFormView.swift; sourceTree = "<group>"; };
 		B5B2BD1A9A947CD5AC2DA468 /* TipSelector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipSelector.swift; sourceTree = "<group>"; };
 		B5E4791A61FEAC35F1705916 /* TipSelectorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipSelectorTests.swift; sourceTree = "<group>"; };
 		B62A6AB082C43BA17EA8D3E9 /* ProjectService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectService.swift; sourceTree = "<group>"; };
@@ -567,9 +573,12 @@
 				5478A24929F4E5D406E63882 /* ShareableAnswerCard.swift */,
 				5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */,
 				32FB959FE38C1F5150194748 /* GitHubConnectionView.swift */,
+				152003FF07104F53C671B4DC /* FigmaConnectionView.swift */,
 				8CA425BE92964029B960BF7C /* SalesTrackerConnectionView.swift */,
 				ED85EC6F262946AFAEF87FE8 /* ABAPerConnectionView.swift */,
 				F07C2D3DF9E143828530204D /* ABAPerConnectFormView.swift */,
+				8D6EE1CF58794098BE5FEA13 /* ODataConnectionView.swift */,
+				B50B43032E8649A8BED0E48F /* ODataConnectFormView.swift */,
 				EA47CE39743E5C5F2735C8D6 /* MacComposerTextView.swift */,
 				01905164500684B2385FE524 /* ComposerPickers.swift */,
 				680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */,
@@ -997,9 +1006,12 @@
 				97EB1625B38D58E56F0AC278 /* ScreenshotFixtures.swift in Sources */,
 				83BB536B4B990DE7C8A23210 /* ChatToolbarButtons.swift in Sources */,
 				88222B9DC515A5F81EE222E0 /* GitHubConnectionView.swift in Sources */,
+				867A12B33F50F0A773DBE22D /* FigmaConnectionView.swift in Sources */,
 				1842E9E8551C4687B3174592 /* SalesTrackerConnectionView.swift in Sources */,
 				B6C1197FE2E246019EB66ACB /* ABAPerConnectionView.swift in Sources */,
 				616A41CCEC604DC9AFE9F986 /* ABAPerConnectFormView.swift in Sources */,
+				17E8C1D53E1849629E865C14 /* ODataConnectionView.swift in Sources */,
+				3763D89448054805BA97EE90 /* ODataConnectFormView.swift in Sources */,
 				1348457AC405F66A2730AA8D /* MacComposerTextView.swift in Sources */,
 				62BC5ECA748BA2907E12AAA2 /* ComposerPickers.swift in Sources */,
 				EE2A9CDE00AA8DB357799E52 /* ChatView+Scroll.swift in Sources */,
@@ -1298,7 +1310,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 203;
+				CURRENT_PROJECT_VERSION = 219;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1330,7 +1342,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.12.0;
+				MARKETING_VERSION = 2.15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1350,7 +1362,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 203;
+				CURRENT_PROJECT_VERSION = 219;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1382,7 +1394,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.12.0;
+				MARKETING_VERSION = 2.15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1400,10 +1412,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 203;
+				CURRENT_PROJECT_VERSION = 219;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.12.0;
+				MARKETING_VERSION = 2.15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1418,10 +1430,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 203;
+				CURRENT_PROJECT_VERSION = 219;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.12.0;
+				MARKETING_VERSION = 2.15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

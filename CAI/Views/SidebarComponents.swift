@@ -5,20 +5,6 @@ import SwiftUI
 // ChatView+Scroll.swift and ChatManager+Background.swift). Used by SidebarView's
 // chat history (SidebarConversationList) on every platform.
 
-// MARK: - Conversation Grouping
-
-struct ConversationGroup: Identifiable {
-    let id: String      // == title, always unique within a list
-    let title: String
-    let conversations: [Conversation]
-
-    init(title: String, conversations: [Conversation]) {
-        self.id = title
-        self.title = title
-        self.conversations = conversations
-    }
-}
-
 // MARK: - Sidebar Row
 
 struct SidebarConversationRow: View {

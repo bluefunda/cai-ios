@@ -22,9 +22,10 @@ struct ABAPerConnectionView: View {
                             .font(MacSettingsFont.row)
                             #endif
                     } icon: {
-                        Image(systemName: "curlybraces")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.primary)
+                        Image("ABAPerMark")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
                     }
                     Spacer()
                     Button(role: .destructive) {

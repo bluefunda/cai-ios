@@ -1,5 +1,43 @@
 # Changelog
 
+## [2.15.0](https://github.com/bluefunda/cai-ios/compare/v2.14.0...v2.15.0) (2026-10-22)
+
+
+### Features
+
+* **chat:** feed the streaming answer live; follow it once scrolled to the end ([3049c97](https://github.com/bluefunda/cai-ios/commit/3049c97a37c589d496da63c057fa6ed8153f0d89))
+* **chat:** stream answers like the web app; thinking steps type in live ([76713fe](https://github.com/bluefunda/cai-ios/commit/76713fead4f543cc95fb60189505877d129fd1d0))
+* **chat:** stream answers like the web app; thinking steps type in live ([032d04b](https://github.com/bluefunda/cai-ios/commit/032d04b71cf0ec2e2b5491caf2ecb90f1168a414))
+
+## [2.14.0](https://github.com/bluefunda/cai-ios/compare/v2.13.1...v2.14.0) (2026-10-21)
+
+
+### Features
+
+* **connectors:** connect SAP Analytics (OData); Figma and ABAPer logos ([8fd1955](https://github.com/bluefunda/cai-ios/commit/8fd1955e397d8cd457973f5203d3796af59577f0))
+
+## [2.13.1](https://github.com/bluefunda/cai-ios/compare/v2.13.0...v2.13.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **mac:** select and copy your own prompt ([b889525](https://github.com/bluefunda/cai-ios/commit/b889525d362366db922cc99e5a4adc7c55fb74d4))
+* **mac:** select and copy your own prompt ([0fd5117](https://github.com/bluefunda/cai-ios/commit/0fd51177a64fb8598ad66eebec90a9a22a494ac7)), closes [#401](https://github.com/bluefunda/cai-ios/issues/401)
+
+## [2.13.0](https://github.com/bluefunda/cai-ios/compare/v2.12.0...v2.13.0) (2026-10-19)
+
+
+### Features
+
+* **connectors:** connect Figma; connect sheet closes itself; Mac and usage fixes ([13c488f](https://github.com/bluefunda/cai-ios/commit/13c488fa6ff37defe012551ae463ad47f3397a4c))
+* **connectors:** connect Figma; connect sheet closes itself; Mac and usage fixes ([6d24337](https://github.com/bluefunda/cai-ios/commit/6d2433786c2179c517c0a68604630fb3e31c1c22))
+
+
+### Bug Fixes
+
+* **markdown:** parse inline markdown inside headings ([963721a](https://github.com/bluefunda/cai-ios/commit/963721af5f6b9b9528fad11c2a66c81d33ccb4c9)), closes [#392](https://github.com/bluefunda/cai-ios/issues/392)
+* **usage:** leave restricted mode when a reached limit renews ([9d70046](https://github.com/bluefunda/cai-ios/commit/9d7004644f246db596cc223033d6046a4915b403))
+
 ## [2.12.0](https://github.com/bluefunda/cai-ios/compare/v2.11.2...v2.12.0) (2026-10-15)
 
 

@@ -56,6 +56,19 @@ extension ChatManager {
         }
     }
 
+    /// Replaces one message's text by id — unlike updateLastMessage, safe from a turn that may
+    /// no longer be the last one (a stopped stream whose task ends after a new send).
+    func updateMessage(id: String, content: String, in conversationId: String) {
+        guard var conversation = conversations.first(where: { $0.id == conversationId }),
+              let index = conversation.messages.firstIndex(where: { $0.id == id }),
+              conversation.messages[index].content != content else { return }
+        conversation.messages[index].content = content
+        updateConversation(conversation)
+        if currentConversation?.id == conversationId {
+            currentConversation = conversation
+        }
+    }
+
     func updateLastMessage(_ message: ChatMessage, in conversationId: String) {
         guard var conversation = conversations.first(where: { $0.id == conversationId }),
               !conversation.messages.isEmpty else { return }
@@ -89,5 +102,32 @@ extension ChatManager {
             }
             cacheUpdateTitle(title, for: conversationId)
         }
+    }
+}
+
+// MARK: - Live answer
+/// The text of the answer being streamed, published apart from the conversation — see
+/// `ChatManager.liveAnswer`.
+final class LiveAnswerText: ObservableObject {
+    @Published private(set) var messageID: String?
+    @Published private(set) var text = ""
+
+    func update(messageID: String, text: String) {
+        if self.messageID != messageID { self.messageID = messageID }
+        self.text = text
+    }
+
+    /// Clears it only if it's still this message's (a new turn may already have started).
+    func clear(messageID: String) {
+        guard self.messageID == messageID else { return }
+        self.messageID = nil
+        text = ""
+    }
+
+    /// The text to show for `messageID`: the live text while it's this message's and ahead of
+    /// what the conversation holds, else `fallback`.
+    func text(for messageID: String, fallback: String) -> String {
+        guard self.messageID == messageID, text.count > fallback.count, text.hasPrefix(fallback) else { return fallback }
+        return text
     }
 }

@@ -241,6 +241,13 @@ struct AnswerWithInlineStepsView: View {
     let isStreaming: Bool
     let wasStopped: Bool
     let onRevealingChanged: (Bool) -> Void
+    @EnvironmentObject private var liveAnswer: LiveAnswerText
+
+    /// While streaming, the live text (ChatManager.liveAnswer) — ahead of the conversation,
+    /// which is republished only once a second.
+    private var content: String {
+        isStreaming ? liveAnswer.text(for: message.id, fallback: message.content) : message.content
+    }
 
     /// Inline steps grouped by position, in order (steps at the same position share a group).
     private var groups: [(offset: Int, steps: [MessageStep])] {
@@ -259,10 +266,11 @@ struct AnswerWithInlineStepsView: View {
 
     var body: some View {
         let groups = groups
+        let content = content
         if groups.isEmpty {
-            paced(id: message.id, text: message.content, live: true)
+            paced(id: message.id, text: content, live: true)
         } else {
-            let units = Array(message.content.utf16)
+            let units = Array(content.utf16)
             let bounds = groups.map { min(max(0, $0.offset), units.count) }
             VStack(alignment: .leading, spacing: BFSpacing._3) {
                 ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
@@ -372,15 +380,18 @@ private extension String {
 
 /// Text that types itself out as it grows — the live thought text reads as being written
 /// (claude.ai) rather than jumping in whole sentences each time the router re-captions (~4x/s).
-/// Growth that extends the shown text continues from where it is; a different text (a new
-/// thought) types in from the start. Reveals any backlog within ~0.3s, so it never trails far
-/// behind the live stream. `animates: false` (finished or history steps) renders instantly.
+/// Each update keeps what it shares with the text already shown and types only the rest, so a
+/// growing thought never restarts — including when the router's caption changes its ending
+/// ("…" once it gets long). A genuinely new thought starts typing straight away: no queue, no
+/// hold, so thoughts stay live while the model thinks. Reveals word by word, never mid-word, and
+/// any backlog within ~0.3s. `animates: false` (finished or history steps) renders instantly.
 struct TypingText: View {
     let text: String
     var suffix: String = ""
     var animates: Bool = true
 
     @State private var shown: String?
+    @State private var target = ""
     @State private var typingTask: Task<Void, Never>?
 
     private static let tick: Duration = .milliseconds(25)
@@ -388,18 +399,32 @@ struct TypingText: View {
 
     var body: some View {
         Text((animates ? shown ?? "" : text) + suffix)
-            .onChange(of: text, initial: true) { _, newText in type(toward: newText) }
+            .onChange(of: text, initial: true) { _, newText in receive(newText) }
             .onDisappear { typingTask?.cancel() }
     }
 
-    private func type(toward target: String) {
+    private func receive(_ newText: String) {
         guard animates else { return }
+        target = newText
+        shown = Self.sharedStart(shown ?? "", newText)
+        run()
+    }
+
+    /// The part of `shown` that `next` starts with, cut back to a whole word unless all of it is
+    /// shared — so a re-captioned ending ("…") continues from there instead of starting over.
+    static func sharedStart(_ shown: String, _ next: String) -> String {
+        if next.hasPrefix(shown) { return shown }
+        let common = String(zip(shown, next).prefix { $0 == $1 }.map(\.0))
+        guard let lastSpace = common.lastIndex(of: " ") else { return "" }
+        return String(common[..<lastSpace])
+    }
+
+    private func run() {
         typingTask?.cancel()
-        var current = shown ?? ""
-        if !target.hasPrefix(current) { current = "" }
-        shown = current
         typingTask = Task { @MainActor in
-            while !Task.isCancelled, current.count < target.count {
+            while !Task.isCancelled {
+                let current = shown ?? ""
+                guard current.count < target.count, target.hasPrefix(current) else { return }
                 let step = max(1, (target.count - current.count) / Self.ticksToCatchUp)
                 var end = target.index(target.startIndex, offsetBy: min(target.count, current.count + step))
                 // Finish the word being revealed, so text appears word by word, not mid-word.
@@ -407,8 +432,7 @@ struct TypingText: View {
                    target.distance(from: end, to: space) <= 12 {
                     end = space
                 }
-                current = String(target[..<end])
-                shown = current
+                shown = String(target[..<end])
                 try? await Task.sleep(for: Self.tick)
             }
         }

@@ -1,4 +1,2 @@
 New in this release:
-• Show files the assistant creates as downloadable cards
-
-Plus bug fixes and performance improvements.
+• Connect SAP Analytics (OData); Figma and ABAPer logos

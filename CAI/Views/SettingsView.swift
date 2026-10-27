@@ -451,49 +451,6 @@ struct SettingsView: View {
     // MARK: - Legal
 
     @ViewBuilder
-    private var legalDetail: some View {
-        List {
-            Section {
-                Button {
-                    openURL(privacyPolicyURL)
-                } label: {
-                    HStack {
-                        Label("Privacy Policy", systemImage: "hand.raised")
-                            #if targetEnvironment(macCatalyst)
-                            .font(MacSettingsFont.row)
-                            #endif
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .bfPointerHover()
-
-                Button {
-                    openURL(termsOfServiceURL)
-                } label: {
-                    HStack {
-                        Label("Terms of Service", systemImage: "doc.text")
-                            #if targetEnvironment(macCatalyst)
-                            .font(MacSettingsFont.row)
-                            #endif
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .bfPointerHover()
-            }
-        }
-        .navigationTitle("Legal")
-        .settingsInlineTitle()
-    }
-
-    // MARK: - About
-
-    @ViewBuilder
     private var aboutDetail: some View {
         List {
             Section {
@@ -639,6 +596,55 @@ struct SettingsView: View {
             return BFColor.neutral400
         }
     }
+}
+
+// MARK: - Legal
+// In an extension to keep SettingsView's body under SwiftLint's type_body_length limit
+// (bluefunda/cai-ios#261 precedent).
+
+extension SettingsView {
+    @ViewBuilder
+    private var legalDetail: some View {
+        List {
+            Section {
+                Button {
+                    openURL(privacyPolicyURL)
+                } label: {
+                    HStack {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .bfPointerHover()
+
+                Button {
+                    openURL(termsOfServiceURL)
+                } label: {
+                    HStack {
+                        Label("Terms of Service", systemImage: "doc.text")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .bfPointerHover()
+            }
+        }
+        .navigationTitle("Legal")
+        .settingsInlineTitle()
+    }
+
+    // MARK: - About
 }
 
 // MARK: - User Info Row

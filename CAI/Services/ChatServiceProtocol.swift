@@ -231,7 +231,7 @@ enum StepState: String, Equatable {
 struct ChatMessage: Identifiable, Codable, Equatable {
     let id: String
     let role: MessageRole
-    let content: String
+    var content: String
     let timestamp: Date
     /// Durable reference to a user-attached file, relayed by cai-bff from history
     /// (also set locally the moment an attachment upload succeeds).

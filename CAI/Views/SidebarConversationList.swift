@@ -124,124 +124,33 @@ struct SidebarConversationList: View {
 
     @ViewBuilder
     private var conversationList: some View {
-        if allowsSwipeActions {
-            List {
-                Group { listRows }
-                    .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .environment(\.defaultMinListRowHeight, 0)
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 2) { listRows }
-                    .padding(.horizontal, 8)
-            }
-        }
-    }
-
-    /// Shared by both containers; the List-only row modifiers above are no-ops in the
-    /// LazyVStack.
-    @ViewBuilder
-    private var listRows: some View {
-        let pinned = chatManager.conversations.filter(\.isPinned)
-        if !pinned.isEmpty {
-            SidebarSectionHeader(title: "Pinned")
-            ForEach(pinned) { row(for: $0) }
-        }
-
-        ForEach(groupedConversations(chatManager.conversations.filter { !$0.isPinned })) { group in
-            SidebarSectionHeader(title: group.title)
-            ForEach(group.conversations) { row(for: $0) }
-        }
-
-        if chatManager.chatListNextCursor != nil {
-            // Coming into view near the end of the list loads the next page.
-            ProgressView()
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
-                .onAppear { Task { await chatManager.loadMoreChats() } }
-        }
-    }
-
-    private func row(for convo: Conversation) -> some View {
-        SidebarConversationRow(
-            title: convo.title,
-            meta: convo.createdAt.formatted(.relative(presentation: .named)),
-            isSelected: chatManager.currentConversation?.id == convo.id,
-            isPinned: convo.isPinned,
-            hoverMenuRows: [
-                BFDropdownRow(
-                    convo.isPinned ? "Unpin" : "Pin",
-                    systemImage: convo.isPinned ? "pin.slash" : "pin"
-                ) { chatManager.setPinned(convo, !convo.isPinned) },
-                BFDropdownRow("Delete", systemImage: "trash", role: .destructive) {
-                    pendingDelete = convo
-                }
-            ]
+        // The rows are an equatable snapshot: ChatManager publishes on every streamed chunk, and
+        // rebuilding each row then (fonts, menus, swipe actions) held the main thread ~200ms at a
+        // time on the Mac — the stalls in the answer's reveal. The rows only redraw when a title,
+        // a pin, the selection or the paging state actually changes.
+        SidebarConversationRows(
+            rows: chatManager.conversations.map(SidebarRowItem.init),
+            selectedId: chatManager.currentConversation?.id,
+            hasMorePages: chatManager.chatListNextCursor != nil,
+            allowsSwipeActions: allowsSwipeActions,
+            actions: SidebarRowActions(
+                select: { id in
+                    if let convo = conversation(id) { onSelect(convo) }
+                },
+                setPinned: { id, pinned in
+                    if let convo = conversation(id) { chatManager.setPinned(convo, pinned) }
+                },
+                markdownExport: { id in conversation(id)?.markdownExport ?? "" },
+                // Every delete path asks first (P4): this only arms the confirmation.
+                delete: { id in pendingDelete = conversation(id) },
+                loadMore: { Task { await chatManager.loadMoreChats() } }
+            )
         )
-        .onTapGesture { onSelect(convo) }
-        .bfPointerHover()
-        .accessibilityIdentifier("conversationRow")
-        .contextMenu {
-            Button {
-                chatManager.setPinned(convo, !convo.isPinned)
-            } label: {
-                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash" : "pin")
-            }
-            ShareLink(item: convo.markdownExport) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-            Button(role: .destructive) {
-                pendingDelete = convo
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                chatManager.setPinned(convo, !convo.isPinned)
-            } label: {
-                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash" : "pin")
-            }
-            .tint(BFColor.secondaryAdaptive)
-        }
-        // Not `role: .destructive` — that animates the row away before the
-        // confirmation has been answered.
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button {
-                pendingDelete = convo
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            .tint(.red)
-        }
+        .equatable()
     }
 
-    /// Groups by recency of creation, in list order.
-    private func groupedConversations(_ conversations: [Conversation]) -> [ConversationGroup] {
-        let now = Date()
-        let cal = Calendar.current
-
-        var today: [Conversation] = []
-        var yesterday: [Conversation] = []
-        var thisWeek: [Conversation] = []
-        var older: [Conversation] = []
-
-        for conversation in conversations {
-            switch cal.dateComponents([.day], from: conversation.createdAt, to: now).day ?? 0 {
-            case ...0: today.append(conversation)
-            case 1: yesterday.append(conversation)
-            case 2..<7: thisWeek.append(conversation)
-            default: older.append(conversation)
-            }
-        }
-
-        return [("Today", today), ("Yesterday", yesterday), ("This week", thisWeek), ("Older", older)]
-            .filter { !$0.1.isEmpty }
-            .map { ConversationGroup(title: $0.0, conversations: $0.1) }
+    private func conversation(_ id: String) -> Conversation? {
+        chatManager.conversations.first { $0.id == id }
     }
 
     // MARK: - Search results
@@ -402,5 +311,166 @@ struct SidebarSearchResultRow: View {
         .contentShape(Rectangle())
         .animation(BFMotion.easingDefault, value: isHovered)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Conversation rows
+
+/// What a sidebar row shows — compared by value, unlike Conversation (whose == compares only id).
+struct SidebarRowItem: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let isPinned: Bool
+    let createdAt: Date
+
+    init(_ conversation: Conversation) {
+        id = conversation.id
+        title = conversation.title
+        isPinned = conversation.isPinned
+        createdAt = conversation.createdAt
+    }
+}
+
+/// The row actions, kept out of SidebarConversationRows' == so new closures each render don't
+/// count as a change.
+struct SidebarRowActions {
+    let select: (String) -> Void
+    let setPinned: (String, Bool) -> Void
+    let markdownExport: (String) -> String
+    let delete: (String) -> Void
+    let loadMore: () -> Void
+}
+
+private struct SidebarConversationRows: View, Equatable {
+    let rows: [SidebarRowItem]
+    let selectedId: String?
+    let hasMorePages: Bool
+    /// iPhone drawer: a List, for swipe-to-pin/delete. Elsewhere a LazyVStack with the hover menu.
+    let allowsSwipeActions: Bool
+    let actions: SidebarRowActions
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.rows == rhs.rows && lhs.selectedId == rhs.selectedId
+            && lhs.hasMorePages == rhs.hasMorePages && lhs.allowsSwipeActions == rhs.allowsSwipeActions
+    }
+
+    var body: some View {
+        if allowsSwipeActions {
+            List {
+                Group { rowsContent }
+                    .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 2) { rowsContent }
+                    .padding(.horizontal, 8)
+            }
+        }
+    }
+
+    /// Shared by both containers; the List-only row modifiers above are no-ops in the LazyVStack.
+    @ViewBuilder
+    private var rowsContent: some View {
+        let pinned = rows.filter(\.isPinned)
+        if !pinned.isEmpty {
+            SidebarSectionHeader(title: "Pinned")
+            ForEach(pinned) { row(for: $0) }
+        }
+
+        ForEach(groupedRows(rows.filter { !$0.isPinned }), id: \.title) { group in
+            SidebarSectionHeader(title: group.title)
+            ForEach(group.rows) { row(for: $0) }
+        }
+
+        if hasMorePages {
+            // Coming into view near the end of the list loads the next page.
+            ProgressView()
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .onAppear { actions.loadMore() }
+        }
+    }
+
+    private func row(for item: SidebarRowItem) -> some View {
+        SidebarConversationRow(
+            title: item.title,
+            meta: item.createdAt.formatted(.relative(presentation: .named)),
+            isSelected: selectedId == item.id,
+            isPinned: item.isPinned,
+            hoverMenuRows: [
+                BFDropdownRow(
+                    item.isPinned ? "Unpin" : "Pin",
+                    systemImage: item.isPinned ? "pin.slash" : "pin"
+                ) { actions.setPinned(item.id, !item.isPinned) },
+                BFDropdownRow("Delete", systemImage: "trash", role: .destructive) {
+                    actions.delete(item.id)
+                }
+            ]
+        )
+        .onTapGesture { actions.select(item.id) }
+        .bfPointerHover()
+        .accessibilityIdentifier("conversationRow")
+        .contextMenu {
+            Button {
+                actions.setPinned(item.id, !item.isPinned)
+            } label: {
+                Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
+            }
+            ShareLink(item: actions.markdownExport(item.id)) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            Button(role: .destructive) {
+                actions.delete(item.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                actions.setPinned(item.id, !item.isPinned)
+            } label: {
+                Label(item.isPinned ? "Unpin" : "Pin", systemImage: item.isPinned ? "pin.slash" : "pin")
+            }
+            .tint(BFColor.secondaryAdaptive)
+        }
+        // Not `role: .destructive` — that animates the row away before the
+        // confirmation has been answered.
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                actions.delete(item.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .tint(.red)
+        }
+    }
+
+    /// Groups by recency of creation, in list order.
+    private func groupedRows(_ rows: [SidebarRowItem]) -> [(title: String, rows: [SidebarRowItem])] {
+        let now = Date()
+        let cal = Calendar.current
+
+        var today: [SidebarRowItem] = []
+        var yesterday: [SidebarRowItem] = []
+        var thisWeek: [SidebarRowItem] = []
+        var older: [SidebarRowItem] = []
+
+        for row in rows {
+            switch cal.dateComponents([.day], from: row.createdAt, to: now).day ?? 0 {
+            case ...0: today.append(row)
+            case 1: yesterday.append(row)
+            case 2..<7: thisWeek.append(row)
+            default: older.append(row)
+            }
+        }
+
+        return [("Today", today), ("Yesterday", yesterday), ("This week", thisWeek), ("Older", older)]
+            .filter { !$0.1.isEmpty }
+            .map { (title: $0.0, rows: $0.1) }
     }
 }

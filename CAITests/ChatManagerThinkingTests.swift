@@ -397,3 +397,29 @@ final class ChatManagerThinkingTests: XCTestCase {
         XCTAssertEqual(CountingURLProtocol.messagesRequests, 0, "a concurrent load of the same chat must not fetch again")
     }
 }
+
+/// The live thought text keeps what an update shares with what's shown (TypingText.sharedStart),
+/// so a growing thought never restarts and a new one types in at once.
+final class TypingTextSharedStartTests: XCTestCase {
+    func testGrowthContinuesFromWhatIsShown() {
+        XCTAssertEqual(TypingText.sharedStart("The user wants", "The user wants five customers"), "The user wants")
+    }
+
+    func testRecaptionedEndingKeepsTheWholeWordsItShares() {
+        // The router cuts long captions with "…" — the next caption changes that ending.
+        XCTAssertEqual(
+            TypingText.sharedStart("Checking the travel service for…", "Checking the travel service for passengers"),
+            "Checking the travel service"
+        )
+    }
+
+    func testANewThoughtStartsFromScratch() {
+        XCTAssertEqual(TypingText.sharedStart("Listing the services", "Querying A_Customer"), "")
+    }
+
+    func testNeverCutsMidWord() {
+        XCTAssertEqual(TypingText.sharedStart("Reading the custom", "Reading the customers"), "Reading the custom")
+        XCTAssertEqual(TypingText.sharedStart("Reading the customs", "Reading the customers"), "Reading the")
+    }
+}
+
