@@ -12,6 +12,10 @@ import CryptoKit
 final class AuthManager: NSObject, ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = false
+    /// True while the browser sign-in (Google, Microsoft) is open. The login screen stays up
+    /// with a Cancel button instead of the full-screen spinner: if the browser never calls
+    /// back (closed tab, a browser that doesn't complete the hand-off), the user can get out.
+    @Published var isAwaitingWebSignIn = false
     /// True from init until the first restoreSession() completes. Prevents
     /// the login screen flashing before the Keychain check finishes.
     @Published var isRestoringSession = true
@@ -22,6 +26,9 @@ final class AuthManager: NSObject, ObservableObject {
     private var refreshToken: String?
     private var tokenExpiresAt: Date?
     private var webAuthSession: ASWebAuthenticationSession?
+    /// Identifies the current browser sign-in, so the late callback of one that was replaced
+    /// or cancelled can't clear the state of the next.
+    private var webAuthAttempt: UUID?
 
     /// Background timer that refreshes the access token shortly before it
     /// expires, keeping the session silently alive while the app is open
@@ -91,48 +98,6 @@ final class AuthManager: NSObject, ObservableObject {
 
     private var logoutURL: URL {
         URL(string: "\(Config.keycloakBaseURL)/realms/\(realm)/protocol/openid-connect/logout")!
-    }
-
-    // MARK: - Web OAuth Login (Google, Microsoft via Keycloak IDP)
-
-    func login(realm: String = "individual", idpHint: String? = nil) {
-        self.realm = realm
-        isLoading = true
-        error = nil
-
-        guard let (verifier, challenge) = generatePKCE() else {
-            error = .authenticationFailed("Could not generate PKCE parameters")
-            isLoading = false
-            return
-        }
-        let state = generateRandomToken(byteCount: 16)
-        pendingVerifier = verifier
-        pendingState = state
-
-        guard let url = authorizationURL(idpHint: idpHint, codeChallenge: challenge, state: state) else {
-            error = .invalidURL
-            isLoading = false
-            return
-        }
-
-        webAuthSession = ASWebAuthenticationSession(
-            url: url,
-            callbackURLScheme: Config.redirectScheme
-        ) { [weak self] callbackURL, error in
-            Task { @MainActor in
-                self?.handleAuthCallback(callbackURL: callbackURL, error: error)
-            }
-        }
-
-        webAuthSession?.presentationContextProvider = self
-        // Ephemeral, not shared with Safari's cookie jar: a shared session silently
-        // reused whatever IdP account (Google, etc.) happened to already be signed
-        // into Safari on the device, with no way to pick a different one short of
-        // manually clearing Safari's website data first. Ephemeral always shows the
-        // IdP's own account picker/login form fresh, at the cost of not remembering
-        // a previously-used IdP session between logins.
-        webAuthSession?.prefersEphemeralWebBrowserSession = true
-        webAuthSession?.start()
     }
 
     // MARK: - Native Apple Sign-In
@@ -434,7 +399,9 @@ final class AuthManager: NSObject, ObservableObject {
             pendingState = nil
             pendingVerifier = nil
         }
-        isLoading = false
+        webAuthSession = nil
+        webAuthAttempt = nil
+        isAwaitingWebSignIn = false
 
         if let error = error {
             let asError = error as? ASWebAuthenticationSessionError
@@ -687,6 +654,80 @@ final class AuthManager: NSObject, ObservableObject {
         }
     }
 
+}
+
+// MARK: - Web Sign-In
+// In an extension to keep AuthManager's class body under type_body_length, like the
+// helpers below.
+
+extension AuthManager {
+
+    // MARK: - Web OAuth Login (Google, Microsoft via Keycloak IDP)
+
+    func login(realm: String = "individual", idpHint: String? = nil) {
+        // A sign-in still open in the browser blocks a new one (only one runs at a time).
+        webAuthAttempt = nil
+        webAuthSession?.cancel()
+        self.realm = realm
+        isAwaitingWebSignIn = true
+        error = nil
+
+        guard let (verifier, challenge) = generatePKCE() else {
+            error = .authenticationFailed("Could not generate PKCE parameters")
+            isAwaitingWebSignIn = false
+            return
+        }
+        let state = generateRandomToken(byteCount: 16)
+        pendingVerifier = verifier
+        pendingState = state
+
+        guard let url = authorizationURL(idpHint: idpHint, codeChallenge: challenge, state: state) else {
+            error = .invalidURL
+            isAwaitingWebSignIn = false
+            return
+        }
+
+        let attempt = UUID()
+        webAuthAttempt = attempt
+        webAuthSession = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: Config.redirectScheme
+        ) { [weak self] callbackURL, error in
+            Task { @MainActor in
+                guard let self, self.webAuthAttempt == attempt else { return }
+                self.handleAuthCallback(callbackURL: callbackURL, error: error)
+            }
+        }
+
+        webAuthSession?.presentationContextProvider = self
+        // Ephemeral, not shared with Safari's cookie jar: a shared session silently
+        // reused whatever IdP account (Google, etc.) happened to already be signed
+        // into Safari on the device, with no way to pick a different one short of
+        // manually clearing Safari's website data first. Ephemeral always shows the
+        // IdP's own account picker/login form fresh, at the cost of not remembering
+        // a previously-used IdP session between logins.
+        webAuthSession?.prefersEphemeralWebBrowserSession = true
+        guard webAuthSession?.start() == true else {
+            // The system didn't open the sign-in (e.g. another app's sign-in is still in
+            // progress); without this the screen would wait for a callback that never comes.
+            webAuthSession = nil
+            webAuthAttempt = nil
+            isAwaitingWebSignIn = false
+            error = .authenticationFailed("Couldn't open the sign-in page. Close any open sign-in windows and try again.")
+            return
+        }
+    }
+
+    /// Ends a browser sign-in that's still open — the user gave up on it (closed tab, a
+    /// browser that never returns to the app). Reported as a cancel, so no error is shown.
+    func cancelWebSignIn() {
+        webAuthAttempt = nil
+        webAuthSession?.cancel()
+        webAuthSession = nil
+        pendingState = nil
+        pendingVerifier = nil
+        isAwaitingWebSignIn = false
+    }
 }
 
 // MARK: - Keychain / Crypto / JWT Helpers
