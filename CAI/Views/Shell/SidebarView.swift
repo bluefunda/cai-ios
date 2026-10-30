@@ -127,7 +127,7 @@ struct SidebarView: View {
                 SidebarDestinationRow(
                     destination: destination,
                     isSelected: workspace.currentDestination == destination,
-                    badge: destination == .requests(.inbox) ? unreadCount : 0
+                    badge: destination == .requests(.requests) ? unreadCount : 0
                 ) {
                     workspace.navigate(to: destination)
                     closeDrawer()
@@ -192,7 +192,7 @@ struct SidebarView: View {
     }
 
     /// The Requests segment carries the count only while the user is in the other space;
-    /// inside Requests, the Inbox row shows it instead.
+    /// inside Requests, the Requests row shows it instead.
     private func spaceBadges(active: AppSpace) -> [AppSpace: Int] {
         active == .requests ? [:] : [.requests: unreadCount]
     }

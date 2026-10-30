@@ -32,10 +32,13 @@ final class WorkspaceStore: ObservableObject {
     /// Every org alias in the current token, fed from `AuthManager.currentUser`
     /// by `CAIApp` whenever the user changes (sign-in, refresh, sign-out).
     @Published private(set) var organizations: [String] = []
+    /// The token's BlueRequests roles (`User.requestsRoles`), fed the same way.
+    @Published private(set) var requestsRoles: [String] = []
 
-    /// The persisted choice — may name a space that isn't currently available
-    /// (e.g. before sign-in, or after leaving the `trm` org). Kept as-is so the
-    /// choice survives a transient loss of entitlement; read `activeSpace`.
+    /// The chosen space for this session — may name a space that isn't currently
+    /// available (e.g. after leaving the `trm` org). Kept as-is so the choice
+    /// survives a transient loss of entitlement; read `activeSpace`. Each launch
+    /// starts in Assistant (see init).
     @Published private var storedSpace: AppSpace {
         didSet { defaults.set(storedSpace.rawValue, forKey: Self.activeSpaceKey) }
     }
@@ -57,7 +60,9 @@ final class WorkspaceStore: ObservableObject {
         self.defaults = defaults
         self.isRequestsFeatureEnabled = isRequestsFeatureEnabled
         self.isRequestsFixturesEnabled = isRequestsFixturesEnabled
-        storedSpace = defaults.string(forKey: Self.activeSpaceKey).flatMap(AppSpace.init(rawValue:)) ?? .assistant
+        // Every launch opens in Assistant — chat is the app's home — whatever space was last
+        // used; each space still remembers its own last destination.
+        storedSpace = .assistant
         migrateLegacyAppMode()
     }
 
@@ -96,6 +101,20 @@ final class WorkspaceStore: ObservableObject {
         guard organizations != self.organizations else { return }
         self.organizations = organizations
     }
+
+    func update(requestsRoles: [String]) {
+        guard requestsRoles != self.requestsRoles else { return }
+        self.requestsRoles = requestsRoles
+    }
+
+    /// Requests destinations this user's roles allow (Releases needs `release-manager`).
+    var availableRequestsDestinations: [RequestsDestination] {
+        RequestsDestination.available(roles: requestsRoles)
+    }
+
+    /// trm's web shows its admin screens only to this role; the app's admin
+    /// destinations will check it too.
+    var isRequestsAdmin: Bool { requestsRoles.contains("admin") }
 
     // MARK: - Active Space
 

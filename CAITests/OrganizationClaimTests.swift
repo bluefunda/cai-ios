@@ -54,4 +54,16 @@ final class OrganizationClaimTests: XCTestCase {
         XCTAssertEqual(user.organization, "acme")
         XCTAssertNil(User(id: "u", email: "", name: "", roles: []).organization)
     }
+
+    func test_requestsRoles_comeFromAdminTrmClientOnly() {
+        let claims: [String: Any] = [
+            "realm_access": ["roles": ["admin"]],
+            "resource_access": [
+                "admin-trm": ["roles": ["release-manager", "default-roles-trm"]],
+                "account": ["roles": ["admin"]]
+            ]
+        ]
+        XCTAssertEqual(AuthManager.requestsRoles(from: claims), ["release-manager", "default-roles-trm"])
+        XCTAssertEqual(AuthManager.requestsRoles(from: ["realm_access": ["roles": ["admin"]]]), [])
+    }
 }

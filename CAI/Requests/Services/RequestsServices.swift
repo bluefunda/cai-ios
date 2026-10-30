@@ -17,6 +17,8 @@ struct RequestsServices {
     let attachmentService: AttachmentServicing
     let crFileService: CRFileServicing
     let teamService: TeamServicing
+    let messagesService: MessagesServicing
+    let adminService: AdminServicing
 
     init(authManager: AuthManager, useFixtures: Bool = BFFeatureFlags.requestsFixtures) {
         if useFixtures {
@@ -30,6 +32,8 @@ struct RequestsServices {
             attachmentService = FixtureAttachmentService()
             crFileService = FixtureCRFileService()
             teamService = FixtureTeamService()
+            messagesService = FixtureMessagesService()
+            adminService = FixtureAdminService()
             return
         }
 
@@ -53,6 +57,8 @@ struct RequestsServices {
         attachmentService = AttachmentService(client: client, currentUserProvider: currentUserProvider)
         crFileService = CRFileService(client: client)
         teamService = TeamService(client: client)
+        messagesService = MessagesService(client: client, currentUserProvider: currentUserProvider)
+        adminService = AdminService(client: client)
     }
 }
 

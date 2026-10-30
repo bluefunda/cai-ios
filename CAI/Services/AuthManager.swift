@@ -607,11 +607,13 @@ final class AuthManager: NSObject, ObservableObject {
 
         if var user = decodeJWT(response.accessToken) {
             if user.name.isEmpty, let name = appleFullName {
-                user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles, organizations: user.organizations)
+                user = User(id: user.id, email: user.email.isEmpty ? (appleEmail ?? "") : user.email, name: name, roles: user.roles, organizations: user.organizations,
+                            requestsRoles: user.requestsRoles)
                 needsProfileSync = true
             }
             if user.email.isEmpty, let email = appleEmail {
-                user = User(id: user.id, email: email, name: user.name, roles: user.roles, organizations: user.organizations)
+                user = User(id: user.id, email: email, name: user.name, roles: user.roles, organizations: user.organizations,
+                            requestsRoles: user.requestsRoles)
                 needsProfileSync = true
             }
             currentUser = user
@@ -759,8 +761,16 @@ extension AuthManager {
             email: json["email"] as? String ?? "",
             name:  Self.displayName(from: json),
             roles: (json["realm_access"] as? [String: Any])?["roles"] as? [String] ?? [],
-            organizations: Self.organizations(from: json)
+            organizations: Self.organizations(from: json),
+            requestsRoles: Self.requestsRoles(from: json)
         )
+    }
+
+    /// `resource_access.admin-trm.roles` — see AppConfig.requestsRolesClient.
+    nonisolated static func requestsRoles(from json: [String: Any]) -> [String] {
+        let access = json["resource_access"] as? [String: Any]
+        let client = access?[AppConfig.requestsRolesClient] as? [String: Any]
+        return client?["roles"] as? [String] ?? []
     }
 
     /// Mirrors cai-bff's extractOrganization (internal/transport/http/handler.go) —
@@ -870,6 +880,10 @@ struct User: Codable, Identifiable {
     /// here for the same reason it's picked there, so the user can see which
     /// one won.
     var organization: String? { organizations.first }
+
+    /// BlueRequests roles (`admin-trm` client roles) — gate Requests destinations
+    /// the way trm's web nav does (see RequestsDestination.requiredRole).
+    var requestsRoles: [String] = []
 
     var isAdmin: Bool { roles.contains("admin") }
 }

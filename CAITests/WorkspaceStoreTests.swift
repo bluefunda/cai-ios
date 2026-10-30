@@ -85,9 +85,10 @@ final class WorkspaceStoreTests: XCTestCase {
         store.update(organizations: ["trm"])
         XCTAssertEqual(store.activeSpace, .requests)
 
+        // Every launch opens in Assistant, whatever space was last used.
         let relaunched = makeStore(flag: true)
         relaunched.update(organizations: ["trm"])
-        XCTAssertEqual(relaunched.activeSpace, .requests)
+        XCTAssertEqual(relaunched.activeSpace, .assistant)
     }
 
     func test_lastDestination_isPerSpaceAndPersisted() {

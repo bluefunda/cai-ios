@@ -43,28 +43,54 @@ enum AssistantDestination: String, CaseIterable, Identifiable {
 /// WorkspaceStore.availableSpaces. The screens behind these land with the Requests
 /// port; until then each shows a placeholder.
 enum RequestsDestination: String, CaseIterable, Identifiable {
-    case inbox, requests, projects, releases, teams
+    case messages, requests, projects, releases, teams, git
+    // Admin only (trm's web nav shows these under its admin section).
+    case userManagement, requestTemplates, manageTeams, configurations
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .inbox: return "Inbox"
+        case .messages: return "Messages"
         case .requests: return "Requests"
         case .projects: return "Projects"
         case .releases: return "Releases"
         case .teams: return "Teams"
+        case .git: return "Git"
+        case .userManagement: return "User Management"
+        case .requestTemplates: return "Request Templates"
+        case .manageTeams: return "Manage Teams"
+        case .configurations: return "Configurations"
         }
     }
 
     var icon: String {
         switch self {
-        case .inbox: return "tray"
+        case .messages: return "bubble.left.and.bubble.right"
         case .requests: return "doc.text"
         case .projects: return "folder.badge.gearshape"
         case .releases: return "shippingbox"
         case .teams: return "person.2"
+        case .git: return "arrow.triangle.branch"
+        case .userManagement: return "person.badge.key"
+        case .requestTemplates: return "doc.on.doc"
+        case .manageTeams: return "person.3"
+        case .configurations: return "gearshape.2"
         }
+    }
+
+    /// The `admin-trm` role trm's web nav requires to show this destination
+    /// (leftNavbar/index.js); nil means every Requests user sees it.
+    var requiredRole: String? {
+        switch self {
+        case .releases: return "release-manager"
+        case .userManagement, .requestTemplates, .manageTeams, .configurations: return "admin"
+        case .messages, .requests, .projects, .teams, .git: return nil
+        }
+    }
+
+    static func available(roles: [String]) -> [RequestsDestination] {
+        allCases.filter { $0.requiredRole.map(roles.contains) ?? true }
     }
 }
 
@@ -113,20 +139,21 @@ struct SidebarLayout: Equatable {
     let activeSpace: AppSpace
     let destinations: [SidebarDestination]
 
-    init(availableSpaces: [AppSpace], activeSpace: AppSpace) {
+    init(availableSpaces: [AppSpace], activeSpace: AppSpace, requestsRoles: [String] = []) {
         spaces = availableSpaces
         showsSpaceSwitcher = availableSpaces.count > 1
         // Never render a space the user can't use, whatever was persisted.
         self.activeSpace = availableSpaces.contains(activeSpace) ? activeSpace : .assistant
         switch self.activeSpace {
         case .assistant: destinations = AssistantDestination.allCases.map { .assistant($0) }
-        case .requests: destinations = RequestsDestination.allCases.map { .requests($0) }
+        case .requests: destinations = RequestsDestination.available(roles: requestsRoles).map { .requests($0) }
         }
     }
 
     @MainActor
     init(workspace: WorkspaceStore) {
-        self.init(availableSpaces: workspace.availableSpaces, activeSpace: workspace.activeSpace)
+        self.init(availableSpaces: workspace.availableSpaces, activeSpace: workspace.activeSpace,
+                  requestsRoles: workspace.requestsRoles)
     }
 }
 
@@ -140,9 +167,12 @@ extension WorkspaceStore {
         set { setLastDestination(newValue.rawValue, for: .assistant) }
     }
 
+    /// Falls back to Requests when the stored destination needs a role the user
+    /// doesn't have (or no longer has).
     var requestsDestination: RequestsDestination {
         get {
-            lastDestination(for: .requests).flatMap(RequestsDestination.init(rawValue:)) ?? .requests
+            let stored = lastDestination(for: .requests).flatMap(RequestsDestination.init(rawValue:))
+            return stored.flatMap { availableRequestsDestinations.contains($0) ? $0 : nil } ?? .requests
         }
         set { setLastDestination(newValue.rawValue, for: .requests) }
     }
@@ -162,7 +192,7 @@ extension WorkspaceStore {
             activeSpace = .assistant
             assistantDestination = assistant
         case .requests(let requests):
-            guard isRequestsAvailable else { return }
+            guard isRequestsAvailable, availableRequestsDestinations.contains(requests) else { return }
             activeSpace = .requests
             requestsDestination = requests
         }

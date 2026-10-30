@@ -41,15 +41,15 @@ enum BFFeatureFlags {
     }
 
     /// The BlueRequests space (change requests, projects, releases, teams) for
-    /// members of the `trm` Keycloak organization. Off by default until the
-    /// backend accepts `individual`-realm tokens on /requests and maps the org
-    /// claim to the tenant (see docs/BLUEREQUESTS_INTEGRATION.md, "Tenancy").
-    /// Even when on, the space only appears for `trm` org members — see
-    /// WorkspaceStore.availableSpaces.
+    /// members of the `trm` Keycloak organization. On by default: it appears for
+    /// every `trm` org member and for nobody else (see
+    /// WorkspaceStore.availableSpaces). The backend accepts `individual`-realm
+    /// tokens on /requests and maps the org claim to the tenant (trm-gw#68,
+    /// trm-bff#42, trm-backend-go#197). Kill switch: -bf_feature_requests NO
     static var requestsEnabled: Bool {
         UserDefaults.standard.object(forKey: Keys.requests) != nil
             ? UserDefaults.standard.bool(forKey: Keys.requests)
-            : false
+            : true
     }
 
     /// Backs every BlueRequests service with RequestsFixtures' canned data

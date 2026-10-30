@@ -22,9 +22,11 @@ final class SidebarLayoutTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeStore(flag: Bool, organizations: [String]) -> WorkspaceStore {
+    private func makeStore(flag: Bool, organizations: [String],
+                           requestsRoles: [String] = []) -> WorkspaceStore {
         let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { flag }, isRequestsFixturesEnabled: { false })
         store.update(organizations: organizations)
+        store.update(requestsRoles: requestsRoles)
         return store
     }
 
@@ -61,8 +63,32 @@ final class SidebarLayoutTests: XCTestCase {
         store.navigate(to: .requests(.projects))
         let layout = SidebarLayout(workspace: store)
         XCTAssertEqual(layout.activeSpace, .requests)
-        XCTAssertEqual(layout.destinations, RequestsDestination.allCases.map { .requests($0) })
+        // No `release-manager` role: everything but Releases.
+        XCTAssertEqual(layout.destinations, [.requests(.messages), .requests(.requests), .requests(.projects),
+                                             .requests(.teams), .requests(.git)])
         XCTAssertEqual(store.currentDestination, .requests(.projects))
+    }
+
+    func test_releases_onlyForReleaseManagers() {
+        let member = makeStore(flag: true, organizations: ["trm"])
+        member.navigate(to: .requests(.releases))
+        XCTAssertNotEqual(member.currentDestination, .requests(.releases))
+
+        let manager = makeStore(flag: true, organizations: ["trm"], requestsRoles: ["release-manager"])
+        manager.navigate(to: .requests(.releases))
+        XCTAssertEqual(manager.currentDestination, .requests(.releases))
+        XCTAssertFalse(SidebarLayout(workspace: manager).destinations.contains(.requests(.configurations)))
+
+        // Admins get the admin destinations; both roles get everything.
+        let admin = makeStore(flag: true, organizations: ["trm"], requestsRoles: ["admin", "release-manager"])
+        admin.navigate(to: .requests(.configurations))
+        XCTAssertEqual(admin.currentDestination, .requests(.configurations))
+        XCTAssertEqual(SidebarLayout(workspace: admin).destinations,
+                       RequestsDestination.allCases.map { .requests($0) })
+
+        // Losing the role drops the remembered destination back to Requests.
+        manager.update(requestsRoles: [])
+        XCTAssertEqual(manager.currentDestination, .requests(.requests))
     }
 
     func test_eachSpaceRemembersItsLastDestination() {
@@ -111,5 +137,6 @@ final class SidebarLayoutTests: XCTestCase {
         XCTAssertEqual(AssistantDestination.allCases, [.chats, .code, .files, .agents])
         XCTAssertEqual(ShellKeyboardShortcuts.key(forIndex: 0), "1")
         XCTAssertEqual(ShellKeyboardShortcuts.key(forIndex: 3), "4")
+        XCTAssertEqual(ShellKeyboardShortcuts.key(forIndex: 8), "9")
     }
 }

@@ -20,6 +20,7 @@ final class RequestsState: ObservableObject {
     @Published private(set) var projects: ProjectsListViewModel?
     @Published private(set) var releases: ReleasesListViewModel?
     @Published private(set) var teams: TeamsListViewModel?
+    @Published private(set) var messages: MessagesListViewModel?
 
     /// The Requests destination's NavigationStack path (change request ids).
     @Published var requestsPath: [String] = []
@@ -55,6 +56,7 @@ final class RequestsState: ObservableObject {
             projects = nil
             releases = nil
             teams = nil
+            messages = nil
             return
         }
         changeRequests = ChangeRequestListViewModel(
@@ -64,6 +66,7 @@ final class RequestsState: ObservableObject {
         projects = ProjectsListViewModel(service: services.projectService)
         releases = ReleasesListViewModel(service: services.releaseService)
         teams = TeamsListViewModel(service: services.teamService)
+        messages = MessagesListViewModel(service: services.messagesService, currentUserId: currentUserId)
     }
 
     func makeNewRequestModel(lockedProjectId: String? = nil) -> NewChangeRequestViewModel? {
@@ -89,7 +92,9 @@ final class RequestsState: ObservableObject {
         case .projects: await projects?.load(forceRefresh: true)
         case .releases: await releases?.load()
         case .teams: await teams?.load(forceRefresh: true)
-        case .inbox: break
+        case .messages: await messages?.load()
+        // These screens own their state and reload on pull-to-refresh.
+        case .git, .userManagement, .requestTemplates, .manageTeams, .configurations: break
         }
     }
 }

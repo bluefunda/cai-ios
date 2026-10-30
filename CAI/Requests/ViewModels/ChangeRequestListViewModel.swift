@@ -98,31 +98,19 @@ final class ChangeRequestListViewModel: ObservableObject {
         await load()
     }
 
+    /// The web's CHANGE_REQUEST_PAGE_SIZE.
+    static let pageSize = 50
+    @Published private(set) var hasMore = false
+    @Published private(set) var isLoadingMore = false
+
     func load() async {
         isLoading = true
         error = nil
-        let filter = ChangeRequestFilter(
-            archive: archiveTab == .archived,
-            reqOwner: advancedFilters.ownerIsMe ? currentUserId : nil,
-            requestType: advancedFilters.requestType.isEmpty ? nil : advancedFilters.requestType,
-            severity: advancedFilters.severity,
-            assignee: advancedFilters.assigneeIsMe ? currentUserId : nil,
-            projectId: projectId,
-            // Reinstated after locally confirming the unbounded fetch really does fail —
-            // even with retries bumped to 5 attempts/600ms backoff (AppConfig), it still
-            // hit "network connection lost" repeatably, meaning trm#139's per-row
-            // enrichment (severity/type/project/timeline, up to 7 extra DB round trips per
-            // change request, see ChangeRequestService's doc comments) is a real, current
-            // problem for this account — not just theoretical caution, and not something
-            // more retries can paper over (retries only help transient blips, not a query
-            // that struggles on every attempt). Unlike trm-backend-go#116, #139 hasn't been
-            // fixed server-side, so this cap stays until it is.
-            limit: 5
-        )
         do {
-            let result = try await service.listChangeRequests(filter: filter)
+            let result = try await service.listChangeRequests(filter: filter(offset: 0))
             guard !Task.isCancelled else { return }
             changeRequests = result
+            hasMore = result.count >= Self.pageSize
         } catch {
             guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
@@ -130,5 +118,52 @@ final class ChangeRequestListViewModel: ObservableObject {
         guard !Task.isCancelled else { return }
         isLoading = false
         hasLoaded = true
+    }
+
+    /// The next page, as the web's List view loads on scroll. Rows already shown are
+    /// skipped, in case the list shifted between pages.
+    func loadMore() async {
+        guard hasMore, !isLoading, !isLoadingMore else { return }
+        isLoadingMore = true
+        do {
+            let page = try await service.listChangeRequests(filter: filter(offset: changeRequests.count))
+            let known = Set(changeRequests.map(\.id))
+            changeRequests += page.filter { !known.contains($0.id) }
+            hasMore = page.count >= Self.pageSize
+        } catch {
+            self.error = error.localizedDescription
+        }
+        isLoadingMore = false
+    }
+
+    /// The board's drag and drop — the same status update the web's Grid view sends on
+    /// drop (changeRequestUpdateFunc), then a reload so the card lands in its new column.
+    func move(_ id: String, to status: ChangeRequestStatus) async {
+        guard let current = changeRequests.first(where: { $0.id == id }), current.status != status else { return }
+        do {
+            try await service.update(ChangeRequestUpdatePayload(
+                id: id,
+                createdBy: currentUserId ?? "",
+                updatedBy: currentUserId ?? "",
+                status: status.rawValue
+            ))
+            await load()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Same params as the web's getChangeRequestByFilter.
+    private func filter(offset: Int) -> ChangeRequestFilter {
+        ChangeRequestFilter(
+            archive: archiveTab == .archived,
+            reqOwner: advancedFilters.ownerIsMe ? currentUserId : nil,
+            requestType: advancedFilters.requestType.isEmpty ? nil : advancedFilters.requestType,
+            severity: advancedFilters.severity,
+            assignee: advancedFilters.assigneeIsMe ? currentUserId : nil,
+            projectId: projectId,
+            limit: Self.pageSize,
+            offset: offset
+        )
     }
 }

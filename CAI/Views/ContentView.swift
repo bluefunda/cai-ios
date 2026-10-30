@@ -283,8 +283,8 @@ struct AppShell: View {
         // Several stacks under the split view's detail column broke push navigation and
         // stacked every screen's toolbar at once on Mac Catalyst (trm-ios). State lives
         // in RequestsState, so switching back reconnects instead of refetching.
-        case .requests(.inbox):
-            InboxView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.messages):
+            MessagesView(state: requestsState, navigationControl: navigationControl)
         case .requests(.requests):
             ChangeRequestListView(state: requestsState, navigationControl: navigationControl)
         case .requests(.projects):
@@ -293,6 +293,16 @@ struct AppShell: View {
             ReleasesListView(state: requestsState, navigationControl: navigationControl)
         case .requests(.teams):
             TeamsListView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.git):
+            GitReposView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.userManagement):
+            UserManagementView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.requestTemplates):
+            RequestTemplatesView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.manageTeams):
+            ManageTeamsView(state: requestsState, navigationControl: navigationControl)
+        case .requests(.configurations):
+            ConfigurationsView(state: requestsState, navigationControl: navigationControl)
         }
     }
 

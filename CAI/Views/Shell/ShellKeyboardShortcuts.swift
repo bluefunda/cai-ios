@@ -20,12 +20,13 @@ struct ShellKeyboardShortcuts: View {
 
     var body: some View {
         ZStack {
-            ForEach(Array(destinations.enumerated()), id: \.element) { index, destination in
+            // ⌘1–⌘9 only: an admin's Requests space has more destinations than digits.
+            ForEach(Array(destinations.prefix(9).enumerated()), id: \.element) { index, destination in
                 Button(destination.title) { onDestination(destination) }
                     .keyboardShortcut(Self.key(forIndex: index), modifiers: .command)
             }
             if spaces.count > 1 {
-                ForEach(Array(spaces.enumerated()), id: \.element) { index, space in
+                ForEach(Array(spaces.prefix(9).enumerated()), id: \.element) { index, space in
                     Button("\(space.title) space") { onSpace(space) }
                         .keyboardShortcut(Self.key(forIndex: index), modifiers: [.command, .control])
                 }
@@ -42,7 +43,8 @@ struct ShellKeyboardShortcuts: View {
         .accessibilityHidden(true)
     }
 
-    /// "1" for the first item, "2" for the second, …
+    /// "1" for the first item, "2" for the second, … up to "9" — callers pass at most
+    /// nine items, since a KeyEquivalent is a single character.
     static func key(forIndex index: Int) -> KeyEquivalent {
         KeyEquivalent(Character(String(index + 1)))
     }

@@ -8,6 +8,8 @@ import SwiftUI
 /// (P13 keeps everything around the stage rail quiet).
 struct ChangeRequestGridView: View {
     let requests: [ChangeRequest]
+    /// A card dropped on a status column (id, new status), as the web's board allows.
+    var onMove: ((String, ChangeRequestStatus) -> Void)?
 
     private enum ColumnKey: Hashable {
         case status(ChangeRequestStatus)
@@ -46,7 +48,8 @@ struct ChangeRequestGridView: View {
     var body: some View {
         HStack(alignment: .top, spacing: BFSpacing._3) {
             ForEach(columns) { column in
-                BoardColumn(title: column.title, mark: column.mark, requests: column.requests)
+                BoardColumn(title: column.title, mark: column.mark, requests: column.requests,
+                            onDrop: dropHandler(for: column.key))
                     .frame(maxWidth: .infinity)
             }
         }
@@ -54,12 +57,20 @@ struct ChangeRequestGridView: View {
         .padding(.vertical, BFSpacing._3)
         .background(BFColor.surfaceCanvas)
     }
+
+    /// Only the real status columns take drops — "Other" has no status to set.
+    private func dropHandler(for key: ColumnKey) -> ((String) -> Void)? {
+        guard let onMove, case .status(let status) = key else { return nil }
+        return { id in onMove(id, status) }
+    }
 }
 
 private struct BoardColumn: View {
     let title: String
     let mark: Color
     let requests: [ChangeRequest]
+    let onDrop: ((String) -> Void)?
+    @State private var isTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: BFSpacing._2) {
@@ -91,6 +102,7 @@ private struct BoardColumn: View {
                             }
                             .buttonStyle(.plain)
                             .bfPointerHover()
+                            .draggable(request.id) { BoardCard(request: request).frame(width: 220) }
                             .accessibilityIdentifier("requests.crRow.\(request.id)")
                         }
                     }
@@ -99,8 +111,17 @@ private struct BoardColumn: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(BFColor.surfaceSunken.opacity(0.5), in: RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous)
+                .strokeBorder(BFColor.primary, lineWidth: isTargeted ? 1.5 : 0)
+        )
+        .dropDestination(for: String.self) { ids, _ in
+            guard let onDrop, let id = ids.first else { return false }
+            onDrop(id)
+            return true
+        } isTargeted: { isTargeted = onDrop != nil && $0 }
     }
 }
 

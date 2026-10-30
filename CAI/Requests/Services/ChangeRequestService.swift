@@ -12,20 +12,10 @@ import Foundation
 // logged-in user's id on first visit. See ChangeRequestFilter below for the exact param
 // mapping.
 //
-// ⚠️ Deliberately uses `/change-requests`, NOT `/rest/trm/v1/change-request`, despite the
-// latter being what changeRequestHome.js actually calls (via GO_URL/BASE_URL_APP_GO) and
-// both routing to the exact same trm-backend-go handler (`getChangeRequest` →
-// `getChangeRequestsByParams`, changeRequest.go:212). Direct hurl testing against the live
-// gateway (services/vars.env creds, both routes, same account) showed `/rest/trm/v1/
-// change-request` failing with a flat, consistent HTTP 500 + empty body — not intermittent,
-// not cold-cache-related, reproduced on 3/3 attempts — while `/change-requests` (the
-// BFF-proxied route: gateway → trm-bff's generic reverse-proxy → trm-backend-go, two hops)
-// succeeded cleanly every time for the same account. So despite `/change-requests` being
-// the route trm's own UI does *not* use (only the unused `getAllChangeRequest()` picker
-// helper does), it's the one that's actually reachable and working right now. Revisit this
-// if the direct route's outage gets fixed — the two-hop hurl route did still reproduce the
-// truncation issue from bluefunda/trm#139 for a large-enough dataset in earlier testing, so
-// this isn't a full fix for that, just the only currently-working option of the two.
+// Uses `/rest/trm/v1/change-request` — the route changeRequestHome.js calls (via GO_URL),
+// with the same 50-row pages and `offset` paging. It used to go through the BFF's
+// `/change-requests` instead, while this route 500'd; both reach the same trm-backend-go
+// handler (`getChangeRequestsByParams`), so the response shape is unchanged.
 //
 // Both list and detail hit this same endpoint — it accepts `id` as one of its filter query
 // strings, so "detail" is just "list filtered down to one." There's no separate detail
@@ -63,20 +53,17 @@ struct ChangeRequestFilter {
     var severity: String?
     var assignee: String?
     /// Scopes the list to one project's change requests (Project Detail's embedded list).
-    /// Confirmed allow-listed on this same `/change-requests` BFF route by trm-gw's own
-    /// `bff-change-requests-get.tmpl` — deliberately NOT the direct-gateway singular
-    /// `/rest/trm/v1/change-request` route trm's own web app uses for this, since that route
-    /// is the one confirmed reproducibly 500ing earlier this session (see this file's header
-    /// doc comment).
+    /// Same param projectDetails.js sends.
     var projectId: String?
     /// Caps each response to a size trm-gw's gateway timeout can reliably complete within —
     /// per-row enrichment in trm-backend-go (severity/type/project/timeline, up to 7 extra DB
     /// round trips per change request) made an unbounded fetch a real truncation risk
     /// (bluefunda/trm#139). Requires trm-gw >= v9.3.3 (bluefunda/trm-gw#66), which allow-lists
-    /// `limit` on both change-request routes — older deployments silently drop it. No `offset`
-    /// yet: there's no "load more" UI to page through further results, so a single capped
-    /// fetch is all that's needed for now.
+    /// `limit` on both change-request routes — older deployments silently drop it. Used
+    /// as the page size, with `offset`, for List view's load-more — the web's
+    /// CHANGE_REQUEST_PAGE_SIZE.
     var limit: Int? = 50
+    var offset: Int?
 
     fileprivate var queryItems: [URLQueryItem] {
         var items: [URLQueryItem] = []
@@ -89,6 +76,7 @@ struct ChangeRequestFilter {
         if let assignee, !assignee.isEmpty { items.append(URLQueryItem(name: "user", value: assignee)) }
         if let projectId, !projectId.isEmpty { items.append(URLQueryItem(name: "projectId", value: projectId)) }
         if let limit, limit > 0 { items.append(URLQueryItem(name: "limit", value: String(limit))) }
+        if let offset, offset > 0 { items.append(URLQueryItem(name: "offset", value: String(offset))) }
         return items
     }
 }
@@ -97,9 +85,12 @@ struct ChangeRequestService: ChangeRequestServicing {
     let client: RequestsAPIClient
     let projectService: ProjectServicing
 
+    /// trm's web app's GO_URL for the `trm` organization (the same prefix create/update use).
+    private static let path = "/rest/trm/v1/change-request"
+
     func listChangeRequests(filter: ChangeRequestFilter) async throws -> [ChangeRequest] {
         let response: ChangeRequestListResponse = try await client.get(
-            "/change-requests",
+            Self.path,
             queryItems: filter.queryItems
         )
         return Self.resolveNames(in: response, projects: [])
@@ -107,7 +98,7 @@ struct ChangeRequestService: ChangeRequestServicing {
 
     func changeRequest(id: String) async throws -> ChangeRequest {
         let response: ChangeRequestListResponse = try await client.get(
-            "/change-requests",
+            Self.path,
             queryItems: [URLQueryItem(name: "id", value: id)]
         )
         let projects = (try? await projectService.listProjects(forceRefresh: false)) ?? []

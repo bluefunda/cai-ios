@@ -37,6 +37,11 @@ enum AppConfig {
     /// working once it substitutes org for realm.
     static let requestsOrgAlias = "trm"
 
+    /// Keycloak client whose client roles (`admin`, `release-manager`, …) are the
+    /// BlueRequests roles in the shared `individual` realm — trm's web app reads
+    /// the same ones (src/utilities/organization.js getRoles), never realm roles.
+    static let requestsRolesClient = "admin-trm"
+
     // How long a single BlueRequests call (GET/POST/PUT, including multipart
     // uploads) waits before giving up — trm-gw's own gateway timeout is in a
     // similar range, and per-row enrichment on the change-requests endpoint (up

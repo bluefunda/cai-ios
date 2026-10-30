@@ -105,6 +105,9 @@ struct CAIApp: App {
                     workspaceStore.update(organizations: organizations)
                     updateRequestsPolling()
                 }
+                .onChange(of: authManager.currentUser?.requestsRoles ?? [], initial: true) { _, roles in
+                    workspaceStore.update(requestsRoles: roles)
+                }
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:

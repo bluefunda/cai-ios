@@ -148,11 +148,20 @@ struct ChangeRequestListBody: View {
                     .listRowBackground(BFColor.surfaceCanvas)
                     .listRowSeparatorTint(BFColor.hairline)
                 }
+                if model.hasMore {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(BFColor.surfaceCanvas)
+                        .listRowSeparator(.hidden)
+                        .task(id: model.changeRequests.count) { await model.loadMore() }
+                }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
         } else {
-            ChangeRequestGridView(requests: model.filteredChangeRequests)
+            ChangeRequestGridView(requests: model.filteredChangeRequests) { id, status in
+                Task { await model.move(id, to: status) }
+            }
         }
     }
 
