@@ -5,7 +5,7 @@ import AuthenticationServices
 // MARK: - Settings Category
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case account, aiSettings, connectors, usage, subscription, legal, about
+    case account, aiSettings, connectors, blueRequests, usage, subscription, legal, about
 
     var id: String { rawValue }
 
@@ -14,6 +14,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .account: return "Account"
         case .aiSettings: return "AI Settings"
         case .connectors: return "Agents"
+        case .blueRequests: return "BlueRequests"
         case .usage: return "Usage"
         case .subscription: return "Subscription"
         case .legal: return "Legal"
@@ -26,6 +27,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .account: return "person.crop.circle"
         case .aiSettings: return "sparkles"
         case .connectors: return "brain.head.profile"
+        case .blueRequests: return "doc.text"
         case .usage: return "chart.bar"
         case .subscription: return "star.circle"
         case .legal: return "doc.text"
@@ -40,16 +42,11 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
-    // Not private — SettingsView+Agents.swift (a separate extension file, split out to stay
-    // under SwiftLint's file_length/type_body_length limits) reads/writes these.
-    @Environment(\.webAuthenticationSession) var webAuthenticationSession
+    @Environment(\.isRequestsAvailable) private var isRequestsAvailable
     @State private var showLogoutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var deleteError: String?
-    @State var isConnectingGitHub = false
-    @State var githubConnectError: String?
-    @State var figmaConnect = ConnectorConnectState()
     // nil (not .account) so opening Settings on a compact/iPhone layout shows the category
     // list first instead of auto-navigating straight into Account — detailContent below still
     // falls back to .account for the regular/split-view detail pane, which always needs
@@ -78,9 +75,16 @@ struct SettingsView: View {
         return "\(enabled.count) Selected"
     }
 
-    // Subscription is individual-realm only — trm accounts don't buy IAP.
+    // Subscription is individual-realm only — trm accounts don't buy IAP. BlueRequests
+    // only for users who have the Requests space (feature flag + `trm` org).
     private var categories: [SettingsCategory] {
-        SettingsCategory.allCases.filter { $0 != .subscription || isIndividualRealm }
+        SettingsCategory.allCases.filter { category in
+            switch category {
+            case .subscription: return isIndividualRealm
+            case .blueRequests: return isRequestsAvailable
+            default: return true
+            }
+        }
     }
 
     // Percentage-of-screen sizing (~ Copilot's desktop Settings window: about
@@ -253,7 +257,8 @@ struct SettingsView: View {
         switch selectedCategory ?? .account {
         case .account: accountDetail
         case .aiSettings: aiSettingsDetail
-        case .connectors: connectorsDetail
+        case .connectors: AgentsListView()
+        case .blueRequests: RequestsSettingsSection()
         case .usage: usageDetail
         case .subscription: subscriptionDetail
         case .legal: legalDetail
@@ -420,7 +425,7 @@ struct SettingsView: View {
     }
 
     // MARK: - Connectors
-    // connectorsDetail, connectorRow, connectGitHub moved to SettingsView+Agents.swift
+    // Agents: AgentsListView (AgentsListView.swift), shared with the sidebar's Agents destination
     // (bluefunda/cai-ios#261 precedent) to stay under SwiftLint's file_length/type_body_length
     // limits — no behavior change, purely a structural split.
 
@@ -444,49 +449,6 @@ struct SettingsView: View {
     }
 
     // MARK: - Legal
-
-    @ViewBuilder
-    private var legalDetail: some View {
-        List {
-            Section {
-                Button {
-                    openURL(privacyPolicyURL)
-                } label: {
-                    HStack {
-                        Label("Privacy Policy", systemImage: "hand.raised")
-                            #if targetEnvironment(macCatalyst)
-                            .font(MacSettingsFont.row)
-                            #endif
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .bfPointerHover()
-
-                Button {
-                    openURL(termsOfServiceURL)
-                } label: {
-                    HStack {
-                        Label("Terms of Service", systemImage: "doc.text")
-                            #if targetEnvironment(macCatalyst)
-                            .font(MacSettingsFont.row)
-                            #endif
-                            .foregroundColor(.primary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .bfPointerHover()
-            }
-        }
-        .navigationTitle("Legal")
-        .settingsInlineTitle()
-    }
-
-    // MARK: - About
 
     @ViewBuilder
     private var aboutDetail: some View {
@@ -634,6 +596,55 @@ struct SettingsView: View {
             return BFColor.neutral400
         }
     }
+}
+
+// MARK: - Legal
+// In an extension to keep SettingsView's body under SwiftLint's type_body_length limit
+// (bluefunda/cai-ios#261 precedent).
+
+extension SettingsView {
+    @ViewBuilder
+    private var legalDetail: some View {
+        List {
+            Section {
+                Button {
+                    openURL(privacyPolicyURL)
+                } label: {
+                    HStack {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .bfPointerHover()
+
+                Button {
+                    openURL(termsOfServiceURL)
+                } label: {
+                    HStack {
+                        Label("Terms of Service", systemImage: "doc.text")
+                            #if targetEnvironment(macCatalyst)
+                            .font(MacSettingsFont.row)
+                            #endif
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .bfPointerHover()
+            }
+        }
+        .navigationTitle("Legal")
+        .settingsInlineTitle()
+    }
+
+    // MARK: - About
 }
 
 // MARK: - User Info Row

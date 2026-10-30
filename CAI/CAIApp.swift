@@ -4,10 +4,25 @@ import AuthenticationServices
 
 @main
 struct CAIApp: App {
-    @StateObject private var authManager = AuthManager()
+    @StateObject private var authManager: AuthManager
     @StateObject private var chatManager = ChatManager(service: BFFChatService())
     @StateObject private var iapManager = IAPManager()
+    @StateObject private var workspaceStore = WorkspaceStore()
+    @StateObject private var unreadPoller: UnreadCountPoller
+    /// BlueRequests services share cai's AuthManager for tokens (one identity, P1).
+    /// Built eagerly but inert: nothing calls trm-gw unless the Requests space is
+    /// available (feature flag + `trm` org) — see `updateRequestsPolling`.
+    private let requestsServices: RequestsServices
     @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        let auth = AuthManager()
+        _authManager = StateObject(wrappedValue: auth)
+
+        let services = RequestsServices(authManager: auth)
+        requestsServices = services
+        _unreadPoller = StateObject(wrappedValue: UnreadCountPoller(service: services.notificationsService))
+    }
 
     private let container: ModelContainer = {
         let schema = Schema([PersistedConversation.self, PersistedMessage.self])
@@ -23,6 +38,9 @@ struct CAIApp: App {
                 .environmentObject(chatManager)
                 .environmentObject(chatManager.liveAnswer)
                 .environmentObject(iapManager)
+                .environmentObject(workspaceStore)
+                .environmentObject(unreadPoller)
+                .environment(\.requestsServices, requestsServices)
                 // Allow the window to shrink only so far on Mac.
                 // Never set an explicit frame here — it fights the window manager
                 // and breaks fullscreen.
@@ -60,6 +78,7 @@ struct CAIApp: App {
                     await authManager.restoreSession()
                 }
                 .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
+                    updateRequestsPolling()
                     guard isAuthenticated else { return }
                     #if DEBUG
                     // ScreenshotFixtures.bootstrap already set up everything
@@ -79,6 +98,15 @@ struct CAIApp: App {
                     if let token = newToken {
                         chatManager.updateToken(token)
                     }
+                }
+                // Entitlement follows the token: sign-in, refresh (org membership
+                // can change between tokens) and sign-out all land here.
+                .onChange(of: authManager.currentUser?.organizations ?? [], initial: true) { _, organizations in
+                    workspaceStore.update(organizations: organizations)
+                    updateRequestsPolling()
+                }
+                .onChange(of: authManager.currentUser?.requestsRoles ?? [], initial: true) { _, roles in
+                    workspaceStore.update(requestsRoles: roles)
                 }
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
@@ -102,6 +130,7 @@ struct CAIApp: App {
                     default:
                         break
                     }
+                    updateRequestsPolling(phase: phase)
                 }
                 .onReceive(NotificationCenter.default.publisher(
                     for: ASAuthorizationAppleIDProvider.credentialRevokedNotification
@@ -121,5 +150,14 @@ struct CAIApp: App {
                 .keyboardShortcut("n", modifiers: .command)
             }
         }
+    }
+
+    /// Unread polling only runs while BlueRequests is an available space and the app
+    /// is in the foreground — personal-only users never hit trm-gw.
+    private func updateRequestsPolling(phase: ScenePhase? = nil) {
+        unreadPoller.update(
+            isRequestsAvailable: authManager.isAuthenticated && workspaceStore.isRequestsAvailable,
+            isAppActive: (phase ?? scenePhase) == .active
+        )
     }
 }
