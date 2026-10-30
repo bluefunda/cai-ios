@@ -702,6 +702,23 @@ struct LoginView: View {
                                 .font(.system(size: 20))
                         }
 
+                        // The Google/Microsoft sign-in runs in the browser; if it never comes
+                        // back (closed tab, a browser that doesn't return to the app), Cancel
+                        // gets the user out, and the buttons above start a fresh attempt.
+                        if authManager.isAwaitingWebSignIn {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Finish signing in in your browser…")
+                                    .font(BFFont.micro)
+                                    .foregroundStyle(secondaryText)
+                                Button("Cancel") { authManager.cancelWebSignIn() }
+                                    .font(BFFont.micro)
+                                    .tint(BFColor.primary)
+                            }
+                            .padding(.top, 4)
+                        }
+
                         // Policies must be reachable before sign-in (App Store privacy rules).
                         Text("By continuing, you agree to our [Terms\u{00A0}of\u{00A0}Service](https://bluefunda.com/terms/) and [Privacy\u{00A0}Policy](https://bluefunda.com/privacy/).")
                             .font(BFFont.micro)
