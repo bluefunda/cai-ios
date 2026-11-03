@@ -27,6 +27,7 @@ struct ProjectDetailView: View {
                 projectId: projectId,
                 projectService: services.projectService,
                 changeRequestService: services.changeRequestService,
+                workflowService: services.workflowService,
                 currentUserId: state.currentUserId
             )
             box.model = model
@@ -158,5 +159,6 @@ private struct ProjectRequestsSection: View {
             )
             ChangeRequestListBody(model: model, viewMode: viewMode, showsProject: false)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

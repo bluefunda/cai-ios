@@ -80,6 +80,45 @@ struct RQNamedOption: Identifiable, Decodable, Hashable {
     }
 }
 
+/// A template's kind (utilities/templateWorkflow.js): only a tech template can have
+/// GitHub gate steps.
+enum RQTemplateKind: String, CaseIterable, Identifiable {
+    case standard, tech
+    var id: String { rawValue }
+    var title: String { self == .tech ? "Tech" : "Standard" }
+}
+
+/// A workflow step's type: an approval by the stage's department and role, or (tech
+/// templates only) a GitHub gate satisfied by the linked pull requests.
+enum RQStepType: String, Codable, CaseIterable, Identifiable {
+    case approval
+    case githubGate = "github_gate"
+    var id: String { rawValue }
+    var title: String { self == .githubGate ? "GitHub gate" : "Approval" }
+}
+
+/// A GitHub gate's policy, with the web's defaults (DEFAULT_GATE_POLICY) for any field a
+/// stored step leaves out.
+struct RQGatePolicy: Codable, Hashable {
+    var requireMerged = true
+    var requireApprovedAtHead = true
+    var requireChecksGreen = true
+    var minApprovals = 1
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        requireMerged = c.lenient(.requireMerged) ?? true
+        requireApprovedAtHead = c.lenient(.requireApprovedAtHead) ?? true
+        requireChecksGreen = c.lenient(.requireChecksGreen) ?? true
+        let approvals: Int? = c.lenient(.minApprovals)
+        minApprovals = approvals.map { $0 < 0 ? 1 : $0 } ?? 1
+    }
+
+    private enum CodingKeys: String, CodingKey { case requireMerged, requireApprovedAtHead, requireChecksGreen, minApprovals }
+}
+
 /// One stage of a request template's workflow. Department and role are stored by name.
 struct RQTemplateStage: Codable, Hashable, Identifiable {
     var id = UUID()
@@ -87,8 +126,14 @@ struct RQTemplateStage: Codable, Hashable, Identifiable {
     var department: String
     var role: String
     var qaDeploy: Bool
+    /// From a saved template's workflow; a stage being edited has neither yet.
+    var order: Int?
+    var statusCode = ""
+    /// Older templates have no `type` or `gate`: they read as approval steps.
+    var type: RQStepType = .approval
+    var gate = RQGatePolicy()
 
-    private enum CodingKeys: String, CodingKey { case description, department, role, qaDeploy }
+    private enum CodingKeys: String, CodingKey { case description, department, role, qaDeploy, order, statusCode, type, gate }
 
     init(description: String = "", department: String = "", role: String = "", qaDeploy: Bool = false) {
         self.description = description
@@ -103,6 +148,10 @@ struct RQTemplateStage: Codable, Hashable, Identifiable {
         department = c.lenient(.department) ?? ""
         role = c.lenient(.role) ?? ""
         qaDeploy = c.lenient(.qaDeploy) ?? false
+        order = c.lenient(.order)
+        statusCode = c.lenient(.statusCode) ?? ""
+        type = (c.lenient(.type) as String?).flatMap(RQStepType.init(rawValue:)) ?? .approval
+        gate = (try? c.decodeIfPresent(RQGatePolicy.self, forKey: .gate)) ?? nil ?? RQGatePolicy()
     }
 
     var isComplete: Bool {
@@ -115,8 +164,12 @@ struct RQRequestTemplate: Identifiable, Decodable, Hashable {
     let name: String
     let isActive: Bool
     let workflow: [RQTemplateStage]
+    var kind: RQTemplateKind = .standard
+    /// Requests from this template move only through its approval steps (department
+    /// and role approve each stage, or a GitHub gate passes).
+    var requireApproval = false
 
-    private enum CodingKeys: String, CodingKey { case id, name, status, workflow }
+    private enum CodingKeys: String, CodingKey { case id, name, status, workflow, kind, requireApproval }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -124,6 +177,8 @@ struct RQRequestTemplate: Identifiable, Decodable, Hashable {
         name = c.lenient(.name) ?? ""
         isActive = c.lenient(.status) ?? true
         workflow = c.lenient(.workflow) ?? []
+        kind = (c.lenient(.kind) as String?).flatMap(RQTemplateKind.init(rawValue:)) ?? .standard
+        requireApproval = c.lenient(.requireApproval) ?? false
     }
 }
 
@@ -149,13 +204,16 @@ struct RQConfigItem: Identifiable, Decodable, Hashable {
     let id: String
     let label: String
 
-    private enum CodingKeys: String, CodingKey { case id, type, description }
+    private enum CodingKeys: String, CodingKey { case id, type, description, name }
 
+    /// The first non-empty of type, description and name; a row with none still shows.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let type: String? = c.lenient(.type)
-        let description: String? = c.lenient(.description)
-        label = (type?.isEmpty == false ? type : description) ?? ""
+        let candidates: [String?] = [c.lenient(.type), c.lenient(.description), c.lenient(.name)]
+        let found = candidates.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
+        // The web shows an application's description (configurations.js); a record saved
+        // with none appears blank there, and "Untitled" here.
+        label = found ?? "Untitled"
         id = c.lenientString(.id) ?? label
     }
 }
@@ -270,27 +328,65 @@ struct RQDeactivateUser: Encodable {
     let enabled = false
 }
 
+/// POST /admin/template and PUT /admin/template/update-template/{id}, as the web's
+/// buildTemplatePayload sends it: the kind, and each complete step with its type (a gate
+/// only on a tech template) and, for a gate, its policy. `order` is the step's position
+/// in the editor, counted before incomplete steps are dropped, as on the web.
+/// GET/PUT /settings/workflow (trm-backend-go settingsWorkflow.go) — the tenant's
+/// workflow enforcement switch.
+struct RQWorkflowSettings: Codable, Equatable {
+    var enforceWorkflow: Bool
+}
+
 struct RQTemplatePayload: Encodable {
-    struct Stage: Encodable {
+    struct Stage: Encodable, Equatable {
         let statusCode: String
         let description: String
         let department: String
         let role: String
         let qaDeploy: Bool
+        let type: String
+        let gate: RQGatePolicy?
         let order: Int
+
+        private enum CodingKeys: String, CodingKey {
+            case statusCode, description, department, role, qaDeploy, type, gate, order
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(statusCode, forKey: .statusCode)
+            try c.encode(description, forKey: .description)
+            try c.encode(department, forKey: .department)
+            try c.encode(role, forKey: .role)
+            try c.encode(qaDeploy, forKey: .qaDeploy)
+            try c.encode(type, forKey: .type)
+            try c.encodeIfPresent(gate, forKey: .gate)
+            try c.encode(order, forKey: .order)
+        }
     }
 
     let name: String
+    let kind: String
+    /// Sent every time, so an edit can switch approvals off as well as on.
+    let requireApproval: Bool
     let workflow: [Stage]
     let status = true
     let createdBy: String
 
-    init(name: String, stages: [RQTemplateStage], createdBy: String) {
+    init(name: String, kind: RQTemplateKind = .standard, requireApproval: Bool = false,
+         stages: [RQTemplateStage], createdBy: String) {
         self.name = name
+        self.kind = kind.rawValue
+        self.requireApproval = requireApproval
         self.createdBy = createdBy
-        workflow = stages.filter(\.isComplete).enumerated().map { index, stage in
-            Stage(statusCode: stage.description, description: stage.description, department: stage.department,
-                  role: stage.role, qaDeploy: stage.qaDeploy, order: index + 1)
+        workflow = stages.enumerated().compactMap { index, stage in
+            guard stage.isComplete else { return nil }
+            let isGate = stage.type == .githubGate && kind == .tech
+            return Stage(statusCode: stage.description, description: stage.description, department: stage.department,
+                         role: stage.role, qaDeploy: stage.qaDeploy,
+                         type: isGate ? RQStepType.githubGate.rawValue : RQStepType.approval.rawValue,
+                         gate: isGate ? stage.gate : nil, order: index + 1)
         }
     }
 }

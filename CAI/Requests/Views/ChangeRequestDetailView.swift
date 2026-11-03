@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 // MARK: - Change Request Detail
 // Ported from trm-ios and reshaped to P6: a header card (number, title, status pill,
 // full stage rail), then a segmented control — Details, Activity, Comments, Files.
-// Edit and Archive live in a `···` menu; archiving asks first.
+// Edit and Archive live in a `···` menu; archiving asks first. The stage buttons (or, when
+// the tenant enforces it, the approval workflow) follow the web's detail screen.
 
 struct ChangeRequestDetailView: View {
     let changeRequestId: String
@@ -27,6 +28,7 @@ struct ChangeRequestDetailView: View {
             let model = ChangeRequestDetailViewModel(
                 changeRequestId: changeRequestId,
                 changeRequestService: services.changeRequestService,
+                workflowService: services.workflowService,
                 commentService: services.commentService,
                 attachmentService: services.attachmentService,
                 crFileService: services.crFileService,
@@ -43,7 +45,7 @@ struct ChangeRequestDetailView: View {
 }
 
 enum ChangeRequestDetailTab: String, CaseIterable, Identifiable {
-    case details, activity, comments, files
+    case details, activity, comments, files, ai
     var id: String { rawValue }
 
     var title: String {
@@ -52,6 +54,7 @@ enum ChangeRequestDetailTab: String, CaseIterable, Identifiable {
         case .activity: return "Activity"
         case .comments: return "Comments"
         case .files: return "Files"
+        case .ai: return "AI"
         }
     }
 }
@@ -63,6 +66,17 @@ private struct DetailBody: View {
     @State private var selectedTab: ChangeRequestDetailTab = .details
     @State private var showEditSheet = false
     @State private var confirmArchive = false
+    @State private var confirmDelete = false
+    @State private var pendingMove: StageMove?
+    @Environment(\.dismiss) private var dismiss
+    /// Ask AI and the AI tab (P8) — nil where the shell can't reach the Assistant space.
+    @Environment(\.requestBridge) private var requestBridge
+    @Environment(\.requestChatLinks) private var requestChatLinks
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var tabs: [ChangeRequestDetailTab] {
+        ChangeRequestDetailTab.allCases.filter { $0 != .ai || requestBridge != nil }
+    }
 
     var body: some View {
         content
@@ -72,6 +86,18 @@ private struct DetailBody: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if let cr = model.changeRequest {
+                    if let requestBridge {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                requestBridge.askAI(cr)
+                            } label: {
+                                Label("Ask AI", systemImage: "sparkles")
+                            }
+                            .help("Ask AI about this request")
+                            .bfPointerHover()
+                            .accessibilityIdentifier("requests.detail.askAI")
+                        }
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         moreMenu(cr)
                     }
@@ -94,8 +120,33 @@ private struct DetailBody: View {
             } message: {
                 Text("It moves to the Archive tab. You can unarchive it from there.")
             }
+            .confirmationDialog(
+                "Delete this request?",
+                isPresented: $confirmDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    Task {
+                        if await model.delete() {
+                            state.recents.remove(id: model.changeRequestId)
+                            await state.changeRequests?.load()
+                            dismiss()
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                // The web's wording (changeRequestDetail.js).
+                Text("This removes the request and its transfer info from the database. It can't be undone.")
+            }
+            .sheet(item: $pendingMove) { move in
+                StageMoveSheet(move: move, model: model)
+            }
             .onChange(of: model.changeRequest) { _, changeRequest in
                 if let changeRequest { state.recents.record(changeRequest) }
+            }
+            .onChange(of: selectedTab) { _, tab in
+                if tab == .comments { Task { await model.markCommentsSeen() } }
             }
     }
 
@@ -103,7 +154,12 @@ private struct DetailBody: View {
     private var content: some View {
         if let cr = model.changeRequest {
             VStack(spacing: 0) {
-                DetailHeaderCard(changeRequest: cr, isSaving: model.isSaving) { status in
+                DetailHeaderCard(
+                    changeRequest: cr,
+                    isSaving: model.isSaving || model.isMovingStage,
+                    stageActions: model.stageActions,
+                    onMove: { pendingMove = $0 }
+                ) { status in
                     Task { await model.setStatus(status) }
                 }
 
@@ -115,28 +171,39 @@ private struct DetailBody: View {
                     .padding(.horizontal, BFSpacing._4)
                 }
 
-                Picker("Section", selection: $selectedTab) {
-                    ForEach(ChangeRequestDetailTab.allCases) { tab in
-                        Text(tabTitle(tab)).tag(tab)
+                // Five tabs don't fit a segmented control on an iPhone ("Comments" was cut
+                // off), so compact width scrolls a row of tabs instead.
+                if sizeClass == .compact {
+                    DetailTabStrip(tabs: tabs, selection: $selectedTab, title: tabTitle)
+                        .accessibilityIdentifier("requests.detail.tabs")
+                } else {
+                    Picker("Section", selection: $selectedTab) {
+                        ForEach(tabs) { tab in
+                            Text(tabTitle(tab)).tag(tab)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, BFSpacing._4)
+                    .padding(.vertical, BFSpacing._2)
+                    .accessibilityIdentifier("requests.detail.tabs")
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, BFSpacing._4)
-                .padding(.vertical, BFSpacing._2)
-                .accessibilityIdentifier("requests.detail.tabs")
 
                 BFHairline()
 
                 Group {
                     switch selectedTab {
-                    case .details: DetailsTab(changeRequest: cr)
+                    case .details: DetailsTab(changeRequest: cr, model: model)
                     case .activity: ActivityTab(changeRequest: cr)
                     case .comments: CommentThreadView(model: model)
                     case .files: FilesTab(model: model)
+                    case .ai: AITab(changeRequest: cr, links: requestChatLinks, bridge: requestBridge)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
+            // The header, tabs and tab content in one column on a wide window, instead of
+            // fields at the far left and values at the far right.
+            .readableColumn()
         } else if model.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -152,16 +219,23 @@ private struct DetailBody: View {
         switch tab {
         case .comments: return model.comments.isEmpty ? tab.title : "\(tab.title) \(model.comments.count)"
         case .files: return model.crFiles.isEmpty ? tab.title : "\(tab.title) \(model.crFiles.count)"
+        case .ai:
+            let count = requestChatLinks?.conversations(forRequest: model.changeRequestId).count ?? 0
+            return count == 0 ? tab.title : "\(tab.title) \(count)"
         default: return tab.title
         }
     }
 
     private func moreMenu(_ cr: ChangeRequest) -> some View {
         Menu {
-            Button {
-                showEditSheet = true
-            } label: {
-                Label("Edit", systemImage: "pencil")
+            // As on the web: editing and deleting are only for a request still at its
+            // first stage.
+            if cr.isAtFirstStage {
+                Button {
+                    showEditSheet = true
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
             }
             if cr.isArchived {
                 Button {
@@ -174,6 +248,14 @@ private struct DetailBody: View {
                     confirmArchive = true
                 } label: {
                     Label("Archive", systemImage: "archivebox")
+                }
+            }
+            if cr.isAtFirstStage {
+                Divider()
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
                 }
             }
         } label: {
@@ -190,6 +272,8 @@ private struct DetailBody: View {
 private struct DetailHeaderCard: View {
     let changeRequest: ChangeRequest
     let isSaving: Bool
+    let stageActions: StageActions
+    let onMove: (StageMove) -> Void
     let onSetStatus: (ChangeRequestStatus) -> Void
 
     var body: some View {
@@ -219,6 +303,10 @@ private struct DetailHeaderCard: View {
                 stageStatus: changeRequest.stageStatus,
                 size: .full
             )
+
+            if stageActions != .none {
+                StageActionBar(actions: stageActions, isBusy: isSaving, onMove: onMove)
+            }
         }
         .padding(BFSpacing._4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -234,7 +322,7 @@ private struct DetailHeaderCard: View {
 }
 
 /// Direct status change — the same plain status update trm web's Kanban drag makes on
-/// the generic PUT endpoint, not the full stage-progression flow (out of scope).
+/// the generic PUT endpoint. Moving between stages is the StageActionBar below.
 private struct StatusMenu: View {
     let status: ChangeRequestStatus
     let isSaving: Bool
@@ -276,10 +364,15 @@ private struct StatusMenu: View {
 
 private struct DetailsTab: View {
     let changeRequest: ChangeRequest
+    @ObservedObject var model: ChangeRequestDetailViewModel
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BFSpacing._4) {
+                if let workflow = model.workflow, workflow.enforced, !workflow.steps.isEmpty {
+                    WorkflowSection(workflow: workflow, model: model)
+                }
+
                 if let description = changeRequest.description, !description.isBlank {
                     VStack(alignment: .leading, spacing: 6) {
                         RQFieldLabel("Description")
@@ -301,6 +394,18 @@ private struct DetailsTab: View {
                         field("Project") { valueText(project) }
                     }
                     field("Platform") { valueText(platformSummary ?? "None") }
+                    if let owner = changeRequest.currentStageOwnerName {
+                        field("Stage owner") { valueText(owner) }
+                    }
+                    if let ticket = changeRequest.ticketUrl, !ticket.isBlank {
+                        field("Ticket") {
+                            if let url = URL(string: ticket), url.scheme != nil {
+                                Link(ticket, destination: url).font(RQFont.body).lineLimit(1)
+                            } else {
+                                valueText(ticket)
+                            }
+                        }
+                    }
                     field("Requested by") {
                         OwnerBadge(name: changeRequest.createdByName, avatarURLString: changeRequest.createdByAvatarURL)
                     }
@@ -319,7 +424,7 @@ private struct DetailsTab: View {
     }
 
     private var platformSummary: String? {
-        let systems = changeRequest.platforms.compactMap(\.sap).filter { !$0.isBlank }
+        let systems = changeRequest.platforms.compactMap(\.description).filter { !$0.isBlank }
         return systems.isEmpty ? nil : systems.joined(separator: ", ")
     }
 
@@ -422,6 +527,7 @@ private struct TimelineRow: View {
 private struct FilesTab: View {
     @ObservedObject var model: ChangeRequestDetailViewModel
     @State private var showFileImporter = false
+    @State private var pendingDelete: CRFile?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -450,16 +556,36 @@ private struct FilesTab: View {
                 }
             } else {
                 List(model.crFiles) { file in
-                    if let url = URL(string: file.url) {
-                        Link(destination: url) { FileRow(file: file) }
-                            .bfPointerHover()
-                    } else {
-                        FileRow(file: file)
+                    Group {
+                        if let url = URL(string: file.url) {
+                            Link(destination: url) { FileRow(file: file) }
+                                .bfPointerHover()
+                        } else {
+                            FileRow(file: file)
+                        }
+                    }
+                    .swipeActions {
+                        Button("Delete", role: .destructive) { pendingDelete = file }
+                    }
+                    .contextMenu {
+                        Button("Delete", systemImage: "trash", role: .destructive) { pendingDelete = file }
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
+        }
+        .confirmationDialog(
+            "Delete \(pendingDelete?.name ?? "this file")?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                guard let file = pendingDelete else { return }
+                Task { await model.deleteFile(file) }
+            }
+        } message: {
+            Text("It's removed from the request for everyone.")
         }
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item]) { result in
             guard case .success(let url) = result else { return }
@@ -499,5 +625,408 @@ private struct FileRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Stage Flow
+
+extension StageMove: Identifiable {
+    var id: String { "\(kind)-\(from.order)-\(to.order)" }
+}
+
+/// The web's stage buttons under the header: Revert, and Start / Push to next stage /
+/// Mark as completed. A Deploy to QA the app can't run yet stays visible but disabled,
+/// with where to do it instead.
+private struct StageActionBar: View {
+    let actions: StageActions
+    let isBusy: Bool
+    let onMove: (StageMove) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: BFSpacing._2) {
+                if let revert = actions.revert {
+                    Button {
+                        onMove(revert)
+                    } label: {
+                        Label("Revert", systemImage: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("requests.detail.stage.revert")
+                }
+                if let forward = actions.forward {
+                    Button {
+                        onMove(forward)
+                    } label: {
+                        Label(forwardTitle(forward), systemImage: forward.kind == .complete ? "checkmark" : "arrow.right")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(forward.needsWeb)
+                    .accessibilityIdentifier("requests.detail.stage.forward")
+                }
+                if isBusy { ProgressView().controlSize(.small) }
+                Spacer(minLength: 0)
+            }
+            .controlSize(.small)
+            .tint(BFColor.primary)
+            .disabled(isBusy)
+
+            if let forward = actions.forward, forward.needsWeb {
+                Text(forward.kind == .complete && !forward.from.qaDeploy
+                     ? "Completing an SAP request releases its transports. Do this from the web app for now."
+                     : "Deploy to QA runs SAP transports or a Git merge. Do this from the web app for now.")
+                    .font(RQFont.meta)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func forwardTitle(_ move: StageMove) -> String {
+        move.needsWeb && move.from.qaDeploy ? "Deploy to QA" : move.kind.title
+    }
+}
+
+/// The web's push drawer: where the request is and where it's going, an optional comment
+/// that's posted with the move, then confirm.
+private struct StageMoveSheet: View {
+    let move: StageMove
+    @ObservedObject var model: ChangeRequestDetailViewModel
+
+    @State private var comment = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    stageRow(label: move.kind == .revert ? "From" : "Current stage", stage: move.from,
+                             owner: model.changeRequest?.currentStageOwnerName)
+                    stageRow(label: move.kind == .revert ? "Back to" : "Next stage", stage: move.to, owner: nil)
+                } footer: {
+                    Text("The request will be \(move.status.style.label.lowercased()) after this.")
+                }
+
+                Section("Comment") {
+                    TextField("Add a note for the team (optional)", text: $comment, axis: .vertical)
+                        .lineLimit(3...8)
+                        .accessibilityIdentifier("requests.stageMove.comment")
+                }
+
+                if let error = model.error {
+                    Section {
+                        Text(error).foregroundStyle(.red).font(RQFont.meta)
+                    }
+                }
+            }
+            .navigationTitle(move.kind.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(model.isMovingStage)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if model.isMovingStage {
+                        ProgressView()
+                    } else {
+                        Button(move.kind.title) {
+                            Task {
+                                if await model.moveStage(move, comment: comment) { dismiss() }
+                            }
+                        }
+                        .accessibilityIdentifier("requests.stageMove.confirm")
+                    }
+                }
+            }
+            .interactiveDismissDisabled(model.isMovingStage)
+        }
+        .presentationDetents([.medium, .large])
+        .onAppear { model.error = nil }
+    }
+
+    private func stageRow(label: String, stage: RQStage, owner: String?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            RQFieldLabel(label)
+            Text("\(stage.order). \(stage.description.isEmpty ? stage.statusCode : stage.description)")
+                .font(RQFont.rowTitle)
+            if let owner {
+                Text("Owner: \(owner)").font(RQFont.meta).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Approval Workflow
+
+/// The web's ChangeRequestWorkflow: each step with its state, approver, gate and
+/// decisions, and Approve/Reject on the current approval step.
+private struct WorkflowSection: View {
+    let workflow: RQWorkflow
+    @ObservedObject var model: ChangeRequestDetailViewModel
+
+    @State private var pending: PendingDecision?
+    @State private var decisionError: String?
+
+    struct PendingDecision: Identifiable {
+        let step: RQWorkflowStep
+        let decision: WorkflowDecision
+        var id: String { "\(step.order)-\(decision.rawValue)" }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: BFSpacing._2) {
+            RQFieldLabel("Approval workflow")
+            VStack(spacing: 0) {
+                ForEach(workflow.steps) { step in
+                    stepRow(step)
+                    if step.id != workflow.steps.last?.id { BFHairline() }
+                }
+            }
+            .background(BFColor.surfaceRaised, in: RoundedRectangle(cornerRadius: BFRadius.xl2, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: BFRadius.xl2, style: .continuous)
+                    .strokeBorder(BFColor.hairline, lineWidth: 0.5)
+            )
+            if let decisionError {
+                InlineErrorBanner(message: decisionError) { self.decisionError = nil }
+            }
+        }
+        .sheet(item: $pending) { pending in
+            WorkflowDecisionSheet(step: pending.step, decision: pending.decision, model: model) { error in
+                decisionError = error
+            }
+        }
+    }
+
+    private func stepRow(_ step: RQWorkflowStep) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(step.order)").font(RQFont.number).foregroundStyle(.secondary)
+                Text(step.title).font(RQFont.rowTitle)
+                badge(step.stateLabel, color: stateColor(step.state))
+                if step.isGate { badge("GitHub gate", color: BFColor.neutral400) }
+                Spacer(minLength: 0)
+            }
+            let approver = [step.department, step.role].filter { !$0.isEmpty }.joined(separator: " · ")
+            if !step.isGate, !approver.isEmpty {
+                Text(approver).font(RQFont.meta).foregroundStyle(.secondary)
+            }
+            if step.isGate {
+                Text([step.gateLabel, step.gate?.prs.map { $0 == 1 ? "1 pull request" : "\($0) pull requests" },
+                      step.state == "satisfied" ? nil : "Waiting for GitHub"]
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .font(RQFont.meta).foregroundStyle(.secondary)
+            }
+            ForEach(step.decisions) { decision in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(decision.actorName).font(RQFont.meta.weight(.semibold))
+                        badge(decision.isRejection ? "Rejected" : "Approved",
+                              color: decision.isRejection ? .red : .green)
+                        if let date = decision.createdAt {
+                            Text(date.formatted(date: .abbreviated, time: .shortened))
+                                .font(RQFont.meta).foregroundStyle(.tertiary)
+                        }
+                    }
+                    if let comment = decision.comment, !comment.isBlank {
+                        Text(comment).font(RQFont.meta).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if step.canDecide {
+                HStack(spacing: BFSpacing._2) {
+                    Button("Reject") { pending = PendingDecision(step: step, decision: .reject) }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("requests.workflow.reject")
+                    Button("Approve") { pending = PendingDecision(step: step, decision: .approve) }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("requests.workflow.approve")
+                }
+                .controlSize(.small)
+                .tint(BFColor.primary)
+                .disabled(model.isDeciding)
+            }
+        }
+        .padding(BFSpacing._3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(RQFont.pill)
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.12), in: Capsule())
+    }
+
+    private func stateColor(_ state: String) -> Color {
+        switch state {
+        case "current": return BFColor.primary
+        case "approved", "satisfied": return .green
+        case "rejected": return .red
+        case "blocked": return .orange
+        default: return BFColor.neutral400
+        }
+    }
+}
+
+private struct WorkflowDecisionSheet: View {
+    let step: RQWorkflowStep
+    let decision: WorkflowDecision
+    @ObservedObject var model: ChangeRequestDetailViewModel
+    let onFailure: (String) -> Void
+
+    @State private var comment = ""
+    @Environment(\.dismiss) private var dismiss
+
+    private var verb: String { decision == .approve ? "Approve" : "Reject" }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Comment") {
+                    TextField(decision == .approve ? "Optional comment" : "Why is this being rejected?",
+                              text: $comment, axis: .vertical)
+                        .lineLimit(3...8)
+                        .accessibilityIdentifier("requests.workflow.comment")
+                }
+            }
+            .navigationTitle("\(verb) \(step.title)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(model.isDeciding)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if model.isDeciding {
+                        ProgressView()
+                    } else {
+                        Button(verb) {
+                            Task {
+                                // As on the web, the sheet closes either way; a refusal
+                                // shows under the workflow.
+                                if let error = await model.decide(decision, on: step, comment: comment) {
+                                    onFailure(error)
+                                }
+                                dismiss()
+                            }
+                        }
+                        .accessibilityIdentifier("requests.workflow.confirm")
+                    }
+                }
+            }
+            .interactiveDismissDisabled(model.isDeciding)
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+// MARK: - AI Tab
+// The request's linked chats (started with Ask AI, or turned into this request with
+// Create change request…), newest first; tap one to open it in the Assistant space.
+
+private struct AITab: View {
+    let changeRequest: ChangeRequest
+    let links: RequestChatLinks?
+    let bridge: RequestBridgeActions?
+
+    private var chats: [RequestChatLink] { links?.conversations(forRequest: changeRequest.id) ?? [] }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button {
+                    bridge?.askAI(changeRequest)
+                } label: {
+                    Label("New chat about this request", systemImage: "sparkles")
+                        .font(RQFont.body)
+                }
+                .disabled(bridge == nil)
+                .bfPointerHover()
+                .accessibilityIdentifier("requests.detail.newChat")
+            }
+            .padding(.horizontal, BFSpacing._4)
+            .padding(.vertical, BFSpacing._2)
+
+            if chats.isEmpty {
+                ContentUnavailableView {
+                    Label("No chats yet", systemImage: "bubble.left.and.bubble.right")
+                } description: {
+                    Text("Ask the assistant about this request, and the chat shows up here.")
+                }
+            } else {
+                List(chats) { chat in
+                    Button {
+                        bridge?.openConversation(chat)
+                    } label: {
+                        HStack(spacing: BFSpacing._3) {
+                            Image(systemName: "bubble.left.and.text.bubble.right")
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(bridge?.chatTitle(chat.conversationId) ?? "Chat about \(chat.number)")
+                                    .font(RQFont.body)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Text(chat.linkedAt.formatted(.relative(presentation: .named)))
+                                    .font(RQFont.meta)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .bfPointerHover()
+                    .swipeActions {
+                        Button("Unlink", role: .destructive) { links?.unlink(conversationId: chat.conversationId) }
+                    }
+                    .accessibilityIdentifier("requests.detail.linkedChat")
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+        }
+    }
+}
+
+/// The detail tabs as a scrolling row, for compact width.
+private struct DetailTabStrip: View {
+    let tabs: [ChangeRequestDetailTab]
+    @Binding var selection: ChangeRequestDetailTab
+    let title: (ChangeRequestDetailTab) -> String
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: BFSpacing._2) {
+                    ForEach(tabs) { tab in
+                        let isSelected = tab == selection
+                        Button {
+                            selection = tab
+                            withAnimation { proxy.scrollTo(tab, anchor: .center) }
+                        } label: {
+                            Text(title(tab))
+                                .font(RQFont.body.weight(isSelected ? .semibold : .regular))
+                                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                                .padding(.horizontal, BFSpacing._3)
+                                .padding(.vertical, 6)
+                                .background(isSelected ? BFColor.surfaceSunken : Color.clear, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .id(tab)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        .accessibilityIdentifier("requests.detail.tab.\(tab.rawValue)")
+                    }
+                }
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.vertical, BFSpacing._2)
+            }
+        }
     }
 }

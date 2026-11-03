@@ -27,6 +27,8 @@ struct BottomSentinelYKey: PreferenceKey {
 struct ChatView: View {
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var authManager: AuthManager
+    /// A request attached by "Ask AI about this request" (P8); nil without the Requests space.
+    @Environment(\.requestChatLinks) private var requestChatLinks
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
 
@@ -304,6 +306,12 @@ struct ChatView: View {
                     onTap: { chatManager.tapActiveTip() }
                 )
             }
+            if let links = requestChatLinks,
+               let context = links.pendingContext(for: chatManager.currentConversation?.id) {
+                RequestContextChip(context: context) {
+                    if let id = chatManager.currentConversation?.id { links.detach(from: id) }
+                }
+            }
             ChatInputView(
                 text: $inputText,
                 // Keeps Stop showing (instead of falling back to mic) through the
@@ -392,7 +400,7 @@ struct ChatView: View {
             let prompt = text.isEmpty ? "Analyze the attached file." : text
             let override = isDumpScreenshot
                 ? ST22PromptBuilder.buildPrompt(rawDump: text.isEmpty ? nil : text)
-                : nil
+                : requestChatLinks?.consumePrompt(for: chatManager.currentConversation?.id, question: prompt)
             Task {
                 // Show the user's own message immediately, independent of the attachment
                 // upload — previously the upload was awaited *before* calling sendMessage at
@@ -427,7 +435,11 @@ struct ChatView: View {
                 )
             }
         } else {
-            Task { await chatManager.sendMessage(text, personaOverride: personaForThisSend) }
+            // A chat started from a change request sends its context with the first message.
+            let override = requestChatLinks?.consumePrompt(for: chatManager.currentConversation?.id, question: text)
+            Task {
+                await chatManager.sendMessage(text, requestPromptOverride: override, personaOverride: personaForThisSend)
+            }
         }
     }
 
@@ -723,6 +735,8 @@ struct MessageView: View {
     /// composer can keep showing Stop for as long as text is still visibly printing — even
     /// after the network side (isThisMessageStreaming) has already finished.
     var onRevealingChanged: (Bool) -> Void = { _ in }
+    /// "Create change request…" on an answer, when the Requests space is available (P8).
+    @Environment(\.requestBridge) private var requestBridge
     @State private var didCopy = false
     /// Mac: the prompt's Copy button shows while the pointer is over the prompt.
     @State private var isHoveringPrompt = false
@@ -766,6 +780,13 @@ struct MessageView: View {
         }
         ShareLink(item: message.content) {
             Label("Share", systemImage: "square.and.arrow.up")
+        }
+        if message.role == .assistant, let requestBridge {
+            Button {
+                requestBridge.createRequest(message.content)
+            } label: {
+                Label("Create change request…", systemImage: "doc.badge.plus")
+            }
         }
     }
 
@@ -1254,4 +1275,46 @@ struct ST22DumpBanner: View {
     ChatView()
         .environmentObject(ChatManager(service: BFFChatService()))
         .environmentObject(AuthManager())
+}
+
+/// Above the composer while a chat started from a change request hasn't sent its first
+/// message: the request it's about, with a mini stage rail, removable.
+private struct RequestContextChip: View {
+    let context: RequestChatContext
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.text")
+                .foregroundStyle(BFColor.primary)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(context.number)
+                        .font(RQFont.number)
+                        .foregroundStyle(.secondary)
+                    Text(context.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                }
+                StageRail(stage: context.stage, totalStages: context.totalStages, status: context.railStatus)
+            }
+            Spacer(minLength: 0)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(context.number) from this chat")
+            .bfPointerHover()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(BFColor.surfaceCard, in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous).strokeBorder(BFColor.hairline, lineWidth: 0.5))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Asking about \(context.number), \(context.title)")
+        .accessibilityIdentifier("chat.requestContext")
+    }
 }

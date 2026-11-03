@@ -49,6 +49,7 @@ private struct ChangeRequestListScreen: View {
             )
             ChangeRequestListBody(model: model, viewMode: effectiveViewMode, showsProject: true)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(BFColor.surfaceCanvas)
         .navigationTitle("Requests")
         .navigationBarTitleDisplayMode(.inline)

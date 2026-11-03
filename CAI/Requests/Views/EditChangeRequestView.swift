@@ -33,7 +33,7 @@ struct EditChangeRequestView: View {
         self.services = services
         _requestName = State(initialValue: changeRequest.title)
         _description = State(initialValue: changeRequest.description ?? "")
-        _ticketUrl = State(initialValue: "")
+        _ticketUrl = State(initialValue: changeRequest.ticketUrl ?? "")
         _selectedOwnerId = State(initialValue: changeRequest.requestedByUserId)
     }
 
@@ -93,8 +93,13 @@ struct EditChangeRequestView: View {
                                 requestType: selectedRequestTypeId,
                                 severity: selectedSeverityId,
                                 requestedBy: changed(selectedOwnerId, from: changeRequest.requestedByUserId),
-                                ticketUrl: ticketUrl.trimmingCharacters(in: .whitespaces).isEmpty
-                                    ? nil : ticketUrl.trimmingCharacters(in: .whitespaces)
+                                // nil (unchanged) leaves it alone. An emptied link is sent as
+                                // "", but trm-backend-go's update skips empty values
+                                // (partialUpdate), so a link can't be cleared, as on the web.
+                                ticketUrl: changed(
+                                    ticketUrl.trimmingCharacters(in: .whitespaces),
+                                    from: changeRequest.ticketUrl ?? ""
+                                )
                             )
                             isSaving = false
                             dismiss()

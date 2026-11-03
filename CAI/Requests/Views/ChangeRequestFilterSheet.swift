@@ -3,16 +3,18 @@ import SwiftUI
 /// Ported from trm-ios. Status, Priority (severity), Type, Request Owner, and Assignee — trm's own "filter
 /// drawer" facets (see ChangeRequestFilter's doc comments), edited as a local draft and only
 /// committed to the view model on Apply so Owner/Assignee/Severity/Type batch into a single
-/// refetch instead of one per field. Status has no server round-trip — it's applied
-/// immediately to the (client-side only) `statusFilter`.
+/// refetch instead of one per field. Priority, Type and the people come from the same lists
+/// the web's filter uses (severities, request types, users), and are sent as ids.
 struct ChangeRequestFilterSheet: View {
     @ObservedObject var model: ChangeRequestListViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.requestsServices) private var services
 
     @State private var status: ChangeRequestStatus?
     @State private var draft = ChangeRequestAdvancedFilters()
-
-    private static let severities = ["Low", "Medium", "High"]
+    @State private var severities: [SeverityOption] = []
+    @State private var requestTypes: [RequestTypeOption] = []
+    @State private var users: [UserOption] = []
 
     var body: some View {
         NavigationStack {
@@ -28,37 +30,24 @@ struct ChangeRequestFilterSheet: View {
                     .labelsHidden()
                 }
 
-                Section("Priority") {
+                Section("Classification") {
                     Picker("Priority", selection: $draft.severity) {
                         Text("Any").tag(String?.none)
-                        ForEach(Self.severities, id: \.self) { severity in
-                            Text(severity).tag(String?.some(severity))
+                        ForEach(severities) { severity in
+                            Text(severity.type).tag(String?.some(severity.id))
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                }
-
-                Section("Type") {
-                    TextField("Any", text: $draft.requestType)
-                }
-
-                Section("Request owner") {
-                    Picker("Request Owner", selection: $draft.ownerIsMe) {
-                        Text("Anyone").tag(false)
-                        Text("Me").tag(true)
+                    Picker("Type", selection: $draft.requestTypeId) {
+                        Text("Any").tag(String?.none)
+                        ForEach(requestTypes) { type in
+                            Text(type.type).tag(String?.some(type.id))
+                        }
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
                 }
 
-                Section("Assignee") {
-                    Picker("Assignee", selection: $draft.assigneeIsMe) {
-                        Text("Anyone").tag(false)
-                        Text("Me").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                Section("People") {
+                    PersonPicker(title: "Request owner", isMe: $draft.ownerIsMe, userId: $draft.ownerId, users: users)
+                    PersonPicker(title: "Assignee", isMe: $draft.assigneeIsMe, userId: $draft.assigneeId, users: users)
                 }
             }
             .navigationTitle("Filter")
@@ -79,10 +68,57 @@ struct ChangeRequestFilterSheet: View {
                     .fontWeight(.semibold)
                 }
             }
+            .task { await loadOptions() }
         }
         .onAppear {
             status = model.statusFilter
             draft = model.advancedFilters
+        }
+    }
+
+    private func loadOptions() async {
+        guard let reference = services?.referenceDataService, severities.isEmpty else { return }
+        async let sv = try? reference.severities(forceRefresh: false)
+        async let rt = try? reference.requestTypes(forceRefresh: false)
+        async let us = try? reference.users(forceRefresh: false)
+        let (loadedSeverities, loadedTypes, loadedUsers) = await (sv, rt, us)
+        severities = loadedSeverities ?? []
+        requestTypes = loadedTypes ?? []
+        users = (loadedUsers ?? []).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+}
+
+/// Anyone, Me, or one person from the user list — the web lists every user for Request
+/// Owner and Assignee.
+private struct PersonPicker: View {
+    let title: String
+    @Binding var isMe: Bool
+    @Binding var userId: String?
+    let users: [UserOption]
+
+    private enum Choice: Hashable { case anyone, me, user(String) }
+
+    private var choice: Binding<Choice> {
+        Binding(
+            get: { isMe ? .me : userId.map(Choice.user) ?? .anyone },
+            set: { newValue in
+                switch newValue {
+                case .anyone: isMe = false; userId = nil
+                case .me: isMe = true; userId = nil
+                case .user(let id): isMe = false; userId = id
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        Picker(title, selection: choice) {
+            Text("Anyone").tag(Choice.anyone)
+            Text("Me").tag(Choice.me)
+            if !users.isEmpty { Divider() }
+            ForEach(users) { user in
+                Text(user.name).tag(Choice.user(user.id))
+            }
         }
     }
 }

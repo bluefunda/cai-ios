@@ -30,7 +30,12 @@ private struct RequestTemplatesScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ListScreenHeader(searchText: $searchText, searchPrompt: "Search templates")
+            AdminScreenHeader(
+                title: "Request Templates",
+                subtitle: adminCount(loader.items.count, "template", loaded: loader.hasLoaded),
+                actionTitle: "New template", actionIdentifier: "admin.templates.new",
+                action: { editing = .new }, search: $searchText, searchPrompt: "Search templates"
+            )
             AdminListContent(loader: loader, subject: "templates", emptyTitle: "No templates",
                              emptyIcon: "doc.on.doc", reload: reload) {
                 ForEach(filtered) { template in
@@ -39,14 +44,9 @@ private struct RequestTemplatesScreen: View {
                 }
             }
         }
-        .background(BFColor.surfaceCanvas)
+        .adminColumn()
         .navigationTitle("Request Templates")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { editing = .new } label: { Label("New Template", systemImage: "plus") }
-            }
-        }
         .sheet(item: $editing) { target in
             TemplateFormSheet(context: context, target: target, onSaved: reload)
         }
@@ -66,7 +66,14 @@ private struct TemplateRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(template.name).font(RQFont.rowTitle).foregroundStyle(.primary)
-                Text("\(template.workflow.count) steps").font(RQFont.meta).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("\(template.workflow.count) steps").font(RQFont.meta).foregroundStyle(.secondary)
+                    if template.requireApproval {
+                        Label("Approvals", systemImage: "checkmark.seal")
+                            .font(RQFont.meta)
+                            .foregroundStyle(BFColor.statusBlueText)
+                    }
+                }
             }
             Spacer()
             Text(template.isActive ? "Active" : "Inactive")
@@ -97,6 +104,8 @@ private struct TemplateFormSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
+    @State private var kind: RQTemplateKind = .standard
+    @State private var requireApproval = false
     @State private var stages: [RQTemplateStage] = [RQTemplateStage()]
     @State private var departments: [RQNamedOption] = []
     @State private var roles: [RQNamedOption] = []
@@ -111,8 +120,27 @@ private struct TemplateFormSheet: View {
                 if let error {
                     Text(error).foregroundStyle(.red).font(RQFont.meta)
                 }
-                Section("Template") {
+                Section {
                     TextField("Template name", text: $name)
+                    Picker("Kind", selection: $kind) {
+                        ForEach(RQTemplateKind.allCases) { Text($0.title).tag($0) }
+                    }
+                    .accessibilityIdentifier("admin.template.kind")
+                    Toggle("Require approvals", isOn: $requireApproval)
+                        .toggleStyle(.switch)
+                        .accessibilityIdentifier("admin.template.requireApproval")
+                } header: {
+                    Text("Template")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(requireApproval
+                             ? "Requests from this template move on only when each stage's department and role approve it."
+                             : "Requests from this template move freely; the stages are a guide.")
+                        // As on the web: gate steps exist only on tech templates.
+                        if kind == .tech {
+                            Text("Tech templates can have GitHub gate steps, satisfied by the request's linked pull requests.")
+                        }
+                    }
                 }
                 ForEach($stages) { $stage in
                     Section("Stage \((stages.firstIndex(of: stage) ?? 0) + 1)") {
@@ -126,6 +154,19 @@ private struct TemplateFormSheet: View {
                             ForEach(roles) { Text($0.name).tag($0.name) }
                         }
                         Toggle("QA deploy", isOn: qaBinding(for: stage.id))
+                        if kind == .tech {
+                            Picker("Step type", selection: $stage.type) {
+                                ForEach(RQStepType.allCases) { Text($0.title).tag($0) }
+                            }
+                            .accessibilityIdentifier("admin.template.stepType")
+                            if stage.type == .githubGate {
+                                Toggle("Pull request merged", isOn: $stage.gate.requireMerged)
+                                Toggle("Approved at the latest commit", isOn: $stage.gate.requireApprovedAtHead)
+                                Toggle("Checks passing", isOn: $stage.gate.requireChecksGreen)
+                                Stepper("Approvals needed: \(stage.gate.minApprovals)",
+                                        value: $stage.gate.minApprovals, in: 0...10)
+                            }
+                        }
                         if stages.count > 1 {
                             Button("Remove Stage", role: .destructive) {
                                 stages.removeAll { $0.id == stage.id }
@@ -166,6 +207,8 @@ private struct TemplateFormSheet: View {
             (self.departments, self.roles) = try await (departments, roles)
             if case .edit(let id) = target, let template = try await context.service.template(id: id) {
                 name = template.name
+                kind = template.kind
+                requireApproval = template.requireApproval
                 stages = template.workflow.isEmpty ? [RQTemplateStage()] : template.workflow
             }
         } catch {
@@ -176,7 +219,8 @@ private struct TemplateFormSheet: View {
     private func save() async {
         isSaving = true
         error = nil
-        let payload = RQTemplatePayload(name: name.trimmedValue, stages: stages, createdBy: context.userId)
+        let payload = RQTemplatePayload(name: name.trimmedValue, kind: kind, requireApproval: requireApproval,
+                                        stages: stages, createdBy: context.userId)
         do {
             switch target {
             case .new: try await context.service.createTemplate(payload)

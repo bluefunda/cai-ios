@@ -97,3 +97,89 @@ final class ScreenshotTests: CAIUITests {
         }
     }
 }
+
+/// Requests screenshots (Requests list, request detail, Ask AI chat), from the Requests
+/// fixtures — `-bf_requests_fixtures YES` gives the demo user the Requests space with
+/// RequestsFixtures data, no backend. Each scene is also attached to the test result.
+final class RequestsScreenshotTests: CAIUITests {
+    @MainActor
+    override func setUpWithError() throws {
+        app.launchArguments += ["-bf_feature_requests", "YES", "-bf_requests_fixtures", "YES"]
+        try super.setUpWithError()
+    }
+
+    @MainActor
+    func testRequestsScreenshots() throws {
+        openSidebarIfNeeded()
+        let requestsSpace = app.descendants(matching: .any)["sidebar.space.requests"].firstMatch
+        XCTAssertTrue(requestsSpace.waitForExistence(timeout: 10), "Requests space missing — check the fixtures flags")
+        requestsSpace.tap()
+        let requestsRow = app.descendants(matching: .any)["sidebar.destination.requests"].firstMatch
+        if requestsRow.waitForExistence(timeout: 3) { requestsRow.tap() }
+        closeSidebarIfNeeded()
+
+        let request = app.descendants(matching: .any)["requests.crRow.32"].firstMatch
+        XCTAssertTrue(request.waitForExistence(timeout: 10), "Expected fixture request CR-1042 (id 32)")
+        capture("05-Requests")
+
+        request.tap()
+        let commentsTab = app.descendants(matching: .any)["requests.detail.tab.comments"].firstMatch
+        let askAI = app.buttons["requests.detail.askAI"]
+        XCTAssertTrue(askAI.waitForExistence(timeout: 10), "Ask AI on the request detail")
+        sleep(1)
+        if commentsTab.exists {
+            XCTAssertTrue(commentsTab.isHittable, "Comments isn't cut off")
+        }
+        capture("06-Request")
+
+        askAI.tap()
+        let chip = app.descendants(matching: .any)["chat.requestContext"].firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 10), "the new chat shows the request it's about")
+        // A new chat focuses the composer; iPhone has no Hide keyboard key, so drag the
+        // keyboard down from the chat area for a clean shot.
+        dismissKeyboardIfNeeded()
+        if app.keyboards.count > 0 {
+            app.staticTexts["How can I help you today?"].firstMatch.swipeDown()
+        }
+        capture("07-AskAI")
+    }
+
+    @MainActor
+    private func capture(_ name: String) {
+        snapshot(name)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    private func openSidebarIfNeeded() {
+        let hamburger = app.buttons["hamburgerButton"]
+        if hamburger.waitForExistence(timeout: 5) {
+            hamburger.tap()
+            return
+        }
+        let showSidebar = app.buttons["Show Sidebar"]
+        if showSidebar.waitForExistence(timeout: 3) { showSidebar.tap() }
+    }
+
+    /// iPhone's drawer stays over the content after picking a destination on some runs.
+    @MainActor
+    private func closeSidebarIfNeeded() {
+        let hamburger = app.buttons["hamburgerButton"]
+        if !app.descendants(matching: .any)["requests.crRow.32"].firstMatch.waitForExistence(timeout: 3),
+           hamburger.exists {
+            hamburger.tap()
+        }
+    }
+
+    @MainActor
+    private func dismissKeyboardIfNeeded() {
+        guard app.keyboards.count > 0 else { return }
+        let hideKeyboard = app.buttons["Hide keyboard"]
+        if hideKeyboard.waitForExistence(timeout: 2) {
+            hideKeyboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+    }
+}

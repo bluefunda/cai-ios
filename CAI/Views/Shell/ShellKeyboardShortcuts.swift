@@ -6,7 +6,8 @@ import SwiftUI
 // current Requests list. These live on invisible buttons in the shell's background
 // rather than on the sidebar rows: the sidebar column can be collapsed (iPad/Mac) or the
 // drawer closed (iPhone), and a shortcut must still work then. The titles are what
-// iPad's hold-⌘ shortcut overlay lists. ⌘N is a menu command in CAIApp.
+// iPad's hold-⌘ shortcut overlay lists. ⌘N is a menu command in CAIApp. On Mac Catalyst
+// they're all in CAIApp's Go menu instead, so none is bound twice.
 
 struct ShellKeyboardShortcuts: View {
     let destinations: [SidebarDestination]
@@ -19,6 +20,14 @@ struct ShellKeyboardShortcuts: View {
     let onRefresh: (() -> Void)?
 
     var body: some View {
+        #if targetEnvironment(macCatalyst)
+        EmptyView()
+        #else
+        shortcuts
+        #endif
+    }
+
+    private var shortcuts: some View {
         ZStack {
             // ⌘1–⌘9 only: an admin's Requests space has more destinations than digits.
             ForEach(Array(destinations.prefix(9).enumerated()), id: \.element) { index, destination in

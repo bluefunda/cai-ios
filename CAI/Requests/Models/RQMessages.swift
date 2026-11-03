@@ -41,19 +41,23 @@ struct RQMessage: Identifiable, Decodable, Hashable {
     /// `lastMessageTimestamp`, so it isn't re-formatted.
     let createdAtRaw: String?
     let sender: RQParticipant?
+    /// Files sent with the message (`[{id, fileName}]`), downloaded like comment attachments.
+    var attachments: [RQAttachment] = []
 
     private enum CodingKeys: String, CodingKey {
-        case id, senderId, message, createdAt
+        case id, senderId, message, createdAt, attachments
         case sender = "SenderInfo"
     }
 
-    init(id: Int, senderId: String, text: String, createdAtRaw: String?, sender: RQParticipant?) {
+    init(id: Int, senderId: String, text: String, createdAtRaw: String?, sender: RQParticipant?,
+         attachments: [RQAttachment] = []) {
         self.id = id
         self.senderId = senderId
         self.text = text
         self.createdAtRaw = createdAtRaw
         self.createdAt = createdAtRaw.flatMap { Date.fromISO8601($0) }
         self.sender = sender
+        self.attachments = attachments
     }
 
     init(from decoder: Decoder) throws {
@@ -65,6 +69,7 @@ struct RQMessage: Identifiable, Decodable, Hashable {
         // COALESCEd NULLs arrive as Go's zero time (year 1) — treat as unknown.
         createdAt = createdAtRaw.flatMap { Date.fromISO8601($0) }.flatMap { $0.timeIntervalSince1970 > 0 ? $0 : nil }
         sender = try? c.decode(RQParticipant.self, forKey: .sender)
+        attachments = ((try? c.decodeIfPresent([RQAttachment].self, forKey: .attachments)) ?? nil) ?? []
     }
 }
 
@@ -153,8 +158,39 @@ struct RQNewMessage: Encodable {
     let message: String
     let createdAt: String
     let mentions: [String]
-    let attachments: [String]
+    /// `{id, fileName}` of files already uploaded, as the web's chat box sends them.
+    let attachments: [CommentAttachmentRef]
     let conversationId: String
+}
+
+/// POST /discussions, as trm's createNewChat.js sends it. `userIDs` includes the creator.
+/// A `#123` in the topic links the conversation to change request 123.
+struct RQNewConversation: Encodable {
+    let userIDs: [String]
+    let creatorId: String
+    let topic: String
+    let changeRequestId: Int?
+
+    static func changeRequestId(inTopic topic: String) -> Int? {
+        guard let match = topic.firstMatch(of: /#(\d+)/) else { return nil }
+        return Int(match.1)
+    }
+}
+
+/// POST /discussions' reply. The id's wire type isn't confirmed, so either is accepted.
+struct RQCreatedConversation: Decodable {
+    let conversationId: String
+
+    private enum CodingKeys: String, CodingKey { case conversationId }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let number = try? container.decode(Int.self, forKey: .conversationId) {
+            conversationId = String(number)
+        } else {
+            conversationId = try container.decode(String.self, forKey: .conversationId)
+        }
+    }
 }
 
 struct RQMarkSeen: Encodable {

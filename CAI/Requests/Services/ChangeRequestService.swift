@@ -39,6 +39,8 @@ protocol ChangeRequestServicing {
     func changeRequest(id: String) async throws -> ChangeRequest
     func create(_ payload: NewChangeRequestPayload) async throws -> ChangeRequest
     func update(_ payload: ChangeRequestUpdatePayload) async throws
+    /// Permanently removes the request (the web's Delete, offered at the first stage only).
+    func delete(id: String, updatedBy: String) async throws
 }
 
 /// Mirrors trm's own `getChangeRequestByFilter(desc, archive, status, reqOwner, requestType,
@@ -46,6 +48,8 @@ protocol ChangeRequestServicing {
 /// non-empty values are sent as query params, matching trm's own conditional URL-building.
 struct ChangeRequestFilter {
     var description: String = ""
+    /// One request by number — the backend's `id` facet (also how the detail is fetched).
+    var id: String?
     var archive: Bool? = false
     var status: String?
     var reqOwner: String?
@@ -65,9 +69,10 @@ struct ChangeRequestFilter {
     var limit: Int? = 50
     var offset: Int?
 
-    fileprivate var queryItems: [URLQueryItem] {
+    var queryItems: [URLQueryItem] {
         var items: [URLQueryItem] = []
         if !description.isEmpty { items.append(URLQueryItem(name: "description", value: description)) }
+        if let id, !id.isEmpty { items.append(URLQueryItem(name: "id", value: id)) }
         if let archive { items.append(URLQueryItem(name: "archive", value: archive ? "true" : "false")) }
         if let status, !status.isEmpty { items.append(URLQueryItem(name: "status", value: status)) }
         if let reqOwner, !reqOwner.isEmpty { items.append(URLQueryItem(name: "reqOwner", value: reqOwner)) }
@@ -117,7 +122,10 @@ struct ChangeRequestService: ChangeRequestServicing {
             "/rest/trm/v1/change-request/create",
             body: payload
         )
-        return try await changeRequest(id: String(response.id))
+        guard let id = response.id else {
+            throw RequestsAPIError.serverError(200, response.errorMessage ?? "The request couldn't be created.")
+        }
+        return try await changeRequest(id: String(id))
     }
 
     /// PUT /rest/trm/v1/change-request — confirmed against trm's own updateChangeReq /
@@ -126,6 +134,16 @@ struct ChangeRequestService: ChangeRequestServicing {
     /// the caller re-fetching afterward to pick up the new server-computed timeline entry.
     func update(_ payload: ChangeRequestUpdatePayload) async throws {
         try await client.putDiscardingResponse("/rest/trm/v1/change-request", body: payload)
+    }
+
+    /// PUT /rest/trm/v1/change-request-delete `{id, updatedBy}` — trm's deleteChangeRequest
+    /// (changeReqApis.js), trm-backend-go putCrDelete.
+    func delete(id: String, updatedBy: String) async throws {
+        guard let numericId = Int(id) else { throw RequestsAPIError.invalidURL }
+        try await client.putDiscardingResponse(
+            "/rest/trm/v1/change-request-delete",
+            body: ChangeRequestDeletePayload(id: numericId, updatedBy: updatedBy)
+        )
     }
 
     /// `requestedBy` is a user id and `projectId` is a project id; display data for both
@@ -146,5 +164,44 @@ struct ChangeRequestService: ChangeRequestServicing {
             }
             return cr
         }
+    }
+}
+
+// MARK: - Stage Flow and Approval Workflow
+
+protocol ChangeRequestWorkflowServicing {
+    /// Moves the request to `payload`'s stage — the web's stageUpdateFunc.
+    func moveStage(_ payload: StageUpdatePayload) async throws
+    /// The approval workflow view. A tenant without enforcement answers `enforced: false`.
+    func workflow(changeRequestId: String) async throws -> RQWorkflow
+    func decide(changeRequestId: String, order: Int, _ payload: WorkflowDecisionPayload) async throws
+}
+
+struct ChangeRequestWorkflowService: ChangeRequestWorkflowServicing {
+    let client: RequestsAPIClient
+
+    /// PUT /rest/trm/v1/stage (trm-backend-go stagePut.go). It answers 200 with
+    /// `status: "error"` when the move fails, and 409 workflow_enforced when enforcement
+    /// is on.
+    func moveStage(_ payload: StageUpdatePayload) async throws {
+        let response: StageUpdateResponse = try await client.put("/rest/trm/v1/stage", body: payload)
+        if response.status == "error" {
+            throw RequestsAPIError.serverError(200, response.message ?? "The stage couldn't be updated.")
+        }
+    }
+
+    /// GET /change-requests/{id}/workflow (trm-bff → trm-backend-go workflowApprovals.go).
+    func workflow(changeRequestId: String) async throws -> RQWorkflow {
+        try await client.get("/change-requests/\(Self.escaped(changeRequestId))/workflow")
+    }
+
+    /// POST /change-requests/{id}/steps/{order}/decisions.
+    func decide(changeRequestId: String, order: Int, _ payload: WorkflowDecisionPayload) async throws {
+        try await client.postDiscardingResponse(
+            "/change-requests/\(Self.escaped(changeRequestId))/steps/\(order)/decisions", body: payload)
+    }
+
+    private static func escaped(_ id: String) -> String {
+        id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
     }
 }

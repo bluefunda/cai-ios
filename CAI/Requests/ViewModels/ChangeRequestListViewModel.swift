@@ -15,8 +15,18 @@ struct ChangeRequestAdvancedFilters: Equatable {
     var ownerIsMe = true      // Request Owner: Me vs Anyone
     var assigneeIsMe = true   // Assignee: Me vs Anyone — both default true to match the
                                // app's original launch behavior (equivalent to the old `.mine`)
-    var severity: String?     // nil = Any; else "Low"/"Medium"/"High"
-    var requestType: String = "" // free text; empty = Any (the wire field has no fixed enum)
+    /// A specific other person, when the Me toggle is off (the web's user lists); nil = Anyone.
+    var ownerId: String?
+    var assigneeId: String?
+    /// Severity and request type ids, as the web's filter sends them: trm-backend-go parses
+    /// both as UUIDs and answers an empty list for anything else. nil = Any.
+    var severity: String?
+    var requestTypeId: String?
+
+    /// Narrowed past the Me/Anyone presets.
+    var isCustom: Bool {
+        severity != nil || requestTypeId != nil || (!ownerIsMe && ownerId != nil) || (!assigneeIsMe && assigneeId != nil)
+    }
 }
 
 @MainActor
@@ -50,16 +60,40 @@ final class ChangeRequestListViewModel: ObservableObject {
         loadTask = Task { await load() }
     }
 
-    /// Client-side only — filters the already-fetched (cached) `changeRequests` in memory,
-    /// no refetch. Status is set from either the List-mode status chips or the Filter
-    /// sheet's Status field; search is instant-as-you-type against the same cached list
-    /// rather than a debounced server round-trip, so results appear immediately even for a
-    /// single typed character.
+    /// Status (List-mode chips or the Filter sheet) and search are server-side facets too,
+    /// as on the web, so they reach every request and not just the loaded page. The loaded
+    /// rows are also filtered in memory meanwhile, so results change as soon as you type;
+    /// the debounced server query then replaces them.
     @Published private(set) var statusFilter: ChangeRequestStatus?
-    @Published var searchText: String = ""
+    @Published var searchText: String = "" {
+        didSet {
+            guard oldValue != searchText else { return }
+            searchTask?.cancel()
+            searchTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.searchDebounce)
+                guard !Task.isCancelled else { return }
+                self?.scheduleLoad()
+            }
+        }
+    }
+    private var searchTask: Task<Void, Never>?
+    static let searchDebounce: Duration = .milliseconds(350)
 
     func setStatusFilter(_ status: ChangeRequestStatus?) {
+        guard status != statusFilter else { return }
         statusFilter = status
+        scheduleLoad()
+    }
+
+    /// How the search box maps onto the backend's facets: digits look up one request by
+    /// id; other text searches title and description. A display number like "CR-1030"
+    /// isn't searchable server-side, so it stays an in-memory filter on loaded rows.
+    static func serverSearch(for text: String) -> (description: String, id: String?) {
+        let query = text.trimmingCharacters(in: .whitespaces)
+        if query.isEmpty { return ("", nil) }
+        if query.allSatisfy(\.isNumber) { return ("", query) }
+        if query.range(of: #"^[A-Za-z]+-\d+$"#, options: .regularExpression) != nil { return ("", nil) }
+        return (query, nil)
     }
 
     var filteredChangeRequests: [ChangeRequest] {
@@ -69,21 +103,29 @@ final class ChangeRequestListViewModel: ObservableObject {
         }
         let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         if !query.isEmpty {
+            // The same fields the server search covers (title, description, id), plus the
+            // display number, so server results aren't filtered back out.
             result = result.filter {
-                $0.title.lowercased().contains(query) || $0.requestNumber.lowercased().contains(query)
+                $0.title.lowercased().contains(query)
+                    || $0.requestNumber.lowercased().contains(query)
+                    || ($0.description?.lowercased().contains(query) ?? false)
+                    || $0.id == query
             }
         }
         return result
     }
 
     private let service: ChangeRequestServicing
+    private let workflowService: ChangeRequestWorkflowServicing?
     private let currentUserId: String?
     /// Scopes this list to one project's change requests — set only by Project Detail's
     /// embedded list, nil for the top-level Requests screen.
     private let projectId: String?
 
-    init(service: ChangeRequestServicing, currentUserId: String?, projectId: String? = nil) {
+    init(service: ChangeRequestServicing, workflowService: ChangeRequestWorkflowServicing? = nil,
+         currentUserId: String?, projectId: String? = nil) {
         self.service = service
+        self.workflowService = workflowService
         self.currentUserId = currentUserId
         self.projectId = projectId
     }
@@ -136,8 +178,11 @@ final class ChangeRequestListViewModel: ObservableObject {
         isLoadingMore = false
     }
 
-    /// The board's drag and drop — the same status update the web's Grid view sends on
-    /// drop (changeRequestUpdateFunc), then a reload so the card lands in its new column.
+    /// The board's drag and drop, as the web's Grid view does it on drop
+    /// (changeRequestUpdateFunc → updatestatus): the status update, then the matching stage
+    /// move (see `boardStageTarget`), then a reload so the card lands in its new column.
+    /// With workflow enforcement on, the backend refuses the stage move; the web ignores
+    /// that, and so does this.
     func move(_ id: String, to status: ChangeRequestStatus) async {
         guard let current = changeRequests.first(where: { $0.id == id }), current.status != status else { return }
         do {
@@ -147,20 +192,32 @@ final class ChangeRequestListViewModel: ObservableObject {
                 updatedBy: currentUserId ?? "",
                 status: status.rawValue
             ))
+            if let workflowService, let userId = currentUserId, let numericId = Int(id),
+               let stage = current.boardStageTarget(for: status) {
+                do {
+                    try await workflowService.moveStage(StageUpdatePayload(
+                        stage: stage, changeRequestId: numericId, updatedBy: userId))
+                } catch RequestsAPIError.rejected(_, "workflow_enforced", _) {}
+            }
             await load()
         } catch {
             self.error = error.localizedDescription
+            await load()
         }
     }
 
     /// Same params as the web's getChangeRequestByFilter.
-    private func filter(offset: Int) -> ChangeRequestFilter {
-        ChangeRequestFilter(
+    func filter(offset: Int) -> ChangeRequestFilter {
+        let search = Self.serverSearch(for: searchText)
+        return ChangeRequestFilter(
+            description: search.description,
+            id: search.id,
             archive: archiveTab == .archived,
-            reqOwner: advancedFilters.ownerIsMe ? currentUserId : nil,
-            requestType: advancedFilters.requestType.isEmpty ? nil : advancedFilters.requestType,
+            status: statusFilter?.rawValue,
+            reqOwner: advancedFilters.ownerIsMe ? currentUserId : advancedFilters.ownerId,
+            requestType: advancedFilters.requestTypeId,
             severity: advancedFilters.severity,
-            assignee: advancedFilters.assigneeIsMe ? currentUserId : nil,
+            assignee: advancedFilters.assigneeIsMe ? currentUserId : advancedFilters.assigneeId,
             projectId: projectId,
             limit: Self.pageSize,
             offset: offset

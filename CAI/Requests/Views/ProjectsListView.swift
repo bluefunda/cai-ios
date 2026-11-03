@@ -41,6 +41,7 @@ private struct ProjectsListScreen: View {
             ListScreenHeader(searchText: $model.searchText, searchPrompt: "Search projects")
             content
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(BFColor.surfaceCanvas)
         .navigationTitle("Projects")
         .navigationBarTitleDisplayMode(.inline)

@@ -49,7 +49,7 @@ struct ProjectService: ProjectServicing {
     }
 
     func listProjects(forceRefresh: Bool = false) async throws -> [RQProject] {
-        try await fetchAll(forceRefresh: forceRefresh).map { RQProject(id: $0.id, name: $0.name) }
+        try await fetchAll(forceRefresh: forceRefresh).map { RQProject(id: $0.id, name: $0.name, repos: $0.repos) }
     }
 
     func listProjectDetails(forceRefresh: Bool = false) async throws -> [ProjectDetail] {

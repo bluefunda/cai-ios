@@ -3,6 +3,9 @@ import AuthenticationServices
 
 extension Notification.Name {
     static let newChatRequested = Notification.Name("newChatRequested")
+    /// The Mac menu bar's Search Chats (⌘F) and Refresh (⌘R) — see CAIApp's Go menu.
+    static let focusSearchRequested = Notification.Name("focusSearchRequested")
+    static let refreshRequested = Notification.Name("refreshRequested")
 }
 
 // MARK: - Root
@@ -70,6 +73,8 @@ struct AppShell: View {
     // Requests space — view models and navigation that survive switching destinations
     // (see RequestsState).
     @StateObject private var requestsState = RequestsState()
+    /// Chats started from, or turned into, change requests (P8).
+    @State private var requestChatLinks = RequestChatLinks()
 
     enum AppSheet: String, Identifiable {
         case settings, subscription
@@ -105,12 +110,34 @@ struct AppShell: View {
                 services: workspace.isRequestsAvailable ? requestsServices : nil,
                 currentUserId: authManager.currentUser?.id
             )
+            requestChatLinks.setUser(authManager.currentUser?.id)
         }
         .environment(\.isRequestsAvailable, workspace.isRequestsAvailable)
+        .environment(\.requestChatLinks, workspace.isRequestsAvailable ? requestChatLinks : nil)
+        .environment(\.requestBridge, workspace.isRequestsAvailable ? requestBridge : nil)
+        .sheet(item: $requestsState.newRequestPrefill) { prefill in
+            if let model = requestsState.makeNewRequestModel() {
+                NewChangeRequestView(model: model.applying(prefill)) { created in
+                    if let conversationId = prefill.conversationId {
+                        requestChatLinks.link(conversationId: conversationId, requestId: created.id,
+                                              number: created.requestNumber, title: created.title)
+                    }
+                    workspace.navigate(to: .requests(.requests))
+                    requestsState.openRequest(id: created.id)
+                    Task { await requestsState.changeRequests?.load() }
+                }
+            }
+        }
         .sheet(item: $activeSheet) { sheet in sheetView(sheet) }
         .sheet(item: $safariURL) { url in SafariView(url: url).ignoresSafeArea() }
         .sheet(isPresented: $showSystems) {
             SystemManagerView(store: systemStore).environmentObject(authManager)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchRequested)) { _ in
+            focusSidebarSearch()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .refreshRequested)) { _ in
+            refreshAction?()
         }
         // ⌘N: a new request while the Requests space is active, otherwise a new chat (P10).
         .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
@@ -307,6 +334,35 @@ struct AppShell: View {
     }
 
     // MARK: - Requests
+
+    /// Across spaces: Ask AI from a request, open a linked chat, and Create change request
+    /// from an answer (P8).
+    private var requestBridge: RequestBridgeActions {
+        RequestBridgeActions(
+            askAI: { request in
+                workspace.navigate(to: .assistant(.chats))
+                chatManager.newConversation()
+                if let id = chatManager.currentConversation?.id {
+                    requestChatLinks.attach(RequestChatContext(request), to: id)
+                }
+            },
+            openConversation: { link in
+                workspace.navigate(to: .assistant(.chats))
+                // A chat not loaded into the sidebar yet (an older page) opens by id; its
+                // messages load as usual.
+                let conversation = chatManager.conversations.first { $0.id == link.conversationId }
+                    ?? Conversation(id: link.conversationId, title: "Chat about \(link.number)", messages: [],
+                                    model: chatManager.selectedModel.id, createdAt: link.linkedAt)
+                chatManager.selectConversation(conversation)
+            },
+            createRequest: { markdown in
+                requestsState.newRequestPrefill = NewRequestPrefill(
+                    chatTitle: chatManager.currentConversation?.title, answerMarkdown: markdown,
+                    conversationId: chatManager.currentConversation?.id)
+            },
+            chatTitle: { id in chatManager.conversations.first { $0.id == id }?.title }
+        )
+    }
 
     private var requestsConfigurationKey: String {
         "\(authManager.currentUser?.id ?? "")|\(workspace.isRequestsAvailable)"

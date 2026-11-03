@@ -13,10 +13,13 @@ final class MessagesListViewModel: ObservableObject {
 
     let service: MessagesServicing
     let currentUserId: String?
+    /// Uploads and opens message attachments — the same file store as comment attachments.
+    let attachmentService: AttachmentServicing?
 
-    init(service: MessagesServicing, currentUserId: String?) {
+    init(service: MessagesServicing, currentUserId: String?, attachmentService: AttachmentServicing? = nil) {
         self.service = service
         self.currentUserId = currentUserId
+        self.attachmentService = attachmentService
     }
 
     var filteredConversations: [RQConversation] {
@@ -51,7 +54,105 @@ final class MessagesListViewModel: ObservableObject {
     }
 
     func makeConversationModel(for conversation: RQConversation) -> ConversationViewModel {
-        ConversationViewModel(conversation: conversation, service: service, currentUserId: currentUserId)
+        ConversationViewModel(conversation: conversation, service: service, currentUserId: currentUserId,
+                              attachmentService: attachmentService)
+    }
+}
+
+// MARK: - New Conversation
+
+/// The web's New message drawer (createNewChat.js): pick recipients from the tenant's
+/// active users, a topic, and a first message.
+@MainActor
+final class NewConversationViewModel: ObservableObject {
+    @Published var searchText = ""
+    @Published private(set) var matches: [RQAdminUser] = []
+    @Published private(set) var recipients: [RQAdminUser] = []
+    @Published var topic = ""
+    @Published var message = ""
+    @Published private(set) var isSearching = false
+    @Published private(set) var isSending = false
+    @Published var error: String?
+
+    /// Set once POST /discussions succeeds, so a retry after the first message fails
+    /// re-sends only the message instead of creating a second conversation.
+    @Published private(set) var createdConversationId: String?
+
+    private let messagesService: MessagesServicing
+    private let searchUsers: (String) async throws -> [RQAdminUser]
+    private let currentUserId: String?
+
+    init(messagesService: MessagesServicing,
+         searchUsers: @escaping (String) async throws -> [RQAdminUser],
+         currentUserId: String?) {
+        self.messagesService = messagesService
+        self.searchUsers = searchUsers
+        self.currentUserId = currentUserId
+    }
+
+    var canSend: Bool {
+        !isSending && !recipients.isEmpty
+            && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Active users matching `searchText`, minus the current user and anyone already added.
+    func search() async {
+        isSearching = true
+        defer { isSearching = false }
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        do {
+            let found = try await searchUsers(query)
+            // A slower, older search must not overwrite a newer one's results.
+            guard query == searchText.trimmingCharacters(in: .whitespaces) else { return }
+            let chosen = Set(recipients.map(\.id))
+            matches = found.filter { $0.id != currentUserId && !chosen.contains($0.id) }
+            error = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func add(_ user: RQAdminUser) {
+        guard !recipients.contains(user) else { return }
+        recipients.append(user)
+        matches.removeAll { $0.id == user.id }
+    }
+
+    /// Recipients can't change once the conversation exists (only the message is retried).
+    func remove(_ user: RQAdminUser) {
+        guard createdConversationId == nil else { return }
+        recipients.removeAll { $0.id == user.id }
+    }
+
+    /// The new conversation's id, or nil (with `error` set) if it couldn't be created.
+    func send() async -> String? {
+        guard canSend else { return nil }
+        isSending = true
+        error = nil
+        defer { isSending = false }
+        let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let conversationId: String
+            if let existing = createdConversationId {
+                conversationId = existing
+            } else {
+                conversationId = try await messagesService.createConversation(
+                    topic: title.isEmpty ? String(text.prefix(80)) : title,
+                    recipientIds: recipients.map(\.id)
+                )
+                createdConversationId = conversationId
+            }
+            try await messagesService.send(text, conversationId: conversationId)
+            return conversationId
+        } catch {
+            self.error = createdConversationId == nil
+                ? error.localizedDescription
+                : "The conversation was created but the message didn't send. Press Send to try again."
+            return nil
+        }
     }
 }
 
@@ -66,21 +167,50 @@ final class ConversationViewModel: ObservableObject {
     @Published private(set) var isSending = false
     @Published var draft = ""
     @Published var error: String?
+    /// Uploaded and waiting to go with the next message, as the web's chat box holds them.
+    @Published private(set) var pendingAttachments: [RQAttachment] = []
+    @Published private(set) var isUploadingAttachment = false
 
     let conversation: RQConversation
     let currentUserId: String?
     private let service: MessagesServicing
+    private let attachmentService: AttachmentServicing?
 
     static let batchSize = 30
 
-    init(conversation: RQConversation, service: MessagesServicing, currentUserId: String?) {
+    init(conversation: RQConversation, service: MessagesServicing, currentUserId: String?,
+         attachmentService: AttachmentServicing? = nil) {
         self.conversation = conversation
         self.service = service
         self.currentUserId = currentUserId
+        self.attachmentService = attachmentService
     }
 
+    var canAttach: Bool { attachmentService != nil && !isUploadingAttachment && !isSending }
+
     var canSend: Bool {
-        !isSending && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isSending && !isUploadingAttachment
+            && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty)
+    }
+
+    func attach(fileURL: URL) async {
+        guard let attachmentService else { return }
+        isUploadingAttachment = true
+        defer { isUploadingAttachment = false }
+        do {
+            pendingAttachments.append(try await attachmentService.upload(fileURL: fileURL))
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func removePending(_ attachment: RQAttachment) {
+        pendingAttachments.removeAll { $0.id == attachment.id }
+    }
+
+    func download(_ attachment: RQAttachment) async throws -> (data: Data, mimeType: String?, fileName: String) {
+        guard let attachmentService else { throw RequestsAPIError.invalidURL }
+        return try await attachmentService.download(id: attachment.id)
     }
 
     func isMine(_ message: RQMessage) -> Bool {
@@ -132,12 +262,13 @@ final class ConversationViewModel: ObservableObject {
 
     func send() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isSending else { return }
+        guard canSend else { return }
         isSending = true
         error = nil
         do {
-            try await service.send(text, conversationId: conversation.id)
+            try await service.send(text, attachments: pendingAttachments, conversationId: conversation.id)
             draft = ""
+            pendingAttachments = []
             await refreshLatest()
         } catch {
             self.error = error.localizedDescription

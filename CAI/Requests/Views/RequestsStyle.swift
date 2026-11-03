@@ -88,6 +88,15 @@ struct OwnerBadge: View {
     }
 }
 
+extension View {
+    /// A detail screen as one centred, readable column on a wide Mac or iPad window, the
+    /// way the chat and the admin screens read; no effect on an iPhone.
+    func readableColumn(_ width: CGFloat = 900) -> some View {
+        frame(maxWidth: width, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
 struct RQAvatar: View {
     let urlString: String?
     let size: CGFloat

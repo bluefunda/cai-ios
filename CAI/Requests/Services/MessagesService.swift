@@ -9,8 +9,18 @@ protocol MessagesServicing {
     /// One page of a conversation, newest first from the backend: messages at or before
     /// `before` (its raw timestamp), up to `batchSize`. nil starts from the latest message.
     func messages(conversationId: String, before: String?, batchSize: Int) async throws -> [RQMessage]
-    func send(_ text: String, conversationId: String) async throws
+    /// `attachments` are files already uploaded (AttachmentService), sent by id.
+    func send(_ text: String, attachments: [RQAttachment], conversationId: String) async throws
     func markSeen(conversationId: String) async throws
+    /// Starts a conversation with `recipientIds` (the current user is added) and returns
+    /// its id. The first message is a separate `send`, as in the web's New message drawer.
+    func createConversation(topic: String, recipientIds: [String]) async throws -> String
+}
+
+extension MessagesServicing {
+    func send(_ text: String, conversationId: String) async throws {
+        try await send(text, attachments: [], conversationId: conversationId)
+    }
 }
 
 struct MessagesService: MessagesServicing {
@@ -25,23 +35,30 @@ struct MessagesService: MessagesServicing {
 
     func messages(conversationId: String, before: String?, batchSize: Int) async throws -> [RQMessage] {
         var query = [URLQueryItem(name: "batchSize", value: String(batchSize))]
-        // The backend needs a timestamp; "now" (inclusive) means the latest page.
-        query.append(URLQueryItem(name: "lastMessageTimestamp",
-                                  value: before ?? ISO8601DateFormatter().string(from: Date())))
+        // Only an earlier page sends a cursor (the oldest shown message's time, inclusive).
+        // The latest page leaves it out and the backend uses its own now: a device "now"
+        // in whole seconds left out a message sent within the same second.
+        if let before {
+            query.append(URLQueryItem(name: "lastMessageTimestamp", value: before))
+        }
         let history: RQConversationHistory = try await client.get(
             "/conversations/\(conversationId)/messages", queryItems: query
         )
         return history.messages
     }
 
-    func send(_ text: String, conversationId: String) async throws {
+    func send(_ text: String, attachments: [RQAttachment], conversationId: String) async throws {
         let userId = try await currentUserId()
+        // With milliseconds, as the web's toISOString() sends it: history is ordered and
+        // paged by this time, and whole seconds tie between quick messages.
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let body = RQNewMessage(
             senderId: userId,
             message: text,
-            createdAt: ISO8601DateFormatter().string(from: Date()),
+            createdAt: formatter.string(from: Date()),
             mentions: [],
-            attachments: [],
+            attachments: attachments.map { CommentAttachmentRef(id: $0.id, fileName: $0.fileName) },
             conversationId: conversationId
         )
         try await client.postDiscardingResponse("/discussions/\(conversationId)/messages", body: body)
@@ -53,6 +70,19 @@ struct MessagesService: MessagesServicing {
             "/discussions/\(conversationId)/seen",
             body: RQMarkSeen(userId: userId, conversationId: conversationId)
         )
+    }
+
+    func createConversation(topic: String, recipientIds: [String]) async throws -> String {
+        let userId = try await currentUserId()
+        var seen: Set<String> = [userId]
+        let body = RQNewConversation(
+            userIDs: recipientIds.filter { seen.insert($0).inserted } + [userId],
+            creatorId: userId,
+            topic: topic,
+            changeRequestId: RQNewConversation.changeRequestId(inTopic: topic)
+        )
+        let created: RQCreatedConversation = try await client.post("/discussions", body: body)
+        return created.conversationId
     }
 
     private func currentUserId() async throws -> String {
@@ -87,13 +117,20 @@ actor FixtureMessagesService: MessagesServicing {
         Array((store[conversationId] ?? []).reversed().prefix(batchSize))
     }
 
-    func send(_ text: String, conversationId: String) async throws {
+    func send(_ text: String, attachments: [RQAttachment], conversationId: String) async throws {
         let next = (store[conversationId]?.map(\.id).max() ?? 0) + 1
         store[conversationId, default: []].append(
             RQMessage(id: next, senderId: "me", text: text,
-                      createdAtRaw: ISO8601DateFormatter().string(from: Date()), sender: nil)
+                      createdAtRaw: ISO8601DateFormatter().string(from: Date()), sender: nil,
+                      attachments: attachments)
         )
     }
 
     func markSeen(conversationId: String) async throws {}
+
+    func createConversation(topic: String, recipientIds: [String]) async throws -> String {
+        let id = "fixture-\(store.count + 1)"
+        store[id] = []
+        return id
+    }
 }

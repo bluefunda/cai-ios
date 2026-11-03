@@ -149,6 +149,34 @@ struct CAIApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            #if targetEnvironment(macCatalyst)
+            // The Mac menu bar carries every shell shortcut (P10), so they're listed and
+            // discoverable there; ShellKeyboardShortcuts leaves them to this menu on Mac.
+            CommandMenu("Go") {
+                let layout = SidebarLayout(workspace: workspaceStore)
+                ForEach(Array(layout.destinations.prefix(9).enumerated()), id: \.element) { index, destination in
+                    Button(destination.title) { workspaceStore.navigate(to: destination) }
+                        .keyboardShortcut(ShellKeyboardShortcuts.key(forIndex: index), modifiers: .command)
+                }
+                if layout.spaces.count > 1 {
+                    Divider()
+                    ForEach(Array(layout.spaces.prefix(9).enumerated()), id: \.element) { index, space in
+                        Button("\(space.title) Space") { workspaceStore.activeSpace = space }
+                            .keyboardShortcut(ShellKeyboardShortcuts.key(forIndex: index), modifiers: [.command, .control])
+                    }
+                }
+                Divider()
+                Button("Search Chats") {
+                    NotificationCenter.default.post(name: .focusSearchRequested, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                Button("Refresh") {
+                    NotificationCenter.default.post(name: .refreshRequested, object: nil)
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(workspaceStore.activeSpace != .requests)
+            }
+            #endif
         }
     }
 

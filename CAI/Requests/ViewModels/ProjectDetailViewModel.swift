@@ -18,12 +18,14 @@ final class ProjectDetailViewModel: ObservableObject {
         projectId: String,
         projectService: ProjectServicing,
         changeRequestService: ChangeRequestServicing,
+        workflowService: ChangeRequestWorkflowServicing? = nil,
         currentUserId: String?
     ) {
         self.projectId = projectId
         self.projectService = projectService
         self.changeRequestListModel = ChangeRequestListViewModel(
             service: changeRequestService,
+            workflowService: workflowService,
             currentUserId: currentUserId,
             projectId: projectId
         )

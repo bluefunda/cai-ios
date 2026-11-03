@@ -15,6 +15,8 @@ struct SidebarConversationRow: View {
     let title: String
     /// Quiet second line under the title — when the chat started, for now.
     var meta: String?
+    /// A linked change request's number, shown with a `doc.text` glyph before the meta.
+    var requestNumber: String?
     let isSelected: Bool
     /// Pinned rows carry a small pin at the trailing edge (cai-ios#335).
     var isPinned = false
@@ -46,12 +48,20 @@ struct SidebarConversationRow: View {
                     // The leading bubble glyph that used to sit here is gone — the
                     // pill plus brand-blue title already marks selection.
                     .foregroundStyle(isSelected ? BFColor.primary : .primary)
-                if let meta {
-                    Text(meta)
-                        .font(BFFont.sidebarMeta)
-                        .monospacedDigit()
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
+                if meta != nil || requestNumber != nil {
+                    HStack(spacing: 4) {
+                        if let requestNumber {
+                            Image(systemName: "doc.text")
+                            Text(requestNumber)
+                            if meta != nil { Text("·") }
+                        }
+                        if let meta { Text(meta) }
+                    }
+                    .font(BFFont.sidebarMeta)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .accessibilityElement(children: .combine)
                 }
             }
 

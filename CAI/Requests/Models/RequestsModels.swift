@@ -84,6 +84,15 @@ struct ChangeRequest: Identifiable {
     var isArchived: Bool = false  // changeRequest.archive — same field the archive/unarchive
                                     // update action sets; defaults false so older fixtures
                                     // constructed before this field existed still compile.
+    var ticketUrl: String? = nil  // changeRequest.ticketUrl — the external ticket link the
+                                   // web shows on detail and prefills on edit.
+    var currentStage: RQStage? = nil  // envelope `stage[0].stage` — the stage the request is at
+    var stages: [RQStage] = []        // envelope `stageData` — every stage, in order
+    var currentStageOwnerName: String? = nil  // envelope `stage[0].user.name`
+
+    /// The web offers Edit and Delete only at the first stage (changeRequestDetail.js). A
+    /// request with no stages (created without a template) has nothing to be past.
+    var isAtFirstStage: Bool { currentStage.map { $0.order == 1 } ?? true }
 
     /// Prefers the real `createdAt` field; falls back to the earliest timeline entry only if
     /// that's ever absent (defensive — trm's frontend suggests it might not always be sent).
@@ -94,9 +103,85 @@ struct ChangeRequest: Identifiable {
     static func == (lhs: ChangeRequest, rhs: ChangeRequest) -> Bool { lhs.id == rhs.id }
 }
 
-struct ChangeRequestPlatform: Decodable, Hashable {
-    let sap: String?
+/// One step of a request's lifecycle (trm-backend-go `Stage`, changeRequest.go).
+struct RQStage: Decodable, Hashable {
+    let order: Int
+    let description: String
+    let statusCode: String
+    let completed: Bool
+    let current: Bool
+    let ownerId: String?
+    let qaDeploy: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case order, description, statusCode, completed, current, owner, qaDeploy
+    }
+
+    init(order: Int, description: String, statusCode: String = "", completed: Bool = false,
+         current: Bool = false, ownerId: String? = nil, qaDeploy: Bool = false) {
+        self.order = order
+        self.description = description
+        self.statusCode = statusCode
+        self.completed = completed
+        self.current = current
+        self.ownerId = ownerId
+        self.qaDeploy = qaDeploy
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        order = (try? c.decode(Int.self, forKey: .order)) ?? 0
+        description = (try? c.decodeIfPresent(String.self, forKey: .description)) ?? ""
+        statusCode = (try? c.decodeIfPresent(String.self, forKey: .statusCode)) ?? ""
+        completed = (try? c.decodeIfPresent(Bool.self, forKey: .completed)) ?? false
+        current = (try? c.decodeIfPresent(Bool.self, forKey: .current)) ?? false
+        // A uuid.NullUUID: a plain string, or null when unassigned.
+        ownerId = ((try? c.decodeIfPresent(String.self, forKey: .owner)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
+        qaDeploy = (try? c.decodeIfPresent(Bool.self, forKey: .qaDeploy)) ?? false
+    }
+}
+
+/// The envelope's `stage` entries pair a stage with its owner's profile.
+private struct RQStageEntry: Decodable {
+    struct Owner: Decodable { let name: String? }
+    let stage: RQStage?
+    let user: Owner?
+}
+
+/// One application the request touches (an `application` row, copied onto the request):
+/// whether it's an SAP system and whether it deploys through Git decide what Deploy to QA
+/// does on the web.
+struct ChangeRequestPlatform: Codable, Hashable {
+    var id: String? = nil
     let description: String?
+    var isSAP = false
+    var usesGit = false
+
+    private enum CodingKeys: String, CodingKey { case id, description, sap, git }
+
+    init(id: String? = nil, description: String?, isSAP: Bool = false, usesGit: Bool = false) {
+        self.id = id
+        self.description = description
+        self.isSAP = isSAP
+        self.usesGit = usesGit
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? nil
+        description = (try? c.decodeIfPresent(String.self, forKey: .description)) ?? nil
+        isSAP = (try? c.decodeIfPresent(Bool.self, forKey: .sap)) ?? false
+        usesGit = (try? c.decodeIfPresent(Bool.self, forKey: .git)) ?? false
+    }
+
+    /// As the web's create form sends a selected application: `{id, description, sap, git}`.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(id, forKey: .id)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encode(isSAP, forKey: .sap)
+        try c.encode(usesGit, forKey: .git)
+    }
 }
 
 extension ChangeRequest: Hashable {
@@ -106,10 +191,11 @@ extension ChangeRequest: Hashable {
 extension ChangeRequest: Decodable {
     private enum EnvelopeKeys: String, CodingKey {
         case changeRequest, requestId, severityData, requestTypeData, userTimeline
+        case stage, stageData
     }
     private enum CoreKeys: String, CodingKey {
         case id, description, shortDescription, status, requestedBy, projectId, platform, createdAt
-        case stage, totalStages, stageStatus, archive
+        case stage, totalStages, stageStatus, archive, ticketUrl
     }
     private enum LabelKeys: String, CodingKey {
         case type
@@ -137,10 +223,19 @@ extension ChangeRequest: Decodable {
         projectName = nil
         platforms = (try? core.decodeIfPresent([ChangeRequestPlatform].self, forKey: .platform)) ?? []
         createdAt = (try? core.decodeIfPresent(Date.self, forKey: .createdAt)) ?? nil
-        stage = (try? core.decodeIfPresent(Int.self, forKey: .stage)) ?? nil
-        totalStages = (try? core.decodeIfPresent(Int.self, forKey: .totalStages)) ?? nil
-        stageStatus = (try? core.decodeIfPresent(String.self, forKey: .stageStatus)) ?? nil
+        let entries = (try? envelope.decodeIfPresent([RQStageEntry].self, forKey: .stage)) ?? nil
+        currentStage = entries?.compactMap(\.stage).first
+        currentStageOwnerName = entries?.first?.user?.name.flatMap { $0.isEmpty ? nil : $0 }
+        stages = ((try? envelope.decodeIfPresent([RQStage].self, forKey: .stageData)) ?? nil)?
+            .sorted { $0.order < $1.order } ?? []
+        // The real data is the envelope's stage/stageData; the core keys are the earlier guess.
+        stage = (try? core.decodeIfPresent(Int.self, forKey: .stage)) ?? currentStage?.order
+        totalStages = (try? core.decodeIfPresent(Int.self, forKey: .totalStages))
+            ?? (stages.isEmpty ? nil : stages.count)
+        stageStatus = (try? core.decodeIfPresent(String.self, forKey: .stageStatus))
+            ?? currentStage.flatMap { $0.description.isEmpty ? nil : $0.description }
         isArchived = (try? core.decodeIfPresent(Bool.self, forKey: .archive)) ?? false
+        ticketUrl = (try? core.decodeIfPresent(String.self, forKey: .ticketUrl)) ?? nil
 
         if let severityContainer = try? envelope.nestedContainer(keyedBy: LabelKeys.self, forKey: .severityData) {
             severity = (try? severityContainer.decodeIfPresent(String.self, forKey: .type)) ?? nil
@@ -237,6 +332,10 @@ struct ChangeRequestTimelineEntry: Identifiable {
         switch fieldName {
         case "status": return fromStatus == "created" ? "created" : "edited"
         case "stage": return "moved status to"
+        // A stage move or owner change (trm-backend-go compareStageFields: tableName
+        // "stage", values like "stage-QA" and "stage-QA-owner-<uuid>").
+        case "order": return "moved the request to"
+        case "owner": return "changed the stage owner"
         default: return "edited"
         }
     }
@@ -248,6 +347,10 @@ struct ChangeRequestTimelineEntry: Identifiable {
             return toStatus.map { "status to \($0)" }
         case "stage":
             return toStatus
+        case "order":
+            return toStatus.map { $0.hasPrefix("stage-") ? String($0.dropFirst("stage-".count)) : $0 }
+        case "owner":
+            return nil
         default:
             return fieldName
         }
@@ -327,6 +430,8 @@ struct UserProfileEntry: Decodable {
 struct RQProject: Identifiable, Decodable, Hashable {
     let id: String
     let name: String
+    /// The project's Git repositories, offered on the New Request form for a Git platform.
+    var repos: [String] = []
 
     private enum CodingKeys: String, CodingKey {
         case id, name
@@ -344,9 +449,10 @@ struct RQProject: Identifiable, Decodable, Hashable {
 }
 
 extension RQProject {
-    init(id: String, name: String) {
+    init(id: String, name: String, repos: [String] = []) {
         self.id = id
         self.name = name
+        self.repos = repos
     }
 }
 
@@ -415,11 +521,81 @@ extension RQComment {
 }
 
 struct NewCommentRequest: Encodable {
+    /// `{read, userId}` — trm-backend-go's Mention, as the web's comment box sends it.
+    struct Mention: Encodable, Equatable {
+        var read = false
+        let userId: String
+    }
+
     let comment: String
     let createdBy: String
     let changeRequestId: Int
-    let mentions: [String] = []
+    var mentions: [Mention] = []
     var attachments: [CommentAttachmentRef] = []
+}
+
+/// A comment's text with the people @mentioned in it. The web's editor (react-draft-wysiwyg
+/// → draftjs-to-html) posts HTML with each mention as
+/// `<a href="{userId}" class="wysiwyg-mention" data-mention data-value="{name}">@{name}</a>`;
+/// this builds the same markup, so a mention reads the same on the web.
+enum CommentComposition {
+    /// The mentions still present in `text` as "@Name", in order, without repeats. Longer
+    /// names match first and use up their text, so "@Ann Lee" doesn't also mention "Ann".
+    static func mentions(in text: String, from candidates: [ProjectTeamMember]) -> [ProjectTeamMember] {
+        var remaining = text
+        var found: [(person: ProjectTeamMember, offset: Int)] = []
+        for person in candidates.sorted(by: { $0.name.count > $1.name.count }) where !person.name.isEmpty {
+            let tag = "@" + person.name
+            guard let first = remaining.range(of: tag),
+                  !found.contains(where: { $0.person.id == person.id }) else { continue }
+            found.append((person, remaining.distance(from: remaining.startIndex, to: first.lowerBound)))
+            remaining = remaining.replacingOccurrences(of: tag, with: String(repeating: " ", count: tag.count))
+        }
+        return found.sorted { $0.offset < $1.offset }.map(\.person)
+    }
+
+    /// The body to post: the plain text unchanged when nobody is mentioned (as the app has
+    /// always sent it), otherwise escaped HTML with the mention links, in a paragraph.
+    static func body(for text: String, mentioning people: [ProjectTeamMember]) -> String {
+        guard !people.isEmpty else { return text }
+        // One pass, left to right; at each "@" the longest matching name wins, so
+        // "@Ann Lee" is never split into a link for "Ann".
+        let byLength = people.filter { !$0.name.isEmpty }.sorted { $0.name.count > $1.name.count }
+        var html = ""
+        var index = text.startIndex
+        while index < text.endIndex {
+            if text[index] == "@",
+               let person = byLength.first(where: { text[index...].hasPrefix("@" + $0.name) }) {
+                let name = escape(person.name)
+                html += "<a href=\"\(escape(person.id))\" class=\"wysiwyg-mention\" data-mention data-value=\"\(name)\">@\(name)</a>"
+                index = text.index(index, offsetBy: person.name.count + 1)
+            } else {
+                html += text[index] == "\n" ? "<br>" : escape(String(text[index]))
+                index = text.index(after: index)
+            }
+        }
+        return "<p>" + html + "</p>"
+    }
+
+    /// The text being typed after an "@" at the end of `text`, or nil when not mentioning.
+    static func activeQuery(in text: String) -> String? {
+        guard let at = text.lastIndex(of: "@") else { return nil }
+        if at > text.startIndex, !text[text.index(before: at)].isWhitespace { return nil }
+        let query = text[text.index(after: at)...]
+        guard !query.contains("\n"), query.count <= 40 else { return nil }
+        return String(query)
+    }
+
+    /// `text` with the trailing "@query" replaced by the chosen person's "@Name ".
+    static func complete(_ text: String, with person: ProjectTeamMember) -> String {
+        guard let at = text.lastIndex(of: "@") else { return text }
+        return String(text[..<at]) + "@" + person.name + " "
+    }
+
+    private static func escape(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+    }
 }
 
 /// `{id, fileName}` — confirmed against trm-backend-go's `Attach` struct (commentsPost.go);
@@ -444,9 +620,11 @@ extension RQAttachment: Hashable {}
 
 extension RQAttachment: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case id, name
+        case id, name, fileName
     }
 
+    /// Comment attachments name the file `name`; a message's attachments are stored as
+    /// the web sent them, `{id, fileName}`.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let intId = try? container.decode(Int.self, forKey: .id) {
@@ -454,7 +632,9 @@ extension RQAttachment: Decodable {
         } else {
             id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
         }
-        fileName = (try? container.decodeIfPresent(String.self, forKey: .name)) ?? "Attachment"
+        fileName = ((try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil)
+            ?? ((try? container.decodeIfPresent(String.self, forKey: .fileName)) ?? nil)
+            ?? "Attachment"
     }
 }
 
@@ -610,6 +790,7 @@ struct ProjectDetail: Identifiable, Hashable {
     let ownerName: String?
     let requestCount: Int?
     let team: [ProjectTeamMember]
+    var repos: [String] = []
 }
 
 /// `projectUsers` entries — confirmed against trm-backend-go's `projectUser` struct
@@ -629,7 +810,7 @@ struct ProjectTeamMember: Identifiable, Decodable, Hashable {
 
 extension ProjectDetail: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case id, name, description, jira, projectTypeData, ownerUser, requestCount, projectUsers
+        case id, name, description, jira, projectTypeData, ownerUser, requestCount, projectUsers, repos
     }
     private enum LabelKeys: String, CodingKey { case description }
     private enum UserKeys: String, CodingKey { case name }
@@ -646,6 +827,8 @@ extension ProjectDetail: Decodable {
         jira = (try? container.decodeIfPresent(String.self, forKey: .jira)) ?? nil
         requestCount = (try? container.decodeIfPresent(Int.self, forKey: .requestCount)) ?? nil
         team = (try? container.decodeIfPresent([ProjectTeamMember].self, forKey: .projectUsers)) ?? []
+        repos = ((try? container.decodeIfPresent([String].self, forKey: .repos)) ?? nil)?
+            .filter { !$0.isEmpty } ?? []
 
         if let typeContainer = try? container.nestedContainer(keyedBy: LabelKeys.self, forKey: .projectTypeData) {
             projectTypeLabel = (try? typeContainer.decodeIfPresent(String.self, forKey: .description)) ?? nil
@@ -689,24 +872,117 @@ extension Array: EmptyDecodableResponse {
 /// `id` here, which is all that's needed to immediately re-fetch the new row through the
 /// existing, proven `changeRequest(id:)` path and get the fully-resolved (severity/type/
 /// owner-name) version the rest of the app expects.
+///
+/// A failed create still answers 200, with the backend's error list
+/// `[{"status":"error","message":…}]`; that decodes with `id` nil and the message kept.
 struct CreatedChangeRequestResponse: Decodable {
-    let id: Int
+    let id: Int?
+    let errorMessage: String?
+
+    private struct ErrorEntry: Decodable { let message: String? }
+    private enum CodingKeys: String, CodingKey { case id }
+
+    init(from decoder: Decoder) throws {
+        if let entries = try? decoder.singleValueContainer().decode([ErrorEntry].self) {
+            id = nil
+            errorMessage = entries.first?.message ?? "The request couldn't be created."
+            return
+        }
+        id = try decoder.container(keyedBy: CodingKeys.self).decode(Int.self, forKey: .id)
+        errorMessage = nil
+    }
 }
 
+/// POST /rest/trm/v1/change-request/create, as the web's createUpdateChangeRequestForm sends
+/// it. `projectId` is a number on the wire (trm-backend-go decodes it into an int).
 struct NewChangeRequestPayload: Encodable {
+    /// A template stage as the request's own stage: the first is current, and the owner is
+    /// left out when unassigned (the backend reads `owner` as a nullable UUID).
+    struct Stage: Encodable, Equatable {
+        let order: Int
+        let description: String
+        let statusCode: String
+        let qaDeploy: Bool
+        let owner: String?
+        let current: Bool
+        let completed = false
+        let updatedBy: String
+
+        private enum CodingKeys: String, CodingKey {
+            case order, description, statusCode, qaDeploy, owner, current, completed, updatedBy
+        }
+    }
+
+    /// `system` is "qa" or "prd"; the web always sends both.
+    struct DeploymentBranch: Encodable, Equatable {
+        let system: String
+        var source = ""
+        var target = ""
+    }
+
     let shortDescription: String
     let description: String
-    let projectId: String
+    let projectId: Int
     let requestType: String
     let severity: String
     let requestedBy: String
     let createdBy: String
-    let ticketUrl: String?
+    let ticketUrl: String
+    var archive = false
+    var platform: [ChangeRequestPlatform] = []
+    /// A template id, or nil for a request without stages.
+    var template: String?
+    var stage: [Stage] = []
+    /// The optional request number; the backend refuses one already in use.
+    var requestId = ""
+    var deploymentBranches = [DeploymentBranch(system: "qa"), DeploymentBranch(system: "prd")]
+    var repo = ""
+    /// Only sent for an SAP platform.
+    var sapSourceSystemId: String?
+    /// The column's own default. trm-backend-go's synchronous create path otherwise inserts
+    /// "", which the `enum_quality_check_status` column refuses.
+    let qualityCheck = "pending"
+
+    var updatedBy: String { createdBy }
+
+    private enum CodingKeys: String, CodingKey {
+        case shortDescription, description, projectId, requestType, severity, requestedBy, createdBy
+        case updatedBy, ticketUrl, archive, platform, template, stage, requestId, deploymentBranches, repo
+        case sapSourceSystemId, qualityCheck
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(shortDescription, forKey: .shortDescription)
+        try c.encode(description, forKey: .description)
+        try c.encode(projectId, forKey: .projectId)
+        try c.encode(requestType, forKey: .requestType)
+        try c.encode(severity, forKey: .severity)
+        try c.encode(requestedBy, forKey: .requestedBy)
+        try c.encode(createdBy, forKey: .createdBy)
+        try c.encode(updatedBy, forKey: .updatedBy)
+        try c.encode(ticketUrl, forKey: .ticketUrl)
+        try c.encode(archive, forKey: .archive)
+        try c.encode(platform, forKey: .platform)
+        try c.encode(template, forKey: .template)  // null without a template, as the web sends
+        try c.encode(stage, forKey: .stage)
+        try c.encode(requestId, forKey: .requestId)
+        try c.encode(deploymentBranches, forKey: .deploymentBranches)
+        try c.encode(repo, forKey: .repo)
+        try c.encodeIfPresent(sapSourceSystemId, forKey: .sapSourceSystemId)
+        try c.encode(qualityCheck, forKey: .qualityCheck)
+    }
 }
 
 /// All-optional so only the fields actually being changed get encoded — `CreatedBy`/
 /// `UpdatedBy` (capitalized; matches the exact keys trm's own web frontend sends on every
 /// update call, confirmed against changeRequestPut.go) are always included.
+/// PUT /rest/trm/v1/change-request-delete — the web sends the numeric id.
+struct ChangeRequestDeletePayload: Encodable {
+    let id: Int
+    let updatedBy: String
+}
+
 struct ChangeRequestUpdatePayload: Encodable {
     var shortDescription: String?
     var description: String?
@@ -755,7 +1031,13 @@ struct ChangeRequestUpdatePayload: Encodable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
+        // A number on the wire: trm-backend-go decodes `id` into an int, and a string fails
+        // the whole update ("decode failed", in a 200 body).
+        if let numericId = Int(id) {
+            try container.encode(numericId, forKey: .id)
+        } else {
+            try container.encode(id, forKey: .id)
+        }
         try container.encode(createdBy, forKey: .createdBy)
         try container.encode(updatedBy, forKey: .updatedBy)
         try container.encodeIfPresent(shortDescription, forKey: .shortDescription)
@@ -902,8 +1184,13 @@ struct RQRelease: Identifiable, Decodable {
     let description: String?
     let status: ReleaseStatus
     let plannedOn: Date?
+    /// The request's platforms. Scheduling one that has any also deploys it on the web
+    /// (SAP release control, or a Git merge to PRD), which the app doesn't drive yet.
+    var platforms: [ChangeRequestPlatform] = []
 
     var id: String { changeRequestId }
+
+    var needsWebToSchedule: Bool { !platforms.isEmpty }
 
     /// Falls back to the requestId display code, then a generic label — a release with
     /// neither a name nor a description is plausible (trm's own Kanban card falls back to
@@ -915,7 +1202,7 @@ struct RQRelease: Identifiable, Decodable {
 
 extension RQRelease {
     private enum CodingKeys: String, CodingKey {
-        case changeRequestId, requestId, name, description, status, plannedOn
+        case changeRequestId, requestId, name, description, status, plannedOn, platform
     }
 
     init(from decoder: Decoder) throws {
@@ -926,12 +1213,14 @@ extension RQRelease {
         } else {
             changeRequestId = (try? container.decode(String.self, forKey: .changeRequestId)) ?? UUID().uuidString
         }
-        requestId = (try? container.decodeIfPresent(String.self, forKey: .requestId)) ?? nil
+        requestId = ((try? container.decodeIfPresent(String.self, forKey: .requestId)) ?? nil)
+            .flatMap { $0.isEmpty ? nil : $0 }
         name = (try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil
         description = (try? container.decodeIfPresent(String.self, forKey: .description)) ?? nil
         let rawStatus = (try? container.decodeIfPresent(String.self, forKey: .status)) ?? nil
         status = ReleaseStatus(raw: rawStatus ?? "")
         plannedOn = (try? container.decodeIfPresent(Date.self, forKey: .plannedOn)) ?? nil
+        platforms = (try? container.decodeIfPresent([ChangeRequestPlatform].self, forKey: .platform)) ?? []
     }
 
     // Fixtures/tests construct RQRelease via the compiler-synthesized memberwise init (the
@@ -955,7 +1244,209 @@ struct ReleaseListResponse: Decodable, EmptyDecodableResponse {
     /// empty, not a parse failure.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        releases = try container.decodeIfPresent([RQRelease].self, forKey: .releases) ?? []
+        let entries = (try? container.decodeIfPresent([Entry].self, forKey: .releases)) ?? nil
+        releases = (entries ?? []).flatMap(\.releases)
+    }
+
+    /// GET /release answers `[{"releases": [...]}, {"plannedCount", …}]` (the web reads
+    /// `releases[0].releases`), wrapped by the gateway as `{"releases": that}`. A flat
+    /// release in the outer list is kept too; the counts entry holds no releases.
+    private struct Entry: Decodable {
+        let releases: [RQRelease]
+
+        private enum Keys: String, CodingKey { case releases, changeRequestId }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Keys.self)
+            if c.contains(.releases) {
+                releases = (try? c.decode([RQRelease].self, forKey: .releases)) ?? []
+            } else if c.contains(.changeRequestId) {
+                releases = [try RQRelease(from: decoder)]
+            } else {
+                releases = []
+            }
+        }
+    }
+}
+
+// MARK: - Release Settings
+// The web's release settings drawer (releases/releasesSetting.js): the regular release
+// cycle (GET/PUT /release-cycle, one row) and one-off custom releases (GET/POST
+// /custom-release).
+
+enum ReleaseFrequency: String, CaseIterable, Identifiable {
+    case weekly, biweekly, monthly
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .weekly: return "Weekly"
+        case .biweekly: return "Bi weekly"
+        case .monthly: return "Monthly"
+        }
+    }
+    /// Weekly and bi weekly releases fall on a weekday; monthly ones on a day of the month.
+    var usesWeekday: Bool { self != .monthly }
+}
+
+enum ReleaseWeekday: String, CaseIterable, Identifiable {
+    case monday, tuesday, wednesday, thursday, friday, saturday, sunday
+    var id: String { rawValue }
+    var title: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
+}
+
+/// A release time as the web writes it: the hour and minute as picked on the device,
+/// labelled `+00` (`H:M:00+00`). The web reads it back the same way, ignoring the zone, so
+/// the app does too and both show the same time.
+struct ReleaseTime: Equatable {
+    var hour: Int
+    var minute: Int
+
+    var wireValue: String { String(format: "%02d:%02d:00+00", hour, minute) }
+
+    init(hour: Int, minute: Int) {
+        self.hour = hour
+        self.minute = minute
+    }
+
+    init?(wire: String?) {
+        let parts = (wire ?? "").split(separator: ":")
+        guard parts.count >= 2, let hour = Int(parts[0]), let minute = Int(parts[1].prefix(2)),
+              (0..<24).contains(hour), (0..<60).contains(minute) else { return nil }
+        self.init(hour: hour, minute: minute)
+    }
+
+    init(_ date: Date, calendar: Calendar = .current) {
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        self.init(hour: parts.hour ?? 0, minute: parts.minute ?? 0)
+    }
+
+    func date(on day: Date = Date(), calendar: Calendar = .current) -> Date {
+        calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
+    }
+}
+
+/// The release cycle, as GET /release-cycle returns it (`{"releases": [cycle]}` via the
+/// gateway).
+struct RQReleaseCycle: Decodable, Equatable {
+    var frequency: ReleaseFrequency
+    var day: ReleaseWeekday
+    /// Day of the month, for a monthly cycle.
+    var dayOfMonth: Int?
+    var time: ReleaseTime?
+    var systemRetry: Bool
+    var manualRetry: Bool
+    var attempts: Int
+
+    static let `default` = RQReleaseCycle(frequency: .weekly, day: .friday, dayOfMonth: nil,
+                                          time: ReleaseTime(hour: 18, minute: 0),
+                                          systemRetry: false, manualRetry: false, attempts: 1)
+
+    init(frequency: ReleaseFrequency, day: ReleaseWeekday, dayOfMonth: Int?, time: ReleaseTime?,
+         systemRetry: Bool, manualRetry: Bool, attempts: Int) {
+        self.frequency = frequency
+        self.day = day
+        self.dayOfMonth = dayOfMonth
+        self.time = time
+        self.systemRetry = systemRetry
+        self.manualRetry = manualRetry
+        self.attempts = attempts
+    }
+
+    private enum CodingKeys: String, CodingKey { case frequency, day, date, time, systemRetry, manualRetry, attempts }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func string(_ key: CodingKeys) -> String? { (try? c.decodeIfPresent(String.self, forKey: key)) ?? nil }
+        frequency = string(.frequency).flatMap(ReleaseFrequency.init(rawValue:)) ?? .weekly
+        day = string(.day).flatMap(ReleaseWeekday.init(rawValue:)) ?? .friday
+        dayOfMonth = string(.date).flatMap(Int.init)
+        time = ReleaseTime(wire: string(.time))
+        systemRetry = (try? c.decodeIfPresent(Bool.self, forKey: .systemRetry)) ?? nil ?? false
+        manualRetry = (try? c.decodeIfPresent(Bool.self, forKey: .manualRetry)) ?? nil ?? false
+        attempts = (try? c.decodeIfPresent(Int.self, forKey: .attempts)) ?? nil ?? 0
+    }
+}
+
+/// PUT /release-cycle. The retry count goes as `attempts`, the field the backend reads (the
+/// web sends `attempt`, which is dropped, so its count is never saved); a weekday for weekly
+/// and bi weekly cycles (the web only checks for "byweekly", so its bi weekly cycles lost
+/// their day), the day of the month for monthly ones.
+struct ReleaseCyclePayload: Encodable, Equatable {
+    let frequency: String
+    let systemRetry: Bool
+    let attempts: Int
+    let manualRetry: Bool
+    let createdBy: String
+    let time: String
+    let day: String?
+    let date: String?
+
+    init(_ cycle: RQReleaseCycle, createdBy: String) {
+        frequency = cycle.frequency.rawValue
+        systemRetry = cycle.systemRetry
+        attempts = cycle.systemRetry ? max(cycle.attempts, 1) : 0
+        manualRetry = cycle.manualRetry
+        self.createdBy = createdBy
+        time = (cycle.time ?? ReleaseTime(hour: 18, minute: 0)).wireValue
+        day = cycle.frequency.usesWeekday ? cycle.day.rawValue : nil
+        date = cycle.frequency.usesWeekday ? nil : cycle.dayOfMonth.map(String.init)
+    }
+}
+
+/// A one-off release date (GET /custom-release lists the active ones).
+struct RQCustomRelease: Decodable, Identifiable, Equatable {
+    let id: Int
+    let date: Date?
+    let time: ReleaseTime?
+
+    private enum CodingKeys: String, CodingKey { case id, date, time }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(Int.self, forKey: .id)) ?? 0
+        let raw = (try? c.decodeIfPresent(String.self, forKey: .date)) ?? nil
+        date = raw.flatMap { Date.fromISO8601($0) ?? Self.dayFormatter.date(from: String($0.prefix(10))) }
+        time = ReleaseTime(wire: (try? c.decodeIfPresent(String.self, forKey: .time)) ?? nil)
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+/// POST /custom-release, as the web sends it: the day at 18:30 on the device as an ISO
+/// string, and the time the same way as the cycle's.
+struct CustomReleasePayload: Encodable, Equatable {
+    let date: String
+    let time: String
+    let createdBy: String
+
+    init(day: Date, time: ReleaseTime, createdBy: String, calendar: Calendar = .current) {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let evening = calendar.date(bySettingHour: 18, minute: 30, second: 0, of: day) ?? day
+        date = formatter.string(from: evening)
+        self.time = time.wireValue
+        self.createdBy = createdBy
+    }
+}
+
+/// POST /release (schedule) and PUT /release (move to another date), as the web's release
+/// board sends them on drop: `plannedOn` is the day's local midnight as an ISO string.
+struct ReleaseSchedulePayload: Encodable, Equatable {
+    let changeRequestId: Int
+    let description: String
+    let plannedOn: String
+    var createdBy: String?
+    var updatedBy: String?
+
+    static func plannedOn(_ day: Date, calendar: Calendar = .current) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: calendar.startOfDay(for: day))
     }
 }
 
@@ -1000,5 +1491,309 @@ enum ReleaseStatus: Hashable {
         case .error: return "exclamationmark.triangle.fill"
         case .other: return "questionmark.circle"
         }
+    }
+}
+
+// MARK: - Stage Flow
+// The web's stage buttons (changeRequestDetail.js) and push drawer (commonStagingFlow):
+// first stage → Start; the stage before the last → Revert / Mark this as completed; any
+// other stage before that → Revert / Push to next stage; the last stage has none (Archive
+// lives in the menu). None of them show when the tenant enforces the approval workflow —
+// steps then move by Approve/Reject instead.
+
+enum StageMoveKind: Equatable {
+    case start, next, complete, revert
+
+    var title: String {
+        switch self {
+        case .start: return "Start"
+        case .next: return "Push to next stage"
+        case .complete: return "Mark as completed"
+        case .revert: return "Push to previous stage"
+        }
+    }
+}
+
+struct StageMove: Equatable {
+    let kind: StageMoveKind
+    let from: RQStage
+    let to: RQStage
+    /// The request's status once it's at `to`, as the web sets it after a move: planned at
+    /// the first stage, completed at the last, in progress in between.
+    let status: ChangeRequestStatus
+    /// Deploy to QA on an SAP or Git request runs transport releases or a branch merge,
+    /// and marking an SAP request complete releases its transports, before the stage moves.
+    /// The app doesn't drive those yet, so such a move is left to the web.
+    let needsWeb: Bool
+}
+
+struct StageActions: Equatable {
+    var forward: StageMove?
+    var revert: StageMove?
+
+    static let none = StageActions()
+}
+
+extension ChangeRequest {
+    var usesSAP: Bool { platforms.contains(where: \.isSAP) }
+    var usesGit: Bool { platforms.contains(where: \.usesGit) }
+
+    func stageActions(workflowEnforced: Bool) -> StageActions {
+        guard !workflowEnforced, let current = currentStage, let last = stages.last,
+              current.order < last.order else { return .none }
+
+        func move(_ kind: StageMoveKind, to order: Int) -> StageMove? {
+            guard let target = stages.first(where: { $0.order == order }) else { return nil }
+            let status: ChangeRequestStatus = order == 1 ? .planned
+                : order == stages.count ? .completed : .inProgress
+            let forward = kind != .revert
+            let deploysToQA = forward && current.qaDeploy && (usesSAP || usesGit)
+            let releasesTransports = kind == .complete && usesSAP
+            return StageMove(kind: kind, from: current, to: target, status: status,
+                             needsWeb: deploysToQA || releasesTransports)
+        }
+
+        var actions = StageActions()
+        let nextOrder = current.order + 1
+        let kind: StageMoveKind = current.order == 1 ? .start
+            : nextOrder == last.order ? .complete : .next
+        actions.forward = move(kind, to: nextOrder)
+        if current.order > 1 {
+            actions.revert = move(.revert, to: current.order - 1)
+        }
+        return actions
+    }
+}
+
+extension ChangeRequest {
+    /// The stage a board drop into `status`'s column moves the request to, as the web's
+    /// Grid view (changeRequestHome.js updatestatus) does: planned is the first stage, in
+    /// progress the second, completed the last. Other columns, or a drop that lands on the
+    /// stage the request is already at, move no stage.
+    func boardStageTarget(for status: ChangeRequestStatus) -> RQStage? {
+        let target: RQStage?
+        switch status {
+        case .planned: target = stages.first
+        case .inProgress: target = stages.count > 1 ? stages[1] : nil
+        case .completed: target = stages.last
+        default: target = nil
+        }
+        guard let target, target.order != currentStage?.order else { return nil }
+        return target
+    }
+}
+
+/// PUT /rest/trm/v1/stage — the target stage, as the web's stageUpdateFunc sends it. The
+/// owner goes with it because the backend writes it onto the stage it moves to.
+struct StageUpdatePayload: Encodable, Equatable {
+    let order: Int
+    let owner: String?
+    let updatedBy: String
+    let changeRequestId: Int
+    let current: Bool
+    let statusCode: String
+    let description: String
+
+    init(move: StageMove, changeRequestId: Int, updatedBy: String, totalStages: Int) {
+        order = move.to.order
+        owner = move.to.ownerId
+        self.updatedBy = updatedBy
+        self.changeRequestId = changeRequestId
+        current = move.to.order == totalStages
+        statusCode = move.to.statusCode
+        description = move.to.description
+    }
+
+    /// A board drop's stage move. The web sends `current: true` from the board.
+    init(stage: RQStage, changeRequestId: Int, updatedBy: String) {
+        order = stage.order
+        owner = stage.ownerId
+        self.updatedBy = updatedBy
+        self.changeRequestId = changeRequestId
+        current = true
+        statusCode = stage.statusCode
+        description = stage.description
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(order, forKey: .order)
+        try c.encode(owner, forKey: .owner)  // null clears nothing: it's the target's own owner
+        try c.encode(updatedBy, forKey: .updatedBy)
+        try c.encode(changeRequestId, forKey: .changeRequestId)
+        try c.encode(current, forKey: .current)
+        try c.encode(statusCode, forKey: .statusCode)
+        try c.encode(description, forKey: .description)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case order, owner, updatedBy, changeRequestId, current, statusCode, description
+    }
+}
+
+/// The stage endpoint answers 200 even when it fails, with `status: "error"`.
+struct StageUpdateResponse: Decodable {
+    let status: String?
+    let message: String?
+}
+
+// MARK: - Approval Workflow
+// GET /change-requests/{id}/workflow (trm-backend-go internal/workflow View). Only an
+// `enforced` view changes anything on screen: steps with Approve/Reject replace the stage
+// buttons.
+
+struct RQWorkflow: Decodable, Equatable {
+    let enforced: Bool
+    let currentOrder: Int?
+    let steps: [RQWorkflowStep]
+
+    private enum CodingKeys: String, CodingKey { case enforced, currentOrder, steps }
+
+    init(enforced: Bool, currentOrder: Int? = nil, steps: [RQWorkflowStep]) {
+        self.enforced = enforced
+        self.currentOrder = currentOrder
+        self.steps = steps
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enforced = (try? c.decodeIfPresent(Bool.self, forKey: .enforced)) ?? false
+        currentOrder = (try? c.decodeIfPresent(Int.self, forKey: .currentOrder)) ?? nil
+        steps = (try? c.decodeIfPresent([RQWorkflowStep].self, forKey: .steps)) ?? []
+    }
+}
+
+struct RQWorkflowStep: Decodable, Equatable, Identifiable {
+    struct Gate: Decodable, Equatable {
+        let status: String?
+        let prs: Int?
+    }
+
+    let order: Int
+    let statusCode: String
+    let description: String
+    let type: String
+    let department: String
+    let role: String
+    let state: String
+    let decisions: [RQWorkflowDecision]
+    let gate: Gate?
+
+    var id: Int { order }
+    var title: String { description.isEmpty ? statusCode : description }
+    var isGate: Bool { type == "github_gate" }
+    /// Approve/Reject only on the current approval step (the web's canDecideStep). Whether
+    /// this user may approve is the server's call; a refusal comes back as not_an_approver.
+    var canDecide: Bool { state == "current" && !isGate }
+
+    var stateLabel: String {
+        switch state {
+        case "pending": return "Pending"
+        case "current": return "Current"
+        case "approved": return "Approved"
+        case "rejected": return "Rejected"
+        case "satisfied": return "Satisfied"
+        case "blocked": return "Blocked"
+        default: return state.capitalized
+        }
+    }
+
+    /// The web's GATE_STATUS_LABELS.
+    var gateLabel: String? {
+        guard let status = gate?.status else { return nil }
+        switch status {
+        case "none": return "No pull requests"
+        case "pending": return "Pending review"
+        case "changes_requested": return "Changes requested"
+        case "approved": return "Approved"
+        case "approved_stale": return "Approval is stale"
+        case "merged": return "Merged"
+        default: return status
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case order, statusCode, description, type, department, role, state, decisions, gate
+    }
+
+    init(order: Int, description: String, state: String, type: String = "approval",
+         statusCode: String = "", department: String = "", role: String = "",
+         decisions: [RQWorkflowDecision] = [], gate: Gate? = nil) {
+        self.order = order
+        self.statusCode = statusCode
+        self.description = description
+        self.type = type
+        self.department = department
+        self.role = role
+        self.state = state
+        self.decisions = decisions
+        self.gate = gate
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        order = (try? c.decode(Int.self, forKey: .order)) ?? 0
+        statusCode = (try? c.decodeIfPresent(String.self, forKey: .statusCode)) ?? ""
+        description = (try? c.decodeIfPresent(String.self, forKey: .description)) ?? ""
+        type = ((try? c.decodeIfPresent(String.self, forKey: .type)) ?? nil).flatMap { $0.isEmpty ? nil : $0 } ?? "approval"
+        department = (try? c.decodeIfPresent(String.self, forKey: .department)) ?? ""
+        role = (try? c.decodeIfPresent(String.self, forKey: .role)) ?? ""
+        state = (try? c.decodeIfPresent(String.self, forKey: .state)) ?? ""
+        decisions = (try? c.decodeIfPresent([RQWorkflowDecision].self, forKey: .decisions)) ?? []
+        gate = (try? c.decodeIfPresent(Gate.self, forKey: .gate)) ?? nil
+    }
+}
+
+struct RQWorkflowDecision: Decodable, Equatable, Identifiable {
+    struct Actor: Decodable, Equatable {
+        let sub: String?
+        let name: String?
+    }
+
+    let id: String
+    let decision: String
+    let actor: Actor?
+    let comment: String?
+    let createdAt: Date?
+
+    var isRejection: Bool { decision == WorkflowDecision.reject.rawValue }
+    var actorName: String { actor?.name ?? actor?.sub ?? "Someone" }
+}
+
+enum WorkflowDecision: String, Encodable {
+    case approve, reject
+}
+
+/// POST /change-requests/{id}/steps/{order}/decisions — the actor comes from the token.
+struct WorkflowDecisionPayload: Encodable, Equatable {
+    let decision: WorkflowDecision
+    let comment: String
+}
+
+/// The web's DECISION_ERROR_MESSAGES, keyed by the server's error code.
+enum WorkflowDecisionError {
+    /// Codes after which the step has moved on or the setting changed: reload the workflow.
+    static let refreshCodes: Set<String> = ["not_current_step", "step_is_gate", "workflow_not_enforced"]
+
+    static func message(for error: Error) -> String {
+        switch error {
+        case RequestsAPIError.rejected(_, let code, _):
+            switch code {
+            case "not_an_approver": return "You are not an approver for this step."
+            case "not_current_step": return "This step is no longer the current step. The workflow has been refreshed."
+            case "step_is_gate": return "This is a GitHub gate step. It completes automatically and can't be approved by hand."
+            case "workflow_not_enforced": return "Workflow enforcement is turned off for your organization."
+            default: break
+            }
+        case RequestsAPIError.requestsUnavailable(statusCode: 403):
+            return "You are not an approver for this step."
+        default: break
+        }
+        return "Could not record your decision. Please try again."
+    }
+
+    static func needsRefresh(_ error: Error) -> Bool {
+        if case RequestsAPIError.rejected(_, let code, _) = error { return refreshCodes.contains(code) }
+        return false
     }
 }

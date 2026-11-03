@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Ported from trm-ios. Fields match trm's own web create form's *required* set exactly (see the trm-ios plan's
-/// field-scope table) — Platform/SAP/git/template fields are optional there too and are
-/// deliberately not exposed here.
+/// Ported from trm-ios, with the web create form's fields (createUpdateChangeRequestForm):
+/// the required set, then the optional request number, platforms (with an SAP platform's
+/// source system, or a Git platform's repository and branches) and a template whose stages
+/// each get an owner.
 ///
 /// Owns its view model (`@StateObject`): the presenting sheet's content closure can run
 /// again while the sheet is up, and a re-created model would wipe what was typed.
@@ -24,6 +25,10 @@ struct NewChangeRequestView: View {
                     TextField("Request name", text: $model.requestName)
                     TextField("Description", text: $model.description, axis: .vertical)
                         .lineLimit(3...8)
+                    TextField("Request number (optional)", text: $model.requestNumber)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("requests.new.requestNumber")
                 }
 
                 Section("Project") {
@@ -60,6 +65,12 @@ struct NewChangeRequestView: View {
                         }
                     }
                 }
+
+                if !model.applications.isEmpty {
+                    PlatformSection(model: model)
+                }
+
+                StagesSection(model: model)
 
                 Section("Optional") {
                     TextField("Ticket link", text: $model.ticketUrl)
@@ -119,5 +130,145 @@ struct NewChangeRequestView: View {
                 Text(model.error ?? "")
             }
         }
+    }
+}
+
+/// Platforms, then what an SAP or Git platform adds.
+private struct PlatformSection: View {
+    @ObservedObject var model: NewChangeRequestViewModel
+
+    var body: some View {
+        Section {
+            ForEach(model.applications, id: \.self) { platform in
+                Button {
+                    model.togglePlatform(platform)
+                } label: {
+                    HStack {
+                        Text(platform.description ?? "Untitled")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if let id = platform.id, model.selectedPlatformIds.contains(id) {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("requests.new.platform")
+            }
+            if model.hasSAPPlatform {
+                Picker("SAP source system", selection: $model.selectedSystemId) {
+                    Text("Select…").tag(String?.none)
+                    ForEach(model.systems) { system in
+                        Text(system.name.isEmpty ? system.sid : system.name).tag(String?.some(system.id))
+                    }
+                }
+            }
+            if model.hasGitPlatform {
+                Picker("Repository", selection: $model.selectedRepo) {
+                    Text("Select…").tag("")
+                    ForEach(model.repos, id: \.self) { repo in
+                        Text(repo).tag(repo)
+                    }
+                }
+                .disabled(model.repos.isEmpty)
+                BranchFields(title: "QA", branch: $model.qaBranch)
+                BranchFields(title: "PRD", branch: $model.prdBranch)
+            }
+        } header: {
+            Text("Platform")
+        } footer: {
+            if model.hasGitPlatform && model.repos.isEmpty {
+                Text("The selected project has no repositories.")
+            }
+        }
+    }
+}
+
+private struct BranchFields: View {
+    let title: String
+    @Binding var branch: NewChangeRequestPayload.DeploymentBranch
+
+    var body: some View {
+        TextField("\(title) source branch", text: $branch.source)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+        TextField("\(title) target branch", text: $branch.target)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+    }
+}
+
+/// The template, then each of its stages with an owner. A team narrows the owners offered.
+private struct StagesSection: View {
+    @ObservedObject var model: NewChangeRequestViewModel
+
+    var body: some View {
+        Section {
+            Picker("Template", selection: $model.selectedTemplateId) {
+                Text("None").tag(String?.none)
+                ForEach(model.activeTemplates) { template in
+                    Text(template.name).tag(String?.some(template.id))
+                }
+            }
+            .accessibilityIdentifier("requests.new.template")
+            if !model.stages.isEmpty {
+                if !model.teams.isEmpty {
+                    Picker("Team", selection: $model.selectedTeamId) {
+                        Text("All users").tag(String?.none)
+                        ForEach(model.teams) { team in
+                            Text(team.name).tag(String?.some(team.id))
+                        }
+                    }
+                }
+                ForEach(model.stages) { stage in
+                    StageOwnerRow(model: model, stage: stage)
+                }
+            }
+        } header: {
+            Text("Stages")
+        } footer: {
+            if model.activeTemplates.isEmpty {
+                Text("No request templates yet. A request without a template has no stages.")
+            } else if model.selectedTemplate?.requireApproval == true {
+                Label("This template requires approvals: each stage moves on once its department and role approve.",
+                      systemImage: "checkmark.seal")
+            }
+        }
+    }
+}
+
+private struct StageOwnerRow: View {
+    @ObservedObject var model: NewChangeRequestViewModel
+    let stage: DraftStage
+
+    var body: some View {
+        Menu {
+            Button("Unassigned") { model.setOwner(nil, for: stage.order) }
+            ForEach(model.ownerChoices) { choice in
+                Button(choice.name) { model.setOwner(choice.id, for: stage.order) }
+            }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(stage.order). \(stage.description)")
+                        .foregroundStyle(.primary)
+                    if stage.qaDeploy {
+                        Text("Deploy to QA")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Text(model.ownerName(for: stage) ?? "Unassigned")
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("requests.new.stageOwner")
     }
 }

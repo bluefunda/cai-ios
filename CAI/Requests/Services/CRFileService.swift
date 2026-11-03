@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 protocol CRFileServicing {
     func list(projectId: String, changeRequestId: String) async throws -> [CRFile]
     func upload(projectId: String, changeRequestId: String, fileURL: URL) async throws -> CRFile
+    /// DELETE /rest/trm/v1/deleteFile?path={project}/{request}/{name} — viewfiles.js handleDelete.
+    func delete(projectId: String, changeRequestId: String, fileName: String) async throws
 }
 
 struct CRFileService: CRFileServicing {
@@ -44,5 +46,12 @@ struct CRFileService: CRFileServicing {
             throw RequestsAPIError.serverError(200, "Upload response had no file entry")
         }
         return first
+    }
+
+    func delete(projectId: String, changeRequestId: String, fileName: String) async throws {
+        try await client.deleteDiscardingResponse(
+            "/rest/trm/v1/deleteFile",
+            queryItems: [URLQueryItem(name: "path", value: Self.path(projectId: projectId, changeRequestId: changeRequestId) + fileName)]
+        )
     }
 }

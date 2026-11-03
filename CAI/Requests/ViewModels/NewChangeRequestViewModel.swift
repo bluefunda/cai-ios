@@ -1,19 +1,113 @@
 import Foundation
 
+/// The New Request form's optional lists, as the web's createUpdateChangeRequestForm loads
+/// them: templates, teams (to narrow stage owners), applications (platforms) and an SAP
+/// platform's systems. Closures so tests can supply just these.
+struct NewRequestFormSources {
+    var templates: () async throws -> [RQRequestTemplate]
+    var teams: () async throws -> [RQAdminTeam]
+    var applications: () async throws -> [ChangeRequestPlatform]
+    var systems: (_ appId: String) async throws -> [RQSAPSystem]
+
+    init(
+        templates: @escaping () async throws -> [RQRequestTemplate] = { [] },
+        teams: @escaping () async throws -> [RQAdminTeam] = { [] },
+        applications: @escaping () async throws -> [ChangeRequestPlatform] = { [] },
+        systems: @escaping (_ appId: String) async throws -> [RQSAPSystem] = { _ in [] }
+    ) {
+        self.templates = templates
+        self.teams = teams
+        self.applications = applications
+        self.systems = systems
+    }
+
+    init(admin: AdminServicing) {
+        self.init(
+            templates: { try await admin.templates() },
+            teams: { try await admin.teams(search: "") },
+            applications: { try await admin.applications() },
+            systems: { try await admin.systems(appId: $0) }
+        )
+    }
+}
+
+/// One of the chosen template's stages, with the owner picked for it.
+struct DraftStage: Identifiable, Equatable {
+    let order: Int
+    let description: String
+    let statusCode: String
+    let qaDeploy: Bool
+    var ownerId: String?
+
+    var id: Int { order }
+}
+
+/// Someone who can own a stage: a member of the chosen team, or any user.
+struct StageOwnerChoice: Identifiable, Hashable {
+    let id: String
+    let name: String
+}
+
 @MainActor
 final class NewChangeRequestViewModel: ObservableObject {
     @Published var requestName = ""
     @Published var description = ""
-    @Published var selectedProjectId: String?
+    @Published var selectedProjectId: String? {
+        didSet {
+            guard oldValue != selectedProjectId else { return }
+            if !repos.contains(selectedRepo) { selectedRepo = "" }
+        }
+    }
     @Published var selectedRequestTypeId: String?
     @Published var selectedSeverityId: String?
     @Published var selectedOwnerId: String?
     @Published var ticketUrl = ""
+    @Published var requestNumber = ""
+
+    /// Choosing a template lays out its stages; owners picked so far are dropped, as on
+    /// the web.
+    @Published var selectedTemplateId: String? {
+        didSet {
+            guard oldValue != selectedTemplateId else { return }
+            let workflow = templates.first { $0.id == selectedTemplateId }?.workflow ?? []
+            stages = workflow.enumerated().map { index, stage in
+                DraftStage(
+                    order: stage.order ?? index + 1,
+                    description: stage.description,
+                    statusCode: stage.statusCode.isEmpty ? stage.description : stage.statusCode,
+                    qaDeploy: stage.qaDeploy
+                )
+            }
+        }
+    }
+    @Published var stages: [DraftStage] = []
+    /// Narrows the stage owner choices to one team's members; nil offers every user.
+    @Published var selectedTeamId: String?
+
+    @Published var selectedPlatformIds: Set<String> = [] {
+        didSet {
+            guard oldValue != selectedPlatformIds else { return }
+            if !hasSAPPlatform { selectedSystemId = nil; systems = []; systemsAppId = nil }
+            if !hasGitPlatform { selectedRepo = "" }
+            if hasSAPPlatform, let appId = firstSAPPlatformId, appId != systemsAppId {
+                Task { await loadSystems(appId: appId) }
+            }
+        }
+    }
+    @Published var selectedSystemId: String?
+    @Published var selectedRepo = ""
+    @Published var qaBranch = NewChangeRequestPayload.DeploymentBranch(system: "qa")
+    @Published var prdBranch = NewChangeRequestPayload.DeploymentBranch(system: "prd")
 
     @Published private(set) var projects: [RQProject] = []
     @Published private(set) var requestTypes: [RequestTypeOption] = []
     @Published private(set) var severities: [SeverityOption] = []
     @Published private(set) var users: [UserOption] = []
+    @Published private(set) var templates: [RQRequestTemplate] = []
+    @Published private(set) var teams: [RQAdminTeam] = []
+    @Published private(set) var applications: [ChangeRequestPlatform] = []
+    @Published private(set) var systems: [RQSAPSystem] = []
+    private var systemsAppId: String?
 
     @Published private(set) var isLoadingOptions = false
     @Published private(set) var isSubmitting = false
@@ -26,18 +120,21 @@ final class NewChangeRequestViewModel: ObservableObject {
     private let changeRequestService: ChangeRequestServicing
     private let projectService: ProjectServicing
     private let referenceDataService: ReferenceDataServicing
+    private let sources: NewRequestFormSources
     private let currentUserId: String?
 
     init(
         changeRequestService: ChangeRequestServicing,
         projectService: ProjectServicing,
         referenceDataService: ReferenceDataServicing,
+        sources: NewRequestFormSources = NewRequestFormSources(),
         currentUserId: String?,
         lockedProjectId: String? = nil
     ) {
         self.changeRequestService = changeRequestService
         self.projectService = projectService
         self.referenceDataService = referenceDataService
+        self.sources = sources
         self.currentUserId = currentUserId
         self.lockedProjectId = lockedProjectId
     }
@@ -51,6 +148,55 @@ final class NewChangeRequestViewModel: ObservableObject {
             && selectedRequestTypeId != nil
             && selectedSeverityId != nil
             && selectedOwnerId != nil
+    }
+
+    var selectedTemplate: RQRequestTemplate? { templates.first { $0.id == selectedTemplateId } }
+
+    /// Only active templates are offered, as the web lists them.
+    var activeTemplates: [RQRequestTemplate] { templates.filter(\.isActive) }
+
+    var selectedPlatforms: [ChangeRequestPlatform] {
+        applications.filter { $0.id.map(selectedPlatformIds.contains) ?? false }
+    }
+    var hasSAPPlatform: Bool { selectedPlatforms.contains(where: \.isSAP) }
+    var hasGitPlatform: Bool { selectedPlatforms.contains(where: \.usesGit) }
+    private var firstSAPPlatformId: String? { selectedPlatforms.first(where: \.isSAP)?.id }
+
+    /// The chosen project's repositories (the web's `projectData.repos`).
+    var repos: [String] { projects.first { $0.id == selectedProjectId }?.repos ?? [] }
+
+    var ownerChoices: [StageOwnerChoice] {
+        if let team = teams.first(where: { $0.id == selectedTeamId }) {
+            return team.members.map { StageOwnerChoice(id: $0.id, name: $0.name) }
+        }
+        return users.map { StageOwnerChoice(id: $0.id, name: $0.name) }
+    }
+
+    func ownerName(for stage: DraftStage) -> String? {
+        guard let id = stage.ownerId else { return nil }
+        return (ownerChoices + users.map { StageOwnerChoice(id: $0.id, name: $0.name) })
+            .first { $0.id == id }?.name
+    }
+
+    func setOwner(_ ownerId: String?, for order: Int) {
+        guard let index = stages.firstIndex(where: { $0.order == order }) else { return }
+        stages[index].ownerId = ownerId
+    }
+
+    func togglePlatform(_ platform: ChangeRequestPlatform) {
+        guard let id = platform.id else { return }
+        if selectedPlatformIds.contains(id) {
+            selectedPlatformIds.remove(id)
+        } else {
+            selectedPlatformIds.insert(id)
+        }
+    }
+
+    /// Fills the title and description from an assistant answer, keeping anything typed.
+    func applying(_ prefill: NewRequestPrefill) -> Self {
+        if requestName.isEmpty { requestName = prefill.title }
+        if description.isEmpty { description = prefill.description }
+        return self
     }
 
     func loadOptions() async {
@@ -67,24 +213,36 @@ final class NewChangeRequestViewModel: ObservableObject {
         } catch {
             self.error = error.localizedDescription
         }
+        // The optional sections: a list that fails to load leaves its section empty rather
+        // than blocking the required fields.
+        async let t = try? sources.templates()
+        async let tm = try? sources.teams()
+        async let a = try? sources.applications()
+        let (loadedTemplates, loadedTeams, loadedApplications) = await (t, tm, a)
+        templates = loadedTemplates ?? []
+        teams = loadedTeams ?? []
+        applications = loadedApplications ?? []
         isLoadingOptions = false
     }
 
-    func submit() async -> ChangeRequest? {
+    private func loadSystems(appId: String) async {
+        systemsAppId = appId
+        let loaded = (try? await sources.systems(appId)) ?? []
+        guard systemsAppId == appId else { return }
+        systems = loaded
+        if !systems.contains(where: { $0.id == selectedSystemId }) { selectedSystemId = nil }
+    }
+
+    func makePayload() -> NewChangeRequestPayload? {
         guard isValid,
-              let projectId = selectedProjectId,
+              let projectId = selectedProjectId.flatMap(Int.init),
               let requestType = selectedRequestTypeId,
               let severity = selectedSeverityId,
               let owner = selectedOwnerId,
               let currentUserId
         else { return nil }
 
-        isSubmitting = true
-        error = nil
-        defer { isSubmitting = false }
-
-        let trimmedTicket = ticketUrl.trimmingCharacters(in: .whitespaces)
-        let payload = NewChangeRequestPayload(
+        var payload = NewChangeRequestPayload(
             shortDescription: requestName.trimmingCharacters(in: .whitespaces),
             description: description.trimmingCharacters(in: .whitespaces),
             projectId: projectId,
@@ -92,8 +250,37 @@ final class NewChangeRequestViewModel: ObservableObject {
             severity: severity,
             requestedBy: owner,
             createdBy: currentUserId,
-            ticketUrl: trimmedTicket.isEmpty ? nil : trimmedTicket
+            ticketUrl: ticketUrl.trimmingCharacters(in: .whitespaces)
         )
+        payload.platform = selectedPlatforms
+        payload.template = selectedTemplateId
+        payload.stage = stages.enumerated().map { index, stage in
+            NewChangeRequestPayload.Stage(
+                order: stage.order, description: stage.description, statusCode: stage.statusCode,
+                qaDeploy: stage.qaDeploy, owner: stage.ownerId, current: index == 0,
+                updatedBy: currentUserId)
+        }
+        payload.requestId = requestNumber.trimmingCharacters(in: .whitespaces)
+        if hasGitPlatform {
+            payload.repo = selectedRepo
+            payload.deploymentBranches = [qaBranch, prdBranch].map {
+                var branch = $0
+                branch.source = branch.source.trimmingCharacters(in: .whitespaces)
+                branch.target = branch.target.trimmingCharacters(in: .whitespaces)
+                return branch
+            }
+        }
+        if hasSAPPlatform { payload.sapSourceSystemId = selectedSystemId }
+        return payload
+    }
+
+    func submit() async -> ChangeRequest? {
+        guard let payload = makePayload() else { return nil }
+
+        isSubmitting = true
+        error = nil
+        defer { isSubmitting = false }
+
         do {
             return try await changeRequestService.create(payload)
         } catch {

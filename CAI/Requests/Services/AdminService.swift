@@ -33,8 +33,17 @@ protocol AdminServicing {
     // Configurations
     func configList(_ kind: RQConfigKind) async throws -> [RQConfigItem]
     func systems() async throws -> [RQSAPSystem]
+    /// The SAP systems of one application — the New Request form's source system list.
+    func systems(appId: String) async throws -> [RQSAPSystem]
+    /// Applications with their SAP and Git flags — the New Request form's platforms.
+    func applications() async throws -> [ChangeRequestPlatform]
     func addConfigItem(_ kind: RQConfigKind, _ payload: RQTypePayload) async throws
     func addApplication(_ payload: RQApplicationPayload) async throws
+
+    /// Workflow enforcement, as the web's Configurations shows it to admins (GET/PUT
+    /// {GW}/settings/workflow). Changing it needs the admin or super-admin role.
+    func workflowSettings() async throws -> RQWorkflowSettings
+    func setWorkflowEnforcement(_ enabled: Bool) async throws -> RQWorkflowSettings
 
     // Git
     func gitRepos() async throws -> [RQGitRepo]
@@ -157,7 +166,11 @@ struct AdminService: AdminServicing {
 
     func configList(_ kind: RQConfigKind) async throws -> [RQConfigItem] { try await list(kind.listPath) }
 
-    func systems() async throws -> [RQSAPSystem] { try await list("/sap-system", ["appId": ""]) }
+    func systems() async throws -> [RQSAPSystem] { try await systems(appId: "") }
+
+    func systems(appId: String) async throws -> [RQSAPSystem] { try await list("/sap-system", ["appId": appId]) }
+
+    func applications() async throws -> [ChangeRequestPlatform] { try await list(RQConfigKind.applications.listPath) }
 
     func addConfigItem(_ kind: RQConfigKind, _ payload: RQTypePayload) async throws {
         try await client.postDiscardingResponse(Self.base + kind.createPath, body: payload)
@@ -165,6 +178,14 @@ struct AdminService: AdminServicing {
 
     func addApplication(_ payload: RQApplicationPayload) async throws {
         try await client.postDiscardingResponse(Self.base + RQConfigKind.applications.createPath, body: payload)
+    }
+
+    func workflowSettings() async throws -> RQWorkflowSettings {
+        try await client.get("/settings/workflow")
+    }
+
+    func setWorkflowEnforcement(_ enabled: Bool) async throws -> RQWorkflowSettings {
+        try await client.put("/settings/workflow", body: RQWorkflowSettings(enforceWorkflow: enabled))
     }
 
     // MARK: Git
@@ -202,6 +223,10 @@ struct FixtureAdminService: AdminServicing {
     func updateTeam(_ payload: RQTeamPayload) async throws {}
     func configList(_ kind: RQConfigKind) async throws -> [RQConfigItem] { [] }
     func systems() async throws -> [RQSAPSystem] { [] }
+    func systems(appId: String) async throws -> [RQSAPSystem] { [] }
+    func applications() async throws -> [ChangeRequestPlatform] { [] }
+    func workflowSettings() async throws -> RQWorkflowSettings { RQWorkflowSettings(enforceWorkflow: false) }
+    func setWorkflowEnforcement(_ enabled: Bool) async throws -> RQWorkflowSettings { RQWorkflowSettings(enforceWorkflow: enabled) }
     func addConfigItem(_ kind: RQConfigKind, _ payload: RQTypePayload) async throws {}
     func addApplication(_ payload: RQApplicationPayload) async throws {}
     func gitRepos() async throws -> [RQGitRepo] { [] }
