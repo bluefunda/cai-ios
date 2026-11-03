@@ -516,6 +516,37 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertEqual(payload.deploymentBranches[0].source, "feature/x")
     }
 
+    func test_newRequest_templateRequiredWhenApprovalsForEveryRequest() async throws {
+        let template = templateJSON()
+        let model = NewChangeRequestViewModel(
+            changeRequestService: FixtureChangeRequestService(), projectService: FixtureProjectService(),
+            referenceDataService: FixtureReferenceDataService(),
+            sources: NewRequestFormSources(templates: { [template] },
+                                           workflowSettings: { RQWorkflowSettings(enforceWorkflow: true) }),
+            currentUserId: "u-1")
+        await model.loadOptions()
+        fillRequired(model)
+
+        XCTAssertTrue(model.templateRequired)
+        XCTAssertFalse(model.isValid, "the backend would refuse it: template_required")
+        model.selectedTemplateId = "t-1"
+        XCTAssertTrue(model.isValid)
+    }
+
+    func test_newRequest_templateOptionalWhenTheSettingIsOffOrUnreadable() async {
+        for settings in [{ RQWorkflowSettings(enforceWorkflow: false) }, { throw URLError(.notConnectedToInternet) }]
+            as [() async throws -> RQWorkflowSettings] {
+            let model = NewChangeRequestViewModel(
+                changeRequestService: FixtureChangeRequestService(), projectService: FixtureProjectService(),
+                referenceDataService: FixtureReferenceDataService(),
+                sources: NewRequestFormSources(workflowSettings: settings), currentUserId: "u-1")
+            await model.loadOptions()
+            fillRequired(model)
+            XCTAssertFalse(model.templateRequired)
+            XCTAssertTrue(model.isValid)
+        }
+    }
+
     func test_newRequest_teamNarrowsStageOwners() async throws {
         let teamJSON = #"{"id":"tm-1","name":"Core","membersDetails":[{"id":"u-9","name":"Nine"}]}"#
         let team = try JSONDecoder().decode(RQAdminTeam.self, from: Data(teamJSON.utf8))

@@ -206,8 +206,8 @@ private struct StagesSection: View {
 
     var body: some View {
         Section {
-            Picker("Template", selection: $model.selectedTemplateId) {
-                Text("None").tag(String?.none)
+            Picker(model.templateRequired ? "Template (required)" : "Template", selection: $model.selectedTemplateId) {
+                Text(model.templateRequired ? "Select…" : "None").tag(String?.none)
                 ForEach(model.activeTemplates) { template in
                     Text(template.name).tag(String?.some(template.id))
                 }
@@ -229,7 +229,12 @@ private struct StagesSection: View {
         } header: {
             Text("Stages")
         } footer: {
-            if model.activeTemplates.isEmpty {
+            if model.templateRequired {
+                Label(model.activeTemplates.isEmpty
+                      ? "Your organization requires approvals for every request, and there are no templates yet. Ask an admin to add one in Request Templates."
+                      : "Your organization requires approvals for every request: choose a template.",
+                      systemImage: "checkmark.seal")
+            } else if model.activeTemplates.isEmpty {
                 Text("No request templates yet. A request without a template has no stages.")
             } else if model.selectedTemplate?.requireApproval == true {
                 Label("This template requires approvals: each stage moves on once its department and role approve.",

@@ -8,17 +8,22 @@ struct NewRequestFormSources {
     var teams: () async throws -> [RQAdminTeam]
     var applications: () async throws -> [ChangeRequestPlatform]
     var systems: (_ appId: String) async throws -> [RQSAPSystem]
+    /// The organization's "Approvals for every request" switch: when on, the backend
+    /// refuses a request without a template.
+    var workflowSettings: () async throws -> RQWorkflowSettings
 
     init(
         templates: @escaping () async throws -> [RQRequestTemplate] = { [] },
         teams: @escaping () async throws -> [RQAdminTeam] = { [] },
         applications: @escaping () async throws -> [ChangeRequestPlatform] = { [] },
-        systems: @escaping (_ appId: String) async throws -> [RQSAPSystem] = { _ in [] }
+        systems: @escaping (_ appId: String) async throws -> [RQSAPSystem] = { _ in [] },
+        workflowSettings: @escaping () async throws -> RQWorkflowSettings = { RQWorkflowSettings(enforceWorkflow: false) }
     ) {
         self.templates = templates
         self.teams = teams
         self.applications = applications
         self.systems = systems
+        self.workflowSettings = workflowSettings
     }
 
     init(admin: AdminServicing) {
@@ -26,7 +31,8 @@ struct NewRequestFormSources {
             templates: { try await admin.templates() },
             teams: { try await admin.teams(search: "") },
             applications: { try await admin.applications() },
-            systems: { try await admin.systems(appId: $0) }
+            systems: { try await admin.systems(appId: $0) },
+            workflowSettings: { try await admin.workflowSettings() }
         )
     }
 }
@@ -109,6 +115,9 @@ final class NewChangeRequestViewModel: ObservableObject {
     @Published private(set) var systems: [RQSAPSystem] = []
     private var systemsAppId: String?
 
+    /// Approvals for every request are on, so a template must be chosen (the backend
+    /// answers 422 template_required otherwise).
+    @Published private(set) var templateRequired = false
     @Published private(set) var isLoadingOptions = false
     @Published private(set) var isSubmitting = false
     @Published var error: String?
@@ -148,6 +157,7 @@ final class NewChangeRequestViewModel: ObservableObject {
             && selectedRequestTypeId != nil
             && selectedSeverityId != nil
             && selectedOwnerId != nil
+            && (!templateRequired || selectedTemplateId != nil)
     }
 
     var selectedTemplate: RQRequestTemplate? { templates.first { $0.id == selectedTemplateId } }
@@ -218,7 +228,10 @@ final class NewChangeRequestViewModel: ObservableObject {
         async let t = try? sources.templates()
         async let tm = try? sources.teams()
         async let a = try? sources.applications()
-        let (loadedTemplates, loadedTeams, loadedApplications) = await (t, tm, a)
+        async let w = try? sources.workflowSettings()
+        let (loadedTemplates, loadedTeams, loadedApplications, settings) = await (t, tm, a, w)
+        // Unknown (the read failed) counts as off: the backend still has the final say.
+        templateRequired = settings?.enforceWorkflow ?? false
         templates = loadedTemplates ?? []
         teams = loadedTeams ?? []
         applications = loadedApplications ?? []
