@@ -145,6 +145,11 @@ private struct DetailBody: View {
             .onChange(of: model.changeRequest) { _, changeRequest in
                 if let changeRequest { state.recents.record(changeRequest) }
             }
+            // Unarchive, status, edits and stage moves show in the list (and the right
+            // Active/Archive tab) without a refresh.
+            .onChange(of: model.savedChanges) { _, _ in
+                Task { await state.changeRequests?.load() }
+            }
             .onChange(of: selectedTab) { _, tab in
                 if tab == .comments { Task { await model.markCommentsSeen() } }
             }
@@ -201,9 +206,8 @@ private struct DetailBody: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            // The header, tabs and tab content in one column on a wide window, instead of
-            // fields at the far left and values at the far right.
-            .readableColumn()
+            // The header, tabs and tab content use the window's full width.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else if model.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -353,6 +357,11 @@ private struct StatusMenu: View {
                 }
             }
         }
+        // Drawn as written: a Mac otherwise redraws the label as a pull-down button,
+        // dropping the pill and adding a second chevron.
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
         .disabled(isSaving)
         .bfPointerHover()
         .accessibilityLabel("Status: \(status.style.label). Change status")
@@ -418,7 +427,6 @@ private struct DetailsTab: View {
                 }
             }
             .padding(BFSpacing._4)
-            .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -463,7 +471,6 @@ private struct ActivityTab: View {
                     }
                 }
                 .padding(BFSpacing._4)
-                .frame(maxWidth: 720, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -710,6 +717,7 @@ private struct StageMoveSheet: View {
                     TextField("Add a note for the team (optional)", text: $comment, axis: .vertical)
                         .lineLimit(3...8)
                         .accessibilityIdentifier("requests.stageMove.comment")
+                        .formMultilineField()
                 }
 
                 if let error = model.error {
@@ -846,10 +854,31 @@ private struct WorkflowSection: View {
                 .controlSize(.small)
                 .tint(BFColor.primary)
                 .disabled(model.isDeciding)
+            } else if step.isAwaitingDecision {
+                Text("Waiting for \(approverDescription(step)) to approve")
+                    .font(RQFont.meta)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("requests.workflow.waiting")
             }
         }
         .padding(BFSpacing._3)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Who can decide a step, for someone who can't: its owner, or its department · role.
+    private func approverDescription(_ step: RQWorkflowStep) -> String {
+        let group = [step.department, step.role].filter { !$0.isBlank }.joined(separator: " · ")
+        // The waiting step is the current one, whose owner's name the request carries.
+        let owner = step.owner.flatMap { id -> String? in
+            guard let cr = model.changeRequest, cr.currentStage?.ownerId == id else { return nil }
+            return cr.currentStageOwnerName
+        }
+        switch (owner, group.isEmpty) {
+        case let (owner?, false): return "\(owner) or \(group)"
+        case let (owner?, true): return owner
+        case (nil, false): return group
+        case (nil, true): return "an approver"
+        }
     }
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -891,6 +920,7 @@ private struct WorkflowDecisionSheet: View {
                               text: $comment, axis: .vertical)
                         .lineLimit(3...8)
                         .accessibilityIdentifier("requests.workflow.comment")
+                        .formMultilineField()
                 }
             }
             .navigationTitle("\(verb) \(step.title)")

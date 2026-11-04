@@ -92,7 +92,7 @@ final class RequestsState: ObservableObject {
         let adminService = services.adminService
         return NewConversationViewModel(
             messagesService: services.messagesService,
-            searchUsers: { try await adminService.users(search: $0, active: true) },
+            searchUsers: { _ in try await adminService.allUsers() },
             currentUserId: currentUserId
         )
     }

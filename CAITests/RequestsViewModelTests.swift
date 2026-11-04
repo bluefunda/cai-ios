@@ -57,7 +57,13 @@ private final class StageFlowServices: ChangeRequestServicing, ChangeRequestWork
     func listChangeRequests(filter: ChangeRequestFilter) async throws -> [ChangeRequest] { [request] }
     func changeRequest(id: String) async throws -> ChangeRequest { log.append("fetch"); return request }
     func create(_ payload: NewChangeRequestPayload) async throws -> ChangeRequest { request }
-    func update(_ payload: ChangeRequestUpdatePayload) async throws { log.append("status:\(payload.status ?? "")") }
+    var onUpdate: (@MainActor () -> Void)?
+    var updateError: Error?
+    func update(_ payload: ChangeRequestUpdatePayload) async throws {
+        log.append("status:\(payload.status ?? "")")
+        if let onUpdate { await onUpdate() }
+        if let updateError { throw updateError }
+    }
     func delete(id: String, updatedBy: String) async throws {}
 
     func moveStage(_ payload: StageUpdatePayload) async throws {
@@ -157,6 +163,46 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertNotNil(model.error)
     }
 
+    // MARK: New project
+
+    func test_newProject_requiresFieldsAndDefaultsTheOwnerToMe() async {
+        let model = ProjectFormViewModel(
+            projectService: FixtureProjectService(),
+            projectTypes: { [] },
+            users: { [UserOption(id: "u-1", name: "Me"), UserOption(id: "u-2", name: "Ann")] },
+            currentUserId: "u-1")
+        await model.loadOptions()
+        XCTAssertEqual(model.ownerId, "u-1")
+        XCTAssertFalse(model.isValid)
+
+        model.name = "  Payments "
+        model.description = "Card flows"
+        XCTAssertFalse(model.isValid, "a project type is required")
+        model.projectTypeId = "t-2"
+        XCTAssertTrue(model.isValid)
+        XCTAssertEqual(model.makePayload()?.name, "Payments")
+        XCTAssertEqual(model.makePayload()?.repos, [])
+        let saved = await model.save()
+        XCTAssertTrue(saved)
+    }
+
+    func test_editProject_startsFromTheProjectAndSendsAnUpdate() async {
+        let project = ProjectDetail(id: "28", name: "Tech Stack", description: "Old", jira: "https://t/1",
+                                    projectTypeLabel: "Enhancement", ownerName: "Me", requestCount: 2, team: [],
+                                    ownerId: "u-1", projectTypeId: "t-1")
+        let model = ProjectFormViewModel(projectService: FixtureProjectService(), projectTypes: { [] },
+                                         users: { [] }, currentUserId: "u-1", editing: project)
+        XCTAssertEqual(model.name, "Tech Stack")
+        XCTAssertEqual(model.ticketUrl, "https://t/1")
+        XCTAssertTrue(model.isValid)
+        model.description = "New"
+        XCTAssertEqual(model.makeUpdatePayload(), ProjectUpdatePayload(
+            id: 28, name: "Tech Stack", description: "New", owner: "u-1", projectType: "t-1",
+            jira: "https://t/1", updatedBy: "u-1"))
+        let saved = await model.save()
+        XCTAssertTrue(saved)
+    }
+
     // MARK: Board drag and drop
 
     func test_boardDrop_updatesStatusThenMovesToTheColumnsStage() async {
@@ -173,6 +219,31 @@ final class RequestsViewModelTests: XCTestCase {
         services.log = []
         await model.move("32", to: .planned)
         XCTAssertEqual(services.log, ["status:planned", "stage:1"])
+    }
+
+    func test_boardDrop_showsTheCardMovingUntilTheSaveFinishes() async {
+        let services = StageFlowServices()
+        let model = ChangeRequestListViewModel(service: services, workflowService: services, currentUserId: "u-1")
+        await model.load()
+        var duringSave: [String: ChangeRequestStatus] = [:]
+        services.onUpdate = { duringSave = model.moving }
+
+        await model.move("32", to: .completed)
+
+        XCTAssertEqual(duringSave, ["32": .completed])
+        XCTAssertTrue(model.moving.isEmpty)
+    }
+
+    func test_boardDrop_failedSaveClearsTheSpinnerAndShowsTheError() async {
+        let services = StageFlowServices()
+        services.updateError = RequestsAPIError.serverError(500, "nope")
+        let model = ChangeRequestListViewModel(service: services, workflowService: services, currentUserId: "u-1")
+        await model.load()
+
+        await model.move("32", to: .completed)
+
+        XCTAssertTrue(model.moving.isEmpty)
+        XCTAssertNotNil(model.error)
     }
 
     func test_boardDrop_toBlockedMovesNoStage() async {
@@ -297,6 +368,24 @@ final class RequestsViewModelTests: XCTestCase {
 
     private func makeStageDetail(_ services: StageFlowServices) -> ChangeRequestDetailViewModel {
         makeDetail(service: services, workflowService: services, commentService: services)
+    }
+
+    func test_savedChanges_countsSavesSoTheListReloads() async throws {
+        let services = StageFlowServices()
+        let model = makeStageDetail(services)
+        await model.load()
+        XCTAssertEqual(model.savedChanges, 0, "opening a request isn't a change")
+
+        await model.setArchived(false)
+        XCTAssertEqual(model.savedChanges, 1)
+
+        let forward = try XCTUnwrap(model.stageActions.forward)
+        _ = await model.moveStage(forward, comment: "")
+        XCTAssertEqual(model.savedChanges, 2)
+
+        services.updateError = RequestsAPIError.serverError(500, "nope")
+        await model.setArchived(true)
+        XCTAssertEqual(model.savedChanges, 2, "a failed save leaves the list alone")
     }
 
     func test_moveStage_postsCommentThenStageThenStatus() async throws {
@@ -709,6 +798,41 @@ final class NewConversationViewModelTests: XCTestCase {
 
         await model.search()
         XCTAssertEqual(model.matches.map(\.id), ["u-2"], "an added person isn't offered again")
+    }
+
+    /// As the web's drawer: everyone loads once, and typing matches name or email here
+    /// (the server's name+active filter found no one in production).
+    func test_search_loadsEveryoneOnceAndMatchesNameOrEmail() async throws {
+        let users = [try adminUser("u-1", "Phani Kumar"), try adminUser("u-2", "Bob"), try adminUser("pha", "Zed")]
+        var loads: [String] = []
+        let model = NewConversationViewModel(
+            messagesService: RecordingMessagesService(),
+            searchUsers: { query in loads.append(query); return users },
+            currentUserId: "me")
+
+        model.searchText = "pha"
+        await model.search()
+        XCTAssertEqual(model.matches.map(\.name), ["Phani Kumar", "Zed"], "name, or email (pha@example.com)")
+        model.searchText = "BOB"
+        await model.search()
+        XCTAssertEqual(model.matches.map(\.id), ["u-2"], "case doesn't matter")
+        XCTAssertEqual(loads, [""], "one unfiltered load, as the web's getSystemUserApp()")
+    }
+
+    func test_search_hidesDeactivatedUsers() async throws {
+        func user(_ json: String) throws -> RQAdminUser {
+            try JSONDecoder().decode(RQAdminUser.self, from: Data(json.utf8))
+        }
+        let users = [
+            try user(#"{"id":"a","name":"Active Ann","status":true}"#),
+            try user(#"{"id":"b","name":"Gone Bob","status":false}"#),
+            try user(#"{"id":"c","name":"Text Cy","status":"in-active"}"#),
+            try user(#"{"id":"d","name":"Unknown Dee"}"#)
+        ]
+        let model = NewConversationViewModel(messagesService: RecordingMessagesService(),
+                                             searchUsers: { _ in users }, currentUserId: "me")
+        await model.search()
+        XCTAssertEqual(model.matches.map(\.id), ["a", "d"], "deactivated hidden; no status counts as active")
     }
 
     func test_addTwice_keepsOneRecipient_andRemoveWorks() throws {

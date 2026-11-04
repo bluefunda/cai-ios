@@ -22,6 +22,7 @@ struct UserProfile: Decodable {
     let role: String?
     let teamName: String?
     let notification: Bool?
+    var profileImage: String? = nil
 }
 
 struct UserProfileListResponse: Decodable {
@@ -34,7 +35,9 @@ struct UserProfileListResponse: Decodable {
 /// never sent here.
 struct UpdateUserRequest: Encodable {
     let updatedBy: String
-    let notification: Bool?
+    var notification: Bool? = nil
+    /// The uploaded picture's URL, or "" to remove it.
+    var profileImage: String? = nil
 }
 
 // MARK: - Change Request
@@ -791,6 +794,9 @@ struct ProjectDetail: Identifiable, Hashable {
     let requestCount: Int?
     let team: [ProjectTeamMember]
     var repos: [String] = []
+    /// The raw `owner` and `projectType` ids, for editing the project.
+    var ownerId: String? = nil
+    var projectTypeId: String? = nil
 }
 
 /// `projectUsers` entries — confirmed against trm-backend-go's `projectUser` struct
@@ -811,6 +817,7 @@ struct ProjectTeamMember: Identifiable, Decodable, Hashable {
 extension ProjectDetail: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, name, description, jira, projectTypeData, ownerUser, requestCount, projectUsers, repos
+        case owner, projectType
     }
     private enum LabelKeys: String, CodingKey { case description }
     private enum UserKeys: String, CodingKey { case name }
@@ -829,6 +836,8 @@ extension ProjectDetail: Decodable {
         team = (try? container.decodeIfPresent([ProjectTeamMember].self, forKey: .projectUsers)) ?? []
         repos = ((try? container.decodeIfPresent([String].self, forKey: .repos)) ?? nil)?
             .filter { !$0.isEmpty } ?? []
+        ownerId = ((try? container.decodeIfPresent(String.self, forKey: .owner)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
+        projectTypeId = ((try? container.decodeIfPresent(String.self, forKey: .projectType)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
 
         if let typeContainer = try? container.nestedContainer(keyedBy: LabelKeys.self, forKey: .projectTypeData) {
             projectTypeLabel = (try? typeContainer.decodeIfPresent(String.self, forKey: .description)) ?? nil
@@ -1678,13 +1687,20 @@ struct RQWorkflowStep: Decodable, Equatable, Identifiable {
     let state: String
     let decisions: [RQWorkflowDecision]
     let gate: Gate?
+    /// The stage owner's user id, when one was picked.
+    let owner: String?
+    /// Whether the signed-in user may decide this step (its owner, or its role and
+    /// department), as the server says. nil from a server that doesn't say: then the
+    /// buttons show and a refusal comes back as not_an_approver.
+    let callerCanDecide: Bool?
 
     var id: Int { order }
     var title: String { description.isEmpty ? statusCode : description }
     var isGate: Bool { type == "github_gate" }
-    /// Approve/Reject only on the current approval step (the web's canDecideStep). Whether
-    /// this user may approve is the server's call; a refusal comes back as not_an_approver.
-    var canDecide: Bool { state == "current" && !isGate }
+    /// The current approval step (the web's canDecideStep).
+    var isAwaitingDecision: Bool { state == "current" && !isGate }
+    /// Approve/Reject show only to someone who may decide.
+    var canDecide: Bool { isAwaitingDecision && callerCanDecide != false }
 
     var stateLabel: String {
         switch state {
@@ -1713,12 +1729,16 @@ struct RQWorkflowStep: Decodable, Equatable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case order, statusCode, description, type, department, role, state, decisions, gate
+        case order, statusCode, description, type, department, role, state, decisions, gate, owner
+        case callerCanDecide = "canDecide"
     }
 
     init(order: Int, description: String, state: String, type: String = "approval",
          statusCode: String = "", department: String = "", role: String = "",
-         decisions: [RQWorkflowDecision] = [], gate: Gate? = nil) {
+         decisions: [RQWorkflowDecision] = [], gate: Gate? = nil,
+         owner: String? = nil, callerCanDecide: Bool? = nil) {
+        self.owner = owner
+        self.callerCanDecide = callerCanDecide
         self.order = order
         self.statusCode = statusCode
         self.description = description
@@ -1741,6 +1761,8 @@ struct RQWorkflowStep: Decodable, Equatable, Identifiable {
         state = (try? c.decodeIfPresent(String.self, forKey: .state)) ?? ""
         decisions = (try? c.decodeIfPresent([RQWorkflowDecision].self, forKey: .decisions)) ?? []
         gate = (try? c.decodeIfPresent(Gate.self, forKey: .gate)) ?? nil
+        owner = ((try? c.decodeIfPresent(String.self, forKey: .owner)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
+        callerCanDecide = (try? c.decodeIfPresent(Bool.self, forKey: .callerCanDecide)) ?? nil
     }
 }
 

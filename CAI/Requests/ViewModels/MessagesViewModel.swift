@@ -62,7 +62,9 @@ final class MessagesListViewModel: ObservableObject {
 // MARK: - New Conversation
 
 /// The web's New message drawer (createNewChat.js): pick recipients from the tenant's
-/// active users, a topic, and a first message.
+/// users, a topic, and a first message. Like the web, every user is loaded once and the
+/// typed name is matched here: asking the server for `name=…&status=active` found no one
+/// in production.
 @MainActor
 final class NewConversationViewModel: ObservableObject {
     @Published var searchText = ""
@@ -81,6 +83,9 @@ final class NewConversationViewModel: ObservableObject {
     private let messagesService: MessagesServicing
     private let searchUsers: (String) async throws -> [RQAdminUser]
     private let currentUserId: String?
+    /// Everyone, loaded on the first search.
+    private var everyone: [RQAdminUser]?
+    static let matchLimit = 50
 
     init(messagesService: MessagesServicing,
          searchUsers: @escaping (String) async throws -> [RQAdminUser],
@@ -95,23 +100,34 @@ final class NewConversationViewModel: ObservableObject {
             && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Active users matching `searchText`, minus the current user and anyone already added.
+    /// Active users whose name or email contains `searchText` (everyone when it's empty),
+    /// minus the current user and anyone already added. Relies on trm-backend-go
+    /// migration 0009, which marks users from before the `status` column (stored null,
+    /// sent as false) active; deactivating a user writes false.
     func search() async {
         isSearching = true
         defer { isSearching = false }
-        let query = searchText.trimmingCharacters(in: .whitespaces)
         do {
-            let found = try await searchUsers(query)
-            // A slower, older search must not overwrite a newer one's results.
-            guard query == searchText.trimmingCharacters(in: .whitespaces) else { return }
-            let chosen = Set(recipients.map(\.id))
-            matches = found.filter { $0.id != currentUserId && !chosen.contains($0.id) }
+            if everyone == nil { everyone = try await searchUsers("") }
+            refreshMatches()
             error = nil
         } catch is CancellationError {
             return
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func refreshMatches() {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        let chosen = Set(recipients.map(\.id))
+        let found = (everyone ?? []).filter { user in
+            user.isActive && user.id != currentUserId && !chosen.contains(user.id)
+                && (query.isEmpty || user.name.localizedCaseInsensitiveContains(query)
+                    || user.email.localizedCaseInsensitiveContains(query))
+        }
+        matches = Array(found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            .prefix(Self.matchLimit))
     }
 
     func add(_ user: RQAdminUser) {

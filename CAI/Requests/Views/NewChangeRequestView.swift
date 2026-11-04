@@ -21,14 +21,19 @@ struct NewChangeRequestView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Request") {
-                    TextField("Request name", text: $model.requestName)
-                    TextField("Description", text: $model.description, axis: .vertical)
+                Section {
+                    TextField(required: "Request name", text: $model.requestName)
+                    TextField(required: "Description", text: $model.description, axis: .vertical)
                         .lineLimit(3...8)
+                        .formMultilineField()
                     TextField("Request number (optional)", text: $model.requestNumber)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("requests.new.requestNumber")
+                } header: {
+                    Text("Request")
+                } footer: {
+                    RequiredFieldsNote()
                 }
 
                 Section("Project") {
@@ -36,7 +41,7 @@ struct NewChangeRequestView: View {
                         Text(model.projects.first { $0.id == model.lockedProjectId }?.name ?? "—")
                             .foregroundStyle(.secondary)
                     } else {
-                        Picker("Project", selection: $model.selectedProjectId) {
+                        Picker(required: "Project", selection: $model.selectedProjectId) {
                             Text("Select…").tag(String?.none)
                             ForEach(model.projects) { project in
                                 Text(project.name).tag(String?.some(project.id))
@@ -46,19 +51,19 @@ struct NewChangeRequestView: View {
                 }
 
                 Section("Classification") {
-                    Picker("Type", selection: $model.selectedRequestTypeId) {
+                    Picker(required: "Type", selection: $model.selectedRequestTypeId) {
                         Text("Select…").tag(String?.none)
                         ForEach(model.requestTypes) { option in
                             Text(option.type).tag(String?.some(option.id))
                         }
                     }
-                    Picker("Priority", selection: $model.selectedSeverityId) {
+                    Picker(required: "Priority", selection: $model.selectedSeverityId) {
                         Text("Select…").tag(String?.none)
                         ForEach(model.severities) { option in
                             Text(option.type).tag(String?.some(option.id))
                         }
                     }
-                    Picker("Request owner", selection: $model.selectedOwnerId) {
+                    Picker(required: "Request owner", selection: $model.selectedOwnerId) {
                         Text("Select…").tag(String?.none)
                         ForEach(model.users) { user in
                             Text(user.name).tag(String?.some(user.id))
@@ -206,11 +211,13 @@ private struct StagesSection: View {
 
     var body: some View {
         Section {
-            Picker(model.templateRequired ? "Template (required)" : "Template", selection: $model.selectedTemplateId) {
+            Picker(selection: $model.selectedTemplateId) {
                 Text(model.templateRequired ? "Select…" : "None").tag(String?.none)
                 ForEach(model.activeTemplates) { template in
                     Text(template.name).tag(String?.some(template.id))
                 }
+            } label: {
+                model.templateRequired ? Text.required("Template") : Text("Template")
             }
             .accessibilityIdentifier("requests.new.template")
             if !model.stages.isEmpty {
@@ -248,31 +255,40 @@ private struct StageOwnerRow: View {
     @ObservedObject var model: NewChangeRequestViewModel
     let stage: DraftStage
 
+    /// The owner choices, keeping one already picked from another team so it still shows.
+    private var choices: [StageOwnerChoice] {
+        let choices = model.ownerChoices
+        guard let id = stage.ownerId, !choices.contains(where: { $0.id == id }),
+              let name = model.ownerName(for: stage) else { return choices }
+        return [StageOwnerChoice(id: id, name: name)] + choices
+    }
+
+    // The stage on the left and a plain menu picker on the right, which shows the chosen
+    // owner everywhere: a Menu with a custom label shows only its first line on a Mac.
     var body: some View {
-        Menu {
-            Button("Unassigned") { model.setOwner(nil, for: stage.order) }
-            ForEach(model.ownerChoices) { choice in
-                Button(choice.name) { model.setOwner(choice.id, for: stage.order) }
-            }
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(stage.order). \(stage.description)")
-                        .foregroundStyle(.primary)
-                    if stage.qaDeploy {
-                        Text("Deploy to QA")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(stage.order). \(stage.description)")
+                    .foregroundStyle(.primary)
+                if stage.qaDeploy {
+                    Text("Deploy to QA")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Spacer()
-                Text(model.ownerName(for: stage) ?? "Unassigned")
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-            .contentShape(Rectangle())
+            Spacer(minLength: 8)
+            Picker("Owner of \(stage.description)", selection: Binding(
+                get: { stage.ownerId },
+                set: { model.setOwner($0, for: stage.order) }
+            )) {
+                Text("Unassigned").tag(String?.none)
+                ForEach(choices) { choice in
+                    Text(choice.name).tag(String?.some(choice.id))
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
         }
         .accessibilityIdentifier("requests.new.stageOwner")
     }

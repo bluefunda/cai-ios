@@ -3,6 +3,9 @@ import Foundation
 @MainActor
 final class ChangeRequestDetailViewModel: ObservableObject {
     @Published private(set) var changeRequest: ChangeRequest?
+    /// Goes up after every saved change (status, archive, edit, stage move, decision), so
+    /// the request list can reload: it otherwise keeps its copy until a refresh.
+    @Published private(set) var savedChanges = 0
     @Published private(set) var comments: [RQComment] = []
     @Published private(set) var crFiles: [CRFile] = []
     @Published private(set) var isLoading = false
@@ -229,6 +232,7 @@ final class ChangeRequestDetailViewModel: ObservableObject {
                 move: move, changeRequestId: numericId, updatedBy: userId, totalStages: total))
             try await changeRequestService.update(ChangeRequestUpdatePayload(
                 id: changeRequestId, createdBy: userId, updatedBy: userId, status: move.status.rawValue))
+            savedChanges += 1
             changeRequest = try await changeRequestService.changeRequest(id: changeRequestId)
             return true
         } catch {
@@ -255,6 +259,7 @@ final class ChangeRequestDetailViewModel: ObservableObject {
             if WorkflowDecisionError.needsRefresh(error) { await loadWorkflow() }
             return WorkflowDecisionError.message(for: error)
         }
+        savedChanges += 1
         await loadWorkflow()
         if let refreshed = try? await changeRequestService.changeRequest(id: changeRequestId) {
             changeRequest = refreshed
@@ -267,6 +272,7 @@ final class ChangeRequestDetailViewModel: ObservableObject {
         error = nil
         do {
             try await changeRequestService.update(payload)
+            savedChanges += 1
             changeRequest = try await changeRequestService.changeRequest(id: changeRequestId)
         } catch {
             self.error = error.localizedDescription

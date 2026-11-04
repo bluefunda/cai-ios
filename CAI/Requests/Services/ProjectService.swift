@@ -32,6 +32,55 @@ protocol ProjectServicing {
     /// id+name first.
     func listProjectDetails(forceRefresh: Bool) async throws -> [ProjectDetail]
     func projectDetail(id: String, forceRefresh: Bool) async throws -> ProjectDetail
+    func createProject(_ payload: NewProjectPayload) async throws
+    func updateProject(_ payload: ProjectUpdatePayload) async throws
+}
+
+/// POST /rest/trm/v1/projects/create, as the web's CreateUpdateProjectForm sends it.
+struct NewProjectPayload: Encodable, Equatable {
+    var archive = false
+    let name: String
+    let description: String
+    let owner: String
+    let createdBy: String
+    let updatedBy: String
+    let projectType: String
+    /// The web sends the ticket link as `ticketUrl`, which the backend has no field for;
+    /// it's stored as `jira`, so both are sent.
+    let ticketUrl: String
+    var jira: String { ticketUrl }
+    /// Legacy and always empty: repositories are bound on the project page.
+    var repos: [String] = []
+
+    private enum CodingKeys: String, CodingKey {
+        case archive, name, description, owner, createdBy, updatedBy, projectType, ticketUrl, jira, repos
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(archive, forKey: .archive)
+        try c.encode(name, forKey: .name)
+        try c.encode(description, forKey: .description)
+        try c.encode(owner, forKey: .owner)
+        try c.encode(createdBy, forKey: .createdBy)
+        try c.encode(updatedBy, forKey: .updatedBy)
+        try c.encode(projectType, forKey: .projectType)
+        try c.encode(ticketUrl, forKey: .ticketUrl)
+        try c.encode(jira, forKey: .jira)
+        try c.encode(repos, forKey: .repos)
+    }
+}
+
+/// PUT /projects (through trm-bff to trm-backend-go): the id in the body, and only the
+/// edited fields; the backend skips empty ones, so team and repos are left alone.
+struct ProjectUpdatePayload: Encodable, Equatable {
+    let id: Int
+    let name: String
+    let description: String
+    let owner: String
+    let projectType: String
+    let jira: String
+    let updatedBy: String
 }
 
 struct ProjectService: ProjectServicing {
@@ -54,6 +103,14 @@ struct ProjectService: ProjectServicing {
 
     func listProjectDetails(forceRefresh: Bool = false) async throws -> [ProjectDetail] {
         try await fetchAll(forceRefresh: forceRefresh)
+    }
+
+    func createProject(_ payload: NewProjectPayload) async throws {
+        try await client.postDiscardingResponse("/rest/trm/v1/projects/create", body: payload)
+    }
+
+    func updateProject(_ payload: ProjectUpdatePayload) async throws {
+        try await client.putDiscardingResponse("/projects", body: payload)
     }
 
     func projectDetail(id: String, forceRefresh: Bool = false) async throws -> ProjectDetail {

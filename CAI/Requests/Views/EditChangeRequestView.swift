@@ -40,26 +40,31 @@ struct EditChangeRequestView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Request") {
-                    TextField("Request name", text: $requestName)
-                    TextField("Description", text: $description, axis: .vertical)
+                Section {
+                    TextField(required: "Request name", text: $requestName)
+                    TextField(required: "Description", text: $description, axis: .vertical)
                         .lineLimit(3...8)
+                        .formMultilineField()
+                } header: {
+                    Text("Request")
+                } footer: {
+                    RequiredFieldsNote()
                 }
 
                 Section("Classification") {
-                    Picker("Type", selection: $selectedRequestTypeId) {
+                    Picker(required: "Type", selection: $selectedRequestTypeId) {
                         Text("Unchanged").tag(String?.none)
                         ForEach(requestTypes) { option in
                             Text(option.type).tag(String?.some(option.id))
                         }
                     }
-                    Picker("Priority", selection: $selectedSeverityId) {
+                    Picker(required: "Priority", selection: $selectedSeverityId) {
                         Text("Unchanged").tag(String?.none)
                         ForEach(severities) { option in
                             Text(option.type).tag(String?.some(option.id))
                         }
                     }
-                    Picker("Request owner", selection: $selectedOwnerId) {
+                    Picker(required: "Request owner", selection: $selectedOwnerId) {
                         Text("Select…").tag(String?.none)
                         ForEach(users) { user in
                             Text(user.name).tag(String?.some(user.id))

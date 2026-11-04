@@ -47,6 +47,7 @@ private struct ProjectDetailBody: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showFilterSheet = false
     @State private var showCreateSheet = false
+    @State private var showEditSheet = false
 
     private var requests: ChangeRequestListViewModel { model.changeRequestListModel }
 
@@ -79,7 +80,29 @@ private struct ProjectDetailBody: View {
                 if sizeClass != .compact {
                     ViewModeToolbarPicker(viewMode: $state.viewMode)
                 }
+                if model.project != nil {
+                    Button { showEditSheet = true } label: {
+                        Label("Edit project", systemImage: "pencil")
+                    }
+                    .help("Edit project")
+                    .bfPointerHover()
+                    .accessibilityIdentifier("projects.edit")
+                }
                 NewRequestToolbarButton { showCreateSheet = true }
+            }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            if let project = model.project, let services = state.services, let userId = state.currentUserId {
+                ProjectFormView(model: ProjectFormViewModel(
+                    projectService: services.projectService,
+                    projectTypes: { try await services.adminService.configList(.projectTypes) },
+                    users: { try await services.referenceDataService.users(forceRefresh: false) },
+                    currentUserId: userId,
+                    editing: project
+                )) {
+                    await model.load(forceRefresh: true)
+                    await state.projects?.load(forceRefresh: true)
+                }
             }
         }
         .refreshable { await model.load(forceRefresh: true) }

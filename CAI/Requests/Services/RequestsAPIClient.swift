@@ -190,6 +190,9 @@ struct RequestsAPIClient {
         let entry = (try? JSONDecoder().decode([Entry].self, from: data))?.first
             ?? (try? JSONDecoder().decode(Entry.self, from: data))
         guard let entry, entry.status == "error" else { return }
+        #if DEBUG
+        print("[RequestsAPIClient] 200 with an error body: \(String(decoding: data, as: UTF8.self))")
+        #endif
         throw RequestsAPIError.serverError(200, entry.message ?? "The change couldn't be saved.")
     }
 
@@ -234,6 +237,7 @@ struct RequestsAPIClient {
         data fileData: Data,
         filename: String,
         mimeType: String,
+        fileField: String = "file",
         fields: [String: String] = [:],
         queryItems: [URLQueryItem] = [],
         includeAccessTokenHeader: Bool = true
@@ -264,7 +268,7 @@ struct RequestsAPIClient {
         }
 
         append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        append("Content-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(filename)\"\r\n")
         append("Content-Type: \(mimeType)\r\n\r\n")
         body.append(fileData)
         append("\r\n--\(boundary)--\r\n")
@@ -372,6 +376,9 @@ struct RequestsAPIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        // prd trm-gw sends Cache-Control max-age=5 (cache_ttl): a reload right after a
+        // write would otherwise get the list from before it (a board drop snapping back).
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         // trm-gw (KrakenD) validates the Authorization bearer; trm-backend-go's
         // jwtMiddleware reads Access-Token first and only falls back to
         // Authorization — send both so either hop works. No X-Realm: the tenant

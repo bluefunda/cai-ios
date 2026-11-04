@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Projects Destination
 // Ported from trm-ios. The view model lives in RequestsState (see its doc comment).
-// Toolbar: filter only — there's no create endpoint for projects.
+// Toolbar: filter, and New project (the web's CreateUpdateProjectForm).
 
 struct ProjectsListView: View {
     @ObservedObject var state: RequestsState
@@ -12,7 +12,7 @@ struct ProjectsListView: View {
         NavigationStack {
             Group {
                 if let model = state.projects {
-                    ProjectsListScreen(model: model, navigationControl: navigationControl)
+                    ProjectsListScreen(model: model, state: state, navigationControl: navigationControl)
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -33,8 +33,10 @@ struct ProjectsListView: View {
 
 private struct ProjectsListScreen: View {
     @ObservedObject var model: ProjectsListViewModel
+    @ObservedObject var state: RequestsState
     let navigationControl: ShellNavigationControl
     @State private var showFilterSheet = false
+    @State private var showNewProject = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,6 +50,28 @@ private struct ProjectsListScreen: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 FilterToolbarButton(isActive: model.filters != ProjectFilters()) { showFilterSheet = true }
+            }
+            if state.services != nil, state.currentUserId != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showNewProject = true } label: {
+                        Label("New project", systemImage: "plus")
+                    }
+                    .help("New project")
+                    .bfPointerHover()
+                    .accessibilityIdentifier("projects.new")
+                }
+            }
+        }
+        .sheet(isPresented: $showNewProject) {
+            if let services = state.services, let userId = state.currentUserId {
+                ProjectFormView(model: ProjectFormViewModel(
+                    projectService: services.projectService,
+                    projectTypes: { try await services.adminService.configList(.projectTypes) },
+                    users: { try await services.referenceDataService.users(forceRefresh: false) },
+                    currentUserId: userId
+                )) {
+                    await model.load(forceRefresh: true)
+                }
             }
         }
         .shellNavigationControl(navigationControl)
@@ -176,5 +200,86 @@ struct TeamStack: View {
     private func label(_ first: ProjectTeamMember) -> String {
         let remaining = members.count - 1
         return remaining > 0 ? "\(first.name) and \(remaining) other\(remaining == 1 ? "" : "s")" : first.name
+    }
+}
+
+// MARK: - New / Edit Project Sheet
+
+struct ProjectFormView: View {
+    @StateObject var model: ProjectFormViewModel
+    let onCreated: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(required: "Project name", text: $model.name)
+                        .accessibilityIdentifier("projects.new.name")
+                    TextField(required: "Description", text: $model.description, axis: .vertical)
+                        .lineLimit(3...8)
+                        .formMultilineField()
+                } header: {
+                    Text("Project")
+                } footer: {
+                    RequiredFieldsNote()
+                }
+
+                Section {
+                    Picker(required: "Project type", selection: $model.projectTypeId) {
+                        Text("Select…").tag(String?.none)
+                        ForEach(model.projectTypeChoices, id: \.id) { type in
+                            Text(type.label).tag(String?.some(type.id))
+                        }
+                    }
+                    Picker(required: "Owner", selection: $model.ownerId) {
+                        Text("Select…").tag(String?.none)
+                        ForEach(model.ownerChoices, id: \.id) { user in
+                            Text(user.name).tag(String?.some(user.id))
+                        }
+                    }
+                }
+
+                Section("Optional") {
+                    TextField("Ticket link", text: $model.ticketUrl)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+
+            }
+            .disabled(model.isSaving)
+            // An alert, not a row at the bottom: a failed save was easy to miss there.
+            .alert(model.editing == nil ? "Couldn't create the project" : "Couldn't save the project",
+                   isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+                Button("OK", role: .cancel) { model.error = nil }
+            } message: {
+                Text(model.error ?? "")
+            }
+            .navigationTitle(model.editing == nil ? "New project" : "Edit project")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if model.isSaving {
+                        ProgressView()
+                    } else {
+                        Button(model.editing == nil ? "Create project" : "Save") {
+                            Task {
+                                if await model.save() {
+                                    await onCreated()
+                                    dismiss()
+                                }
+                            }
+                        }
+                        .disabled(!model.isValid)
+                        .accessibilityIdentifier("projects.new.create")
+                    }
+                }
+            }
+            .task { await model.loadOptions() }
+        }
     }
 }

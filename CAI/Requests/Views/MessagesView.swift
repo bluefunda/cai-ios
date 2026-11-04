@@ -209,6 +209,7 @@ private struct NewConversationView: View {
                 Section("Message") {
                     TextField("Write a message", text: $model.message, axis: .vertical)
                         .lineLimit(3...8)
+                        .formMultilineField()
                 }
 
                 if let error = model.error {

@@ -330,6 +330,23 @@ final class RequestsAPIModelsTests: XCTestCase {
         XCTAssertEqual(workflow.steps[2].gateLabel, "Approval is stale")
     }
 
+    func testCanDecideFollowsTheServer() throws {
+        let json = #"""
+        {"enforced":true,"currentOrder":1,"steps":[
+          {"order":1,"description":"In Progress","type":"approval","department":"Engineering","role":"developer",
+           "owner":"u-me","canDecide":true,"state":"current","decisions":[]},
+          {"order":2,"description":"Review","type":"approval","department":"Engineering","role":"developer",
+           "canDecide":false,"state":"current","decisions":[]},
+          {"order":3,"description":"Older server","type":"approval","state":"current","decisions":[]}]}
+        """#
+        let workflow = try JSONDecoder().decode(RQWorkflow.self, from: Data(json.utf8))
+        XCTAssertTrue(workflow.steps[0].canDecide, "the stage owner may decide")
+        XCTAssertEqual(workflow.steps[0].owner, "u-me")
+        XCTAssertFalse(workflow.steps[1].canDecide, "the server says this user can't")
+        XCTAssertTrue(workflow.steps[1].isAwaitingDecision, "still shows as waiting")
+        XCTAssertTrue(workflow.steps[2].canDecide, "a server that doesn't say leaves the buttons on")
+    }
+
     func testGateStepIsNeverDecidedByHand() {
         let gate = RQWorkflowStep(order: 3, description: "Review", state: "current", type: "github_gate")
         XCTAssertFalse(gate.canDecide)

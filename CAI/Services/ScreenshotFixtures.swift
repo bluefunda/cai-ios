@@ -24,12 +24,17 @@ enum ScreenshotFixtures {
         return args[idx + 1]
     }
 
-    private static let demoUser = User(
-        id: "screenshot-user",
-        email: "alex.morgan@example.com",
-        name: "Alex Morgan",
-        roles: []
-    )
+    private static let demoUser: User = {
+        var user = User(
+            id: "screenshot-user",
+            email: "alex.morgan@example.com",
+            name: "Alex Morgan",
+            roles: []
+        )
+        // Shows the Requests admin destinations when the Requests fixtures are on.
+        user.requestsRoles = ["admin", "release-manager"]
+        return user
+    }()
 
     /// Called once from CAIApp's `.task` instead of the real auth-restore +
     /// storage-configure + BFF-connect sequence.

@@ -228,9 +228,14 @@ struct FixtureProfileService: ProfileServicing {
     }
 
     func updateNotificationPreference(_ enabled: Bool, userId: String) async throws {}
+    func uploadProfileImage(_ jpeg: Data, userId: String) async throws -> String { "" }
+    func setProfileImage(_ url: String, userId: String) async throws {}
 }
 
 struct FixtureProjectService: ProjectServicing {
+    func createProject(_ payload: NewProjectPayload) async throws {}
+    func updateProject(_ payload: ProjectUpdatePayload) async throws {}
+
     func listProjects(forceRefresh: Bool = false) async throws -> [RQProject] {
         RequestsFixtures.projects
     }

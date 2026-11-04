@@ -144,6 +144,9 @@ final class ChangeRequestListViewModel: ObservableObject {
     static let pageSize = 50
     @Published private(set) var hasMore = false
     @Published private(set) var isLoadingMore = false
+    /// Cards dropped on the board whose save hasn't finished: each shows in its new
+    /// column with a spinner until the reload, and goes back if the save fails.
+    @Published private(set) var moving: [String: ChangeRequestStatus] = [:]
 
     func load() async {
         isLoading = true
@@ -184,7 +187,10 @@ final class ChangeRequestListViewModel: ObservableObject {
     /// With workflow enforcement on, the backend refuses the stage move; the web ignores
     /// that, and so does this.
     func move(_ id: String, to status: ChangeRequestStatus) async {
-        guard let current = changeRequests.first(where: { $0.id == id }), current.status != status else { return }
+        guard moving[id] == nil,
+              let current = changeRequests.first(where: { $0.id == id }), current.status != status else { return }
+        moving[id] = status
+        defer { moving[id] = nil }
         do {
             try await service.update(ChangeRequestUpdatePayload(
                 id: id,
@@ -201,8 +207,9 @@ final class ChangeRequestListViewModel: ObservableObject {
             }
             await load()
         } catch {
-            self.error = error.localizedDescription
+            // Reload first: load() clears the error.
             await load()
+            self.error = error.localizedDescription
         }
     }
 

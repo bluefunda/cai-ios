@@ -99,6 +99,10 @@ final class RequestsAPIClientTests: XCTestCase {
 
     /// URLProtocol sees a POST's body as a stream, not `httpBody`.
     private func bodyJSON(_ request: URLRequest) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData(request)) as? [String: Any])
+    }
+
+    private func bodyData(_ request: URLRequest) -> Data {
         var data = request.httpBody ?? Data()
         if data.isEmpty, let stream = request.httpBodyStream {
             stream.open()
@@ -110,7 +114,7 @@ final class RequestsAPIClientTests: XCTestCase {
                 data.append(buffer, count: read)
             }
         }
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return data
     }
 
     /// Path under the configured base URL (prod's `/requests`, or none for the local stack).
@@ -258,6 +262,102 @@ final class RequestsAPIClientTests: XCTestCase {
             XCTFail("Expected a throw")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("admin or super-admin"), error.localizedDescription)
+        }
+    }
+
+    // MARK: Caching
+
+    func test_requestsIgnoreTheLocalCache() async throws {
+        respond(status: 200, body: #"{"enforceWorkflow":false}"#)
+        _ = try await AdminService(client: makeClient()).workflowSettings()
+        XCTAssertEqual(MockURLProtocol.lastRequest?.cachePolicy, .reloadIgnoringLocalCacheData,
+                       "the gateway's max-age=5 must not serve a list from before a write")
+    }
+
+    // MARK: Projects
+
+    func test_createProject_sendsTheWebsBody() async throws {
+        respond(status: 200, body: #"{"id":"p-9","name":"Payments"}"#)
+        try await ProjectService(client: makeClient()).createProject(NewProjectPayload(
+            name: "Payments", description: "Card flows", owner: "u-1", createdBy: "u-1",
+            updatedBy: "u-1", projectType: "t-2", ticketUrl: ""))
+        let request = try XCTUnwrap(MockURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, path("/rest/trm/v1/projects/create"))
+        XCTAssertEqual(try bodyJSON(request) as NSDictionary, [
+            "archive": false, "name": "Payments", "description": "Card flows", "owner": "u-1",
+            "createdBy": "u-1", "updatedBy": "u-1", "projectType": "t-2", "ticketUrl": "", "jira": "", "repos": []
+        ] as NSDictionary)
+    }
+
+    func test_updateProject_putsTheIdInTheBody() async throws {
+        respond(status: 200, body: #"{"id":28}"#)
+        try await ProjectService(client: makeClient()).updateProject(ProjectUpdatePayload(
+            id: 28, name: "Tech", description: "New", owner: "u-1", projectType: "t-1", jira: "", updatedBy: "u-1"))
+        let request = try XCTUnwrap(MockURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertEqual(request.url?.path, path("/projects"))
+        XCTAssertEqual(try bodyJSON(request)["id"] as? Int, 28)
+    }
+
+    func test_createProject_errorBodyIsAFailure() async {
+        respond(status: 200, body: #"[{"status":"error","message":"project name already exists"}]"#)
+        do {
+            try await ProjectService(client: makeClient()).createProject(NewProjectPayload(
+                name: "x", description: "y", owner: "u-1", createdBy: "u-1", updatedBy: "u-1",
+                projectType: "t", ticketUrl: ""))
+            XCTFail("Expected a throw")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("already exists"), error.localizedDescription)
+        }
+    }
+
+    // MARK: Profile photo
+
+    func test_uploadProfileImage_sendsTheWebsFormAndDropsThePort() async throws {
+        let service = ProfileService(client: makeClient())
+        respond(status: 200, body: #"{"file":[{"url":"https://files.example.com:9000/profile/u-1.jpg"}]}"#)
+
+        let url = try await service.uploadProfileImage(Data([0xFF, 0xD8]), userId: "u-1")
+
+        XCTAssertEqual(url, "https://files.example.com/profile/u-1.jpg")
+        let request = try XCTUnwrap(MockURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, path("/rest/trm/v1/profileImageUpload"))
+        let body = String(decoding: bodyData(request), as: UTF8.self)
+        XCTAssertTrue(body.contains(#"name="image"; filename="profile.jpg""#), body)
+        XCTAssertTrue(body.contains("name=\"id\"\r\n\r\nu-1\r\n"), body)
+    }
+
+    func test_setProfileImage_savesOnlyThePicture() async throws {
+        respond(status: 200, body: #"{"message":"ok"}"#)
+        try await ProfileService(client: makeClient()).setProfileImage("https://files.example.com/p.jpg", userId: "u-1")
+        let request = try XCTUnwrap(MockURLProtocol.lastRequest)
+        XCTAssertEqual(request.url?.query, "userId=u-1")
+        XCTAssertEqual(try bodyJSON(request) as NSDictionary,
+                       ["updatedBy": "u-1", "profileImage": "https://files.example.com/p.jpg"] as NSDictionary)
+    }
+
+    func test_notificationUpdate_stillSendsOnlyTheSwitch() async throws {
+        respond(status: 200, body: #"{"message":"ok"}"#)
+        try await ProfileService(client: makeClient()).updateNotificationPreference(false, userId: "u-1")
+        XCTAssertEqual(try bodyJSON(XCTUnwrap(MockURLProtocol.lastRequest)) as NSDictionary,
+                       ["updatedBy": "u-1", "notification": false] as NSDictionary)
+    }
+
+    // MARK: User status
+
+    func test_setUserActive_sendsEnabledBothWays() async throws {
+        let admin = AdminService(client: makeClient())
+        for active in [false, true] {
+            respond(status: 200, body: #"{"message":"ok"}"#)
+            try await admin.setUserActive(id: "u-9", active: active, updatedBy: "me")
+            let request = try XCTUnwrap(MockURLProtocol.lastRequest)
+            XCTAssertEqual(request.httpMethod, "PUT")
+            XCTAssertEqual(request.url?.path, path("/rest/trm/v1/update-user"))
+            XCTAssertEqual(request.url?.query, "userId=u-9")
+            XCTAssertEqual(try bodyJSON(request) as NSDictionary,
+                           ["updatedBy": "me", "enabled": active] as NSDictionary)
         }
     }
 

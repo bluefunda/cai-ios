@@ -89,6 +89,17 @@ struct OwnerBadge: View {
 }
 
 extension View {
+    /// A multi-line field in a Form. On a Mac it gets no inner top padding, so its
+    /// placeholder sat on the box's top edge while single-line fields are centred.
+    @ViewBuilder
+    func formMultilineField() -> some View {
+        #if targetEnvironment(macCatalyst)
+        padding(.vertical, 6)
+        #else
+        self
+        #endif
+    }
+
     /// A detail screen as one centred, readable column on a wide Mac or iPad window, the
     /// way the chat and the admin screens read; no effect on an iPhone.
     func readableColumn(_ width: CGFloat = 900) -> some View {
@@ -253,5 +264,35 @@ struct RQFieldLabel: View {
         Text(text)
             .font(RQFont.meta)
             .foregroundStyle(.secondary)
+    }
+}
+
+// MARK: - Required fields
+
+extension Text {
+    /// A required field's label: the title and a red asterisk.
+    static func required(_ title: String) -> Text {
+        Text("\(title) \(Text("*").foregroundStyle(.red))")
+    }
+}
+
+extension TextField where Label == Text {
+    /// A required text field: its placeholder carries the red asterisk.
+    init(required title: String, text: Binding<String>, axis: Axis = .horizontal) {
+        self.init(text: text, prompt: Text.required(title), axis: axis) { Text(title) }
+    }
+}
+
+extension Picker where Label == Text {
+    /// A required picker: its label carries the red asterisk.
+    init(required title: String, selection: Binding<SelectionValue>, @ViewBuilder content: () -> Content) {
+        self.init(selection: selection, content: content) { Text.required(title) }
+    }
+}
+
+/// The "* Required" note under a form's first section.
+struct RequiredFieldsNote: View {
+    var body: some View {
+        Text("\(Text("*").foregroundStyle(.red)) Required")
     }
 }

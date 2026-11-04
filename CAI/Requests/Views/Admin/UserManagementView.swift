@@ -106,7 +106,7 @@ private struct UserDetailScreen: View {
     @State private var user: RQAdminUser?
     @State private var error: String?
     @State private var isWorking = false
-    @State private var confirmsDeactivate = false
+    @State private var confirmsStatusChange = false
     @State private var editing: UserFormTarget?
 
     var body: some View {
@@ -126,10 +126,13 @@ private struct UserDetailScreen: View {
                         AdminField(label: "Teams", value: user.teamNames.joined(separator: ", "))
                         AdminField(label: "Last seen", value: user.lastSeen ?? "")
                     }
-                    if user.isActive {
+                    // Not on your own account, so an admin can't lock themselves out.
+                    if user.id != context.userId {
                         Section {
-                            Button("Deactivate User", role: .destructive) { confirmsDeactivate = true }
+                            Button(user.isActive ? "Deactivate User" : "Activate User",
+                                   role: user.isActive ? .destructive : nil) { confirmsStatusChange = true }
                                 .disabled(isWorking)
+                                .accessibilityIdentifier("admin.user.status")
                         }
                     }
                 } else if error == nil {
@@ -141,8 +144,17 @@ private struct UserDetailScreen: View {
         .adminColumn()
         .navigationTitle("User Details")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Deactivate this user?", isPresented: $confirmsDeactivate, titleVisibility: .visible) {
-            Button("Deactivate", role: .destructive) { Task { await deactivate() } }
+        .confirmationDialog(user?.isActive == false ? "Activate this user?" : "Deactivate this user?",
+                            isPresented: $confirmsStatusChange, titleVisibility: .visible) {
+            if user?.isActive == false {
+                Button("Activate") { Task { await setActive(true) } }
+            } else {
+                Button("Deactivate", role: .destructive) { Task { await setActive(false) } }
+            }
+        } message: {
+            // Organization tenants keep the sign-in account; this is the BlueRequests status.
+            Text(user?.isActive == false ? "They'll show as active and can be picked again."
+                                         : "They'll show as inactive and won't be offered when picking people.")
         }
         .sheet(item: $editing) { target in
             UserFormSheet(context: context, target: target) {
@@ -191,10 +203,10 @@ private struct UserDetailScreen: View {
         }
     }
 
-    private func deactivate() async {
+    private func setActive(_ active: Bool) async {
         isWorking = true
         do {
-            try await context.service.deactivateUser(id: userId, updatedBy: context.userId)
+            try await context.service.setUserActive(id: userId, active: active, updatedBy: context.userId)
             await load()
             await onChange()
         } catch {

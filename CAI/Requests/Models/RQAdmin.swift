@@ -50,7 +50,15 @@ struct RQAdminUser: Identifiable, Decodable, Hashable {
         lastName = c.lenient(.lastName) ?? ""
         department = c.lenient(.department) ?? ""
         role = c.lenient(.role) ?? ""
-        isActive = c.lenient(.status) ?? true
+        // `status` is a bool; a text status ("active" / "in-active") is read too. Missing
+        // or unreadable counts as active, so nobody is hidden by mistake.
+        if let flag: Bool = c.lenient(.status) {
+            isActive = flag
+        } else if let text: String = c.lenient(.status) {
+            isActive = !["in-active", "inactive", "false", "disabled"].contains(text.lowercased())
+        } else {
+            isActive = true
+        }
         let names: [String]? = c.lenient(.teamName)
         let teams: [String]? = c.lenient(.teams)
         teamNames = names ?? teams ?? []
@@ -323,9 +331,10 @@ struct RQUserPayload: Encodable {
     var departmentName: String?
 }
 
-struct RQDeactivateUser: Encodable {
+/// PUT /update-user's body for activating or deactivating a user.
+struct RQSetUserEnabled: Encodable {
     let updatedBy: String
-    let enabled = false
+    let enabled: Bool
 }
 
 /// POST /admin/template and PUT /admin/template/update-template/{id}, as the web's

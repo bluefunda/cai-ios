@@ -144,6 +144,85 @@ final class RequestsScreenshotTests: CAIUITests {
         capture("07-AskAI")
     }
 
+    /// The board (regular width only), Configurations and User Details, for checking the
+    /// layouts on iPhone, iPad and Mac.
+    @MainActor
+    func testRequestsLayoutScreenshots() throws {
+        openSidebarIfNeeded()
+        let requestsSpace = app.descendants(matching: .any)["sidebar.space.requests"].firstMatch
+        XCTAssertTrue(requestsSpace.waitForExistence(timeout: 10), "Requests space missing — check the fixtures flags")
+        requestsSpace.tap()
+        let requestsRow = app.descendants(matching: .any)["sidebar.destination.requests"].firstMatch
+        if requestsRow.waitForExistence(timeout: 3) { requestsRow.tap() }
+        closeSidebarIfNeeded()
+        XCTAssertTrue(app.descendants(matching: .any)["requests.crRow.32"].firstMatch.waitForExistence(timeout: 10))
+
+        let viewMode = app.segmentedControls["requests.viewMode"].firstMatch
+        if viewMode.waitForExistence(timeout: 3) {
+            viewMode.buttons.element(boundBy: 1).tap()
+            sleep(1)
+            capture("08-Board")
+        }
+
+        let newRequest = app.buttons["requests.newRequest"].firstMatch
+        if newRequest.waitForExistence(timeout: 3) {
+            newRequest.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["requests.new.create"].firstMatch.waitForExistence(timeout: 10))
+            sleep(1)
+            capture("08b-NewRequest")
+            app.buttons["Cancel"].firstMatch.tap()
+            let create = app.descendants(matching: .any)["requests.new.create"].firstMatch
+            _ = create.waitForNonExistence(timeout: 5)
+        }
+
+        openAdmin("configurations")
+        XCTAssertTrue(app.staticTexts["Request Types"].firstMatch.waitForExistence(timeout: 10), "Configurations cards")
+        sleep(1)
+        capture("09-Configurations")
+
+        openAdmin("userManagement")
+        let user = app.staticTexts["Priya Shah"].firstMatch
+        XCTAssertTrue(user.waitForExistence(timeout: 10), "fixture user in User Management")
+        capture("10-Users")
+        user.tap()
+        XCTAssertTrue(app.buttons["admin.user.status"].firstMatch.waitForExistence(timeout: 10), "Activate/Deactivate button")
+        sleep(1)
+        capture("11-UserDetails")
+
+        openAdmin("projects")
+        let newProject = app.buttons["projects.new"].firstMatch
+        XCTAssertTrue(newProject.waitForExistence(timeout: 10), "New project in the Projects toolbar")
+        newProject.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["projects.new.create"].firstMatch.waitForExistence(timeout: 10))
+        sleep(1)
+        capture("12-NewProject")
+        app.buttons["Cancel"].firstMatch.tap()
+        _ = app.descendants(matching: .any)["projects.new.create"].firstMatch.waitForNonExistence(timeout: 5)
+
+        let firstProject = app.staticTexts["Fixture project description."].firstMatch
+        if firstProject.waitForExistence(timeout: 5) {
+            firstProject.tap()
+            let edit = app.buttons["projects.edit"].firstMatch
+            XCTAssertTrue(edit.waitForExistence(timeout: 10), "Edit project on the project screen")
+            edit.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["projects.new.create"].firstMatch.waitForExistence(timeout: 10))
+            sleep(1)
+            capture("13-EditProject")
+            app.buttons["Cancel"].firstMatch.tap()
+        }
+    }
+
+    @MainActor
+    private func openAdmin(_ destination: String) {
+        let row = app.descendants(matching: .any)["sidebar.destination.\(destination)"].firstMatch
+        // iPhone's drawer keeps its rows in the hierarchy while closed, off screen.
+        if !(row.exists && row.isHittable) { openSidebarIfNeeded() }
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "\(destination) in the sidebar")
+        row.tap()
+        let hamburger = app.buttons["hamburgerButton"]
+        if row.exists, row.isHittable, hamburger.exists { hamburger.tap() }
+    }
+
     @MainActor
     private func capture(_ name: String) {
         snapshot(name)

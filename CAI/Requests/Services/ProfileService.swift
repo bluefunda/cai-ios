@@ -11,6 +11,16 @@ import Foundation
 protocol ProfileServicing {
     func fetchProfile(userId: String) async throws -> UserProfile
     func updateNotificationPreference(_ enabled: Bool, userId: String) async throws
+    /// Stores `jpeg` as the user's picture and returns its URL.
+    func uploadProfileImage(_ jpeg: Data, userId: String) async throws -> String
+    /// Saves the picture's URL on the profile; "" removes it.
+    func setProfileImage(_ url: String, userId: String) async throws
+}
+
+/// POST /profileImageUpload's answer, as the gateway wraps it: {"file": [{"url": …}]}.
+struct ProfileImageUploadResponse: Decodable {
+    struct File: Decodable { let url: String }
+    let file: [File]
 }
 
 struct ProfileService: ProfileServicing {
@@ -28,7 +38,34 @@ struct ProfileService: ProfileServicing {
     }
 
     func updateNotificationPreference(_ enabled: Bool, userId: String) async throws {
-        let request = UpdateUserRequest(updatedBy: userId, notification: enabled)
+        try await update(UpdateUserRequest(updatedBy: userId, notification: enabled), userId: userId)
+    }
+
+    /// As the web's profile page (profile.js): the image goes to the file store as the
+    /// form field `image` with the user's `id`.
+    func uploadProfileImage(_ jpeg: Data, userId: String) async throws -> String {
+        let data = try await client.uploadMultipart(
+            "/rest/trm/v1/profileImageUpload",
+            data: jpeg, filename: "profile.jpg", mimeType: "image/jpeg",
+            fileField: "image", fields: ["id": userId]
+        )
+        guard let url = try JSONDecoder().decode(ProfileImageUploadResponse.self, from: data).file.first?.url else {
+            throw RequestsAPIError.serverError(500, "The upload returned no picture")
+        }
+        return Self.withoutPort(url)
+    }
+
+    func setProfileImage(_ url: String, userId: String) async throws {
+        try await update(UpdateUserRequest(updatedBy: userId, profileImage: url), userId: userId)
+    }
+
+    /// The file store answers with its internal port (https://host:9000/…); the web
+    /// drops it before saving, and so does this.
+    static func withoutPort(_ url: String) -> String {
+        url.replacingOccurrences(of: #":\d+/"#, with: "/", options: .regularExpression)
+    }
+
+    private func update(_ request: UpdateUserRequest, userId: String) async throws {
         try await client.putDiscardingResponse(
             "/rest/trm/v1/update-user",
             queryItems: [URLQueryItem(name: "userId", value: userId)],
