@@ -219,7 +219,10 @@ final class NewChangeRequestViewModel: ObservableObject {
             async let us = referenceDataService.users(forceRefresh: false)
             (projects, requestTypes, severities, users) = try await (p, rt, sv, us)
             if let lockedProjectId { selectedProjectId = lockedProjectId }
-            if selectedOwnerId == nil { selectedOwnerId = currentUserId }
+            // Only someone the picker lists: an id it lacks shows as a blank picker.
+            if selectedOwnerId == nil, let currentUserId, users.contains(where: { $0.id == currentUserId }) {
+                selectedOwnerId = currentUserId
+            }
         } catch {
             self.error = error.localizedDescription
         }

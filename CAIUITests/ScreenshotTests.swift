@@ -199,7 +199,7 @@ final class RequestsScreenshotTests: CAIUITests {
         app.buttons["Cancel"].firstMatch.tap()
         _ = app.descendants(matching: .any)["projects.new.create"].firstMatch.waitForNonExistence(timeout: 5)
 
-        let firstProject = app.staticTexts["Fixture project description."].firstMatch
+        let firstProject = app.staticTexts["Finance Core — S/4HANA"].firstMatch
         if firstProject.waitForExistence(timeout: 5) {
             firstProject.tap()
             let edit = app.buttons["projects.edit"].firstMatch
@@ -215,12 +215,17 @@ final class RequestsScreenshotTests: CAIUITests {
     @MainActor
     private func openAdmin(_ destination: String) {
         let row = app.descendants(matching: .any)["sidebar.destination.\(destination)"].firstMatch
-        // iPhone's drawer keeps its rows in the hierarchy while closed, off screen.
-        if !(row.exists && row.isHittable) { openSidebarIfNeeded() }
+        // iPhone's drawer keeps its rows in the hierarchy while closed, off screen to the
+        // left; isHittable can throw for those, so go by the frame.
+        let onScreen = { row.exists && row.frame.minX >= 0 }
+        // On iPhone a pushed screen (User Details) has a back button where the menu is.
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        if !app.buttons["hamburgerButton"].exists, !onScreen(), back.exists { back.tap() }
+        if !onScreen() { openSidebarIfNeeded() }
         XCTAssertTrue(row.waitForExistence(timeout: 5), "\(destination) in the sidebar")
         row.tap()
         let hamburger = app.buttons["hamburgerButton"]
-        if row.exists, row.isHittable, hamburger.exists { hamburger.tap() }
+        if onScreen(), hamburger.exists { hamburger.tap() }
     }
 
     @MainActor
