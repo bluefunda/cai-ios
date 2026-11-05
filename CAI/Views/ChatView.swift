@@ -921,7 +921,13 @@ struct MessageView: View {
                     RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
                         .strokeBorder(BFColor.hairline, lineWidth: 0.5)
                 )
-                .contextMenu { if !message.content.isEmpty { messageActions } }
+                // A short preview: a long answer otherwise shrinks to an unreadable column
+                // above the menu on iPhone.
+                .contextMenu {
+                    if !message.content.isEmpty { messageActions }
+                } preview: {
+                    MessageMenuPreview(text: message.content)
+                }
             }
 
             if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
@@ -978,6 +984,21 @@ struct MessageView: View {
                         .foregroundStyle(.secondary)
                         .bfPointerHover()
                     }
+
+                    // Turn the answer into a change request, in view rather than only in
+                    // the long-press menu.
+                    if let requestBridge, !isThisMessageStreaming {
+                        Button {
+                            requestBridge.createRequest(message.content)
+                        } label: {
+                            Label("Create change request", systemImage: "doc.badge.plus")
+                                .messageActionGlyph()
+                        }
+                        .foregroundStyle(.secondary)
+                        .help("Create change request")
+                        .bfPointerHover()
+                        .accessibilityIdentifier("chat.message.createRequest")
+                    }
                 }
                 .buttonStyle(.plain)
                 .animation(BFMotion.easingDefault, value: didCopy)
@@ -997,6 +1018,23 @@ struct MessageView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, BFSpacing._4)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Message Menu Preview
+
+/// What a long-pressed answer shows above its menu: the first lines, not the whole answer.
+private struct MessageMenuPreview: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline)
+            .lineLimit(8)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: 320, alignment: .leading)
+            .padding(16)
+            .background(BFColor.surfaceCard)
     }
 }
 

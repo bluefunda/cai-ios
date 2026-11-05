@@ -340,6 +340,9 @@ struct AppShell: View {
     private var requestBridge: RequestBridgeActions {
         RequestBridgeActions(
             askAI: { request in
+                // Pop the request off first: the split view's detail column otherwise
+                // keeps the pushed request on screen over the chat.
+                requestsState.requestsPath = []
                 workspace.navigate(to: .assistant(.chats))
                 chatManager.newConversation()
                 if let id = chatManager.currentConversation?.id {
@@ -347,6 +350,7 @@ struct AppShell: View {
                 }
             },
             openConversation: { link in
+                requestsState.requestsPath = []
                 workspace.navigate(to: .assistant(.chats))
                 // A chat not loaded into the sidebar yet (an older page) opens by id; its
                 // messages load as usual.

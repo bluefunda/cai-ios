@@ -142,6 +142,17 @@ final class RequestsScreenshotTests: CAIUITests {
             app.staticTexts["How can I help you today?"].firstMatch.swipeDown()
         }
         capture("07-AskAI")
+
+        // An answer's action row, with Create change request beside Copy and Share.
+        openSidebarIfNeeded()
+        let chat = app.staticTexts["Q3 Revenue Analysis"].firstMatch
+        if chat.waitForExistence(timeout: 5) {
+            chat.tap()
+            let createRequest = app.buttons["chat.message.createRequest"].firstMatch
+            XCTAssertTrue(createRequest.waitForExistence(timeout: 10), "Create change request on an answer")
+            sleep(1)
+            capture("07b-AnswerActions")
+        }
     }
 
     /// The board (regular width only), Configurations and User Details, for checking the

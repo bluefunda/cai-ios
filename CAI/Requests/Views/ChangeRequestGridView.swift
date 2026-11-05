@@ -47,16 +47,27 @@ struct ChangeRequestGridView: View {
         return result
     }
 
+    /// Narrower than this, a column's title and cards break mid-word (iPad mini, Split
+    /// View): the board scrolls sideways instead of squeezing.
+    static let minColumnWidth: CGFloat = 220
+
     var body: some View {
-        HStack(alignment: .top, spacing: BFSpacing._3) {
-            ForEach(columns) { column in
-                BoardColumn(title: column.title, mark: column.mark, requests: column.requests,
-                            movingIds: Set(moving.keys), onDrop: dropHandler(for: column.key))
-                    .frame(maxWidth: .infinity)
+        GeometryReader { geo in
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(alignment: .top, spacing: BFSpacing._3) {
+                    ForEach(columns) { column in
+                        BoardColumn(title: column.title, mark: column.mark, requests: column.requests,
+                                    movingIds: Set(moving.keys), onDrop: dropHandler(for: column.key))
+                            .frame(minWidth: Self.minColumnWidth, maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.vertical, BFSpacing._3)
+                // Wide windows: the columns still share the full width.
+                .frame(minWidth: geo.size.width, minHeight: geo.size.height, alignment: .topLeading)
             }
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, BFSpacing._3)
         .background(BFColor.surfaceCanvas)
     }
 
@@ -82,6 +93,7 @@ private struct BoardColumn: View {
                 Text(title)
                     .font(RQFont.rowTitle)
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
                 Text("\(requests.count)")
                     .font(RQFont.meta)
                     .monospacedDigit()
