@@ -49,22 +49,31 @@ struct ChangeRequestGridView: View {
 
     /// Narrower than this, a column's title and cards break mid-word (iPad mini, Split
     /// View): the board scrolls sideways instead of squeezing.
-    static let minColumnWidth: CGFloat = 220
+    static let minColumnWidth: CGFloat = 140
+
+    /// Every column the same width: an equal share of the board, never under
+    /// `minColumnWidth`. A scroll view would otherwise size each one to its content.
+    static func columnWidth(available: CGFloat, count: Int) -> CGFloat {
+        guard count > 0 else { return minColumnWidth }
+        let gaps = BFSpacing._3 * CGFloat(count - 1) + BFSpacing._4 * 2
+        return max(minColumnWidth, ((available - gaps) / CGFloat(count)).rounded(.down))
+    }
 
     var body: some View {
         GeometryReader { geo in
+            let columns = self.columns
+            let width = Self.columnWidth(available: geo.size.width, count: columns.count)
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(alignment: .top, spacing: BFSpacing._3) {
                     ForEach(columns) { column in
                         BoardColumn(title: column.title, mark: column.mark, requests: column.requests,
                                     movingIds: Set(moving.keys), onDrop: dropHandler(for: column.key))
-                            .frame(minWidth: Self.minColumnWidth, maxWidth: .infinity)
+                            .frame(width: width)
                     }
                 }
                 .padding(.horizontal, BFSpacing._4)
                 .padding(.vertical, BFSpacing._3)
-                // Wide windows: the columns still share the full width.
-                .frame(minWidth: geo.size.width, minHeight: geo.size.height, alignment: .topLeading)
+                .frame(minHeight: geo.size.height, alignment: .top)
             }
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         }

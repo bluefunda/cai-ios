@@ -179,7 +179,12 @@ final class RequestsAPIClientTests: XCTestCase {
     }
 
     func test_messageHistory_readsAttachments() throws {
-        let json = #"{"conversationId":"c","discussionDetail":{"Messages":[{"id":3,"senderId":"me","message":"see file","createdAt":"2026-11-03T09:53:00Z","attachments":[{"id":"f-1","fileName":"att.txt"}]},{"id":4,"senderId":"me","message":"none","createdAt":"2026-11-03T09:54:00Z","attachments":null}]}}"#
+        let json = #"""
+        {"conversationId":"c","discussionDetail":{"Messages":[
+          {"id":3,"senderId":"me","message":"see file","createdAt":"2026-11-03T09:53:00Z",
+           "attachments":[{"id":"f-1","fileName":"att.txt"}]},
+          {"id":4,"senderId":"me","message":"none","createdAt":"2026-11-03T09:54:00Z","attachments":null}]}}
+        """#
         let history = try RequestsAPIClient.makeDecoder().decode(RQConversationHistory.self, from: Data(json.utf8))
         XCTAssertEqual(history.messages[0].attachments, [RQAttachment(id: "f-1", fileName: "att.txt")])
         XCTAssertTrue(history.messages[1].attachments.isEmpty)
@@ -228,7 +233,12 @@ final class RequestsAPIClientTests: XCTestCase {
         XCTAssertEqual(body["id"] as? Int, 32)
         XCTAssertEqual(body["updatedBy"] as? String, "me")
     }
+}
 
+// The rest in an extension: one class body this long trips type_body_length. Same file,
+// so the private helpers above stay usable.
+@MainActor
+extension RequestsAPIClientTests {
     // MARK: Stage flow and workflow
 
     private func sampleMove() -> StageMove {

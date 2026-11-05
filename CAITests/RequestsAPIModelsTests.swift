@@ -347,6 +347,13 @@ final class RequestsAPIModelsTests: XCTestCase {
         XCTAssertTrue(workflow.steps[2].canDecide, "a server that doesn't say leaves the buttons on")
     }
 
+    func testBoardColumnsShareTheWidthButKeepAMinimum() {
+        // 5 columns, 12pt gaps, 16pt sides: 880 - 48 - 32 = 800, 160 each.
+        XCTAssertEqual(ChangeRequestGridView.columnWidth(available: 880, count: 5), 160)
+        XCTAssertEqual(ChangeRequestGridView.columnWidth(available: 440, count: 5),
+                       ChangeRequestGridView.minColumnWidth, "too narrow: the minimum, and the board scrolls")
+    }
+
     func testGateStepIsNeverDecidedByHand() {
         let gate = RQWorkflowStep(order: 3, description: "Review", state: "current", type: "github_gate")
         XCTAssertFalse(gate.canDecide)
@@ -403,7 +410,16 @@ final class RequestsAPIModelsTests: XCTestCase {
     /// GET /release as the gateway returns it: the releases are nested in the first entry,
     /// and the counts entry holds none.
     func testReleaseListReadsTheNestedReleases() throws {
-        let json = #"{"releases": [{"releases": [{"changeRequestId": 1002, "status": "planned", "description": "Pricing fix", "plannedOn": "2026-11-07T00:00:00.000Z", "platform": [{"id": "a", "description": "S/4HANA Dev", "sap": true, "git": false}], "requestId": ""}, {"changeRequestId": 1003, "status": "released", "description": "Index", "plannedOn": "2026-11-01T00:00:00Z", "platform": []}]}, {"plannedCount": 1, "platformCounts": {"S/4HANA Dev": 1}, "releasedCount": 0}]}"#
+        let json = #"""
+        {"releases": [
+          {"releases": [
+            {"changeRequestId": 1002, "status": "planned", "description": "Pricing fix",
+             "plannedOn": "2026-11-07T00:00:00.000Z",
+             "platform": [{"id": "a", "description": "S/4HANA Dev", "sap": true, "git": false}], "requestId": ""},
+            {"changeRequestId": 1003, "status": "released", "description": "Index",
+             "plannedOn": "2026-11-01T00:00:00Z", "platform": []}]},
+          {"plannedCount": 1, "platformCounts": {"S/4HANA Dev": 1}, "releasedCount": 0}]}
+        """#
         let response = try RequestsAPIClient.makeDecoder().decode(ReleaseListResponse.self, from: Data(json.utf8))
         XCTAssertEqual(response.releases.map(\.changeRequestId), ["1002", "1003"], "no made-up rows for the counts entry")
         XCTAssertNotNil(response.releases[0].plannedOn, "milliseconds in the date")
