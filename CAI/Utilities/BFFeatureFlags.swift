@@ -13,6 +13,8 @@ enum BFFeatureFlags {
     enum Keys {
         static let fileUpload = "bf_feature_file_upload"
         static let personaWire = "bf_feature_persona_wire"
+        static let requests = "bf_feature_requests"
+        static let requestsFixtures = "bf_requests_fixtures"
     }
 
     /// File attachment (photo library + document picker) in the chat input bar.
@@ -36,5 +38,26 @@ enum BFFeatureFlags {
         UserDefaults.standard.object(forKey: Keys.personaWire) != nil
             ? UserDefaults.standard.bool(forKey: Keys.personaWire)
             : true
+    }
+
+    /// The BlueRequests space (change requests, projects, releases, teams) for
+    /// members of the `trm` Keycloak organization. On by default: it appears for
+    /// every `trm` org member and for nobody else (see
+    /// WorkspaceStore.availableSpaces). The backend accepts `individual`-realm
+    /// tokens on /requests and maps the org claim to the tenant (trm-gw#68,
+    /// trm-bff#42, trm-backend-go#197). Kill switch: -bf_feature_requests NO
+    static var requestsEnabled: Bool {
+        UserDefaults.standard.object(forKey: Keys.requests) != nil
+            ? UserDefaults.standard.bool(forKey: Keys.requests)
+            : true
+    }
+
+    /// Backs every BlueRequests service with RequestsFixtures' canned data
+    /// instead of the network, so the Requests screens can be exercised (and
+    /// screenshotted) without a live trm backend:  -bf_requests_fixtures YES
+    static var requestsFixtures: Bool {
+        UserDefaults.standard.object(forKey: Keys.requestsFixtures) != nil
+            ? UserDefaults.standard.bool(forKey: Keys.requestsFixtures)
+            : false
     }
 }

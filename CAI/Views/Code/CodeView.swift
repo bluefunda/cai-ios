@@ -1,31 +1,9 @@
 import SwiftUI
 
-// MARK: - App Mode
-
-/// Top-level mode of the authenticated app: conversational Chat or the
-/// ABAP development workspace (Code). Driven from the sidebar.
-enum AppMode: String, CaseIterable {
-    case chat
-    case code
-
-    var title: String {
-        switch self {
-        case .chat: return "Chat"
-        case .code: return "Code"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .chat: return "bubble.left.and.bubble.right"
-        case .code: return "chevron.left.forwardslash.chevron.right"
-        }
-    }
-}
-
 // MARK: - Code Content
-// The Code workspace body. The shell (AppShell) provides the top bar and the
-// shared sidebar; this view only renders the connected/empty content.
+// The Code destination's body. The shell (AppShell) provides the top bar and the
+// sidebar (whose context list holds the SAP systems); this view only renders the
+// connected/empty content.
 
 struct CodeContent: View {
     @EnvironmentObject var authManager: AuthManager

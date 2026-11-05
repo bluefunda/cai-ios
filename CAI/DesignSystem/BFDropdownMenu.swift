@@ -24,7 +24,8 @@ struct BFDropdownRow: Identifiable {
 /// Menu items despite `bfPointerHover()` being applied to them. Each row here stays a live
 /// SwiftUI Button instead, so hover actually works.
 ///
-/// Scoped ONLY to the profile menu (ContentView.swift) — NOT ModeModelPicker or
+/// Scoped to the sidebar — the profile menu (SidebarView) and the chat rows' hover `···` menu
+/// (SidebarComponents) — NOT ModeModelPicker or
 /// PersonaComposerControl (ComposerPickers.swift) or the attach menu (ChatInputView.swift): a
 /// popover-based rebuild of those specific components previously regressed mouse-click
 /// reliability on Mac Catalyst and was reverted back to Menu (cai-ios#257 follow-up, see the
