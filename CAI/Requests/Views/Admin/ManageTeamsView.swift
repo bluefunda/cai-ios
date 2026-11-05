@@ -23,7 +23,12 @@ private struct ManageTeamsScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ListScreenHeader(searchText: $searchText, searchPrompt: "Search teams")
+            AdminScreenHeader(
+                title: "Manage Teams",
+                subtitle: adminCount(loader.items.count, "team", loaded: loader.hasLoaded),
+                actionTitle: "New team", actionIcon: "person.3", actionIdentifier: "admin.teams.new",
+                action: { isCreating = true }, search: $searchText, searchPrompt: "Search teams"
+            )
             AdminListContent(loader: loader, subject: "teams", emptyTitle: "No teams",
                              emptyIcon: "person.3", reload: reload) {
                 ForEach(loader.items) { team in
@@ -38,14 +43,9 @@ private struct ManageTeamsScreen: View {
                 }
             }
         }
-        .background(BFColor.surfaceCanvas)
+        .adminColumn()
         .navigationTitle("Manage Teams")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { isCreating = true } label: { Label("New Team", systemImage: "plus") }
-            }
-        }
         .navigationDestination(for: RQAdminTeam.self) { team in
             TeamMembersScreen(context: context, team: team, onChange: reload)
         }
@@ -114,42 +114,37 @@ private struct TeamMembersScreen: View {
     @State private var error: String?
     @State private var isSaving = false
     @State private var isAdding = false
+    /// Filters the members on screen, like the web's member search. Saves always start
+    /// from the whole team, so removing someone while searching keeps everyone else.
+    @State private var memberSearch = ""
+    /// Asked before removing — the change saves to the team straight away.
+    @State private var pendingRemoval: RQAdminUser?
+
+    private var shownMembers: [RQAdminUser] {
+        let query = memberSearch.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return members }
+        return members.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.email.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
-        List {
-            if let error {
-                InlineErrorBanner(message: error) { Task { await load() } }
-                    .listRowSeparator(.hidden)
-            }
-            ForEach(members) { member in
-                HStack(spacing: BFSpacing._3) {
-                    RQAvatar(urlString: member.profileImage, size: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(member.name).font(RQFont.rowTitle)
-                        Text([member.department, member.role].filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(RQFont.meta).foregroundStyle(.secondary)
-                    }
-                }
-                .swipeActions {
-                    Button("Remove", role: .destructive) {
-                        Task { await save(members.filter { $0.id != member.id }.map(\.id)) }
-                    }
-                }
-            }
-            if members.isEmpty && error == nil {
-                Text("No members yet").foregroundStyle(.secondary)
-            }
+        VStack(spacing: 0) {
+            header
+            membersList
         }
-        .listStyle(.plain)
+        // One readable column on a wide window: the title, search, Add members and each
+        // member's Remove all line up together instead of sitting in the window's corners.
+        .adminColumn()
         .navigationTitle(team.name)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                if isSaving {
-                    ProgressView()
-                } else {
-                    Button { isAdding = true } label: { Label("Add Members", systemImage: "person.badge.plus") }
-                }
+        .confirmationDialog(
+            "Remove \(pendingRemoval?.name ?? "this member") from \(team.name)?",
+            isPresented: Binding(get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                guard let member = pendingRemoval else { return }
+                // From the whole team, not the search results.
+                Task { await save(members.filter { $0.id != member.id }.map(\.id)) }
             }
         }
         .sheet(isPresented: $isAdding) {
@@ -158,6 +153,77 @@ private struct TeamMembersScreen: View {
             }
         }
         .task { await load() }
+    }
+
+    private var header: some View {
+        AdminScreenHeader(
+            title: team.name,
+            subtitle: members.count == 1 ? "1 member" : "\(members.count) members",
+            actionTitle: "Add members", actionIcon: "person.badge.plus", actionIdentifier: "admin.team.addMembers",
+            isBusy: isSaving, action: { isAdding = true },
+            search: $memberSearch, searchPrompt: "Search members"
+        )
+    }
+
+    private var membersList: some View {
+        List {
+            if let error {
+                InlineErrorBanner(message: error) { Task { await load() } }
+                    .listRowSeparator(.hidden)
+            }
+            Section {
+                ForEach(shownMembers) { member in
+                    memberRow(member)
+                        // Swipe on touch; on a Mac (no swipe with a mouse) the row's button
+                        // and the right-click menu do the same.
+                        .swipeActions {
+                            Button("Remove", role: .destructive) { pendingRemoval = member }
+                        }
+                        .contextMenu {
+                            Button("Remove from team", systemImage: "person.badge.minus", role: .destructive) {
+                                pendingRemoval = member
+                            }
+                        }
+                }
+            }
+            if members.isEmpty && error == nil {
+                Text("No members yet").foregroundStyle(.secondary)
+            } else if shownMembers.isEmpty && !memberSearch.isEmpty {
+                Text("No members match \u{201C}\(memberSearch)\u{201D}").foregroundStyle(.secondary)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    private func memberRow(_ member: RQAdminUser) -> some View {
+        HStack(spacing: BFSpacing._3) {
+            RQAvatar(urlString: member.profileImage, size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(member.name).font(RQFont.rowTitle)
+                // Only when there's something to say: an empty line pushed the name above
+                // the avatar's centre. The email stands in when there's no department or role.
+                let roles = [member.department, member.role].filter { !$0.isEmpty }.joined(separator: " · ")
+                let detail = roles.isEmpty ? member.email : roles
+                if !detail.isEmpty {
+                    Text(detail).font(RQFont.meta).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: BFSpacing._3)
+            Button(role: .destructive) {
+                pendingRemoval = member
+            } label: {
+                Text("Remove").font(RQFont.meta)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(BFColor.statusRedText)
+            .disabled(isSaving)
+            .help("Remove from team")
+            .accessibilityLabel("Remove \(member.name) from team")
+            .bfPointerHover()
+            .accessibilityIdentifier("admin.team.removeMember")
+        }
+        .padding(.vertical, 6)
     }
 
     private func load() async {
@@ -218,6 +284,7 @@ private struct AddMembersSheet: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .navigationTitle("Add Members")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

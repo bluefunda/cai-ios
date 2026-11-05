@@ -27,6 +27,8 @@ struct BottomSentinelYKey: PreferenceKey {
 struct ChatView: View {
     @EnvironmentObject var chatManager: ChatManager
     @EnvironmentObject var authManager: AuthManager
+    /// A request attached by "Ask AI about this request" (P8); nil without the Requests space.
+    @Environment(\.requestChatLinks) private var requestChatLinks
     @State private var inputText = ""
     @FocusState private var isInputFocused: Bool
 
@@ -304,6 +306,12 @@ struct ChatView: View {
                     onTap: { chatManager.tapActiveTip() }
                 )
             }
+            if let links = requestChatLinks,
+               let context = links.pendingContext(for: chatManager.currentConversation?.id) {
+                RequestContextChip(context: context) {
+                    if let id = chatManager.currentConversation?.id { links.detach(from: id) }
+                }
+            }
             ChatInputView(
                 text: $inputText,
                 // Keeps Stop showing (instead of falling back to mic) through the
@@ -392,7 +400,7 @@ struct ChatView: View {
             let prompt = text.isEmpty ? "Analyze the attached file." : text
             let override = isDumpScreenshot
                 ? ST22PromptBuilder.buildPrompt(rawDump: text.isEmpty ? nil : text)
-                : nil
+                : requestChatLinks?.consumePrompt(for: chatManager.currentConversation?.id, question: prompt)
             Task {
                 // Show the user's own message immediately, independent of the attachment
                 // upload — previously the upload was awaited *before* calling sendMessage at
@@ -427,7 +435,11 @@ struct ChatView: View {
                 )
             }
         } else {
-            Task { await chatManager.sendMessage(text, personaOverride: personaForThisSend) }
+            // A chat started from a change request sends its context with the first message.
+            let override = requestChatLinks?.consumePrompt(for: chatManager.currentConversation?.id, question: text)
+            Task {
+                await chatManager.sendMessage(text, requestPromptOverride: override, personaOverride: personaForThisSend)
+            }
         }
     }
 
@@ -723,6 +735,8 @@ struct MessageView: View {
     /// composer can keep showing Stop for as long as text is still visibly printing — even
     /// after the network side (isThisMessageStreaming) has already finished.
     var onRevealingChanged: (Bool) -> Void = { _ in }
+    /// "Create change request…" on an answer, when the Requests space is available (P8).
+    @Environment(\.requestBridge) private var requestBridge
     @State private var didCopy = false
     /// Mac: the prompt's Copy button shows while the pointer is over the prompt.
     @State private var isHoveringPrompt = false
@@ -766,6 +780,13 @@ struct MessageView: View {
         }
         ShareLink(item: message.content) {
             Label("Share", systemImage: "square.and.arrow.up")
+        }
+        if message.role == .assistant, let requestBridge {
+            Button {
+                requestBridge.createRequest(message.content)
+            } label: {
+                Label("Create change request…", systemImage: "doc.badge.plus")
+            }
         }
     }
 
@@ -900,7 +921,13 @@ struct MessageView: View {
                     RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
                         .strokeBorder(BFColor.hairline, lineWidth: 0.5)
                 )
-                .contextMenu { if !message.content.isEmpty { messageActions } }
+                // A short preview: a long answer otherwise shrinks to an unreadable column
+                // above the menu on iPhone.
+                .contextMenu {
+                    if !message.content.isEmpty { messageActions }
+                } preview: {
+                    MessageMenuPreview(text: message.content)
+                }
             }
 
             if let fileMetadata = message.fileMetadata, !fileMetadata.isEmpty {
@@ -957,6 +984,21 @@ struct MessageView: View {
                         .foregroundStyle(.secondary)
                         .bfPointerHover()
                     }
+
+                    // Turn the answer into a change request, in view rather than only in
+                    // the long-press menu.
+                    if let requestBridge, !isThisMessageStreaming {
+                        Button {
+                            requestBridge.createRequest(message.content)
+                        } label: {
+                            Label("Create change request", systemImage: "doc.badge.plus")
+                                .messageActionGlyph()
+                        }
+                        .foregroundStyle(.secondary)
+                        .help("Create change request")
+                        .bfPointerHover()
+                        .accessibilityIdentifier("chat.message.createRequest")
+                    }
                 }
                 .buttonStyle(.plain)
                 .animation(BFMotion.easingDefault, value: didCopy)
@@ -979,184 +1021,20 @@ struct MessageView: View {
     }
 }
 
-// MARK: - Attachment Chip
+// MARK: - Message Menu Preview
 
-/// Small pill showing a file reference attached to a message (user upload or
-/// LLM-generated output) — backed by the durable fileUrl/file_metadata cai-bff
-/// relays on chat history, browsable in full via ConversationFilesView.
-struct AttachmentChip: View {
-    let filename: String
+/// What a long-pressed answer shows above its menu: the first lines, not the whole answer.
+private struct MessageMenuPreview: View {
+    let text: String
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "paperclip")
-            Text(filename).font(.caption).lineLimit(1)
-        }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(BFColor.surfaceSunken, in: Capsule())
-        .overlay(Capsule().strokeBorder(BFColor.hairline, lineWidth: 0.5))
-    }
-}
-
-/// A URL handed from a file card to ChatView, which presents Quick Look or Save to Files —
-/// so the presentation outlives the card (see filePreviewURL / fileToSave).
-struct FileURLAction {
-    let open: (URL) -> Void
-    func callAsFunction(_ url: URL) { open(url) }
-}
-
-private struct OpenFilePreviewKey: EnvironmentKey {
-    static let defaultValue = FileURLAction { _ in }
-}
-
-private struct SaveFileKey: EnvironmentKey {
-    static let defaultValue = FileURLAction { _ in }
-}
-
-/// A file to hand to the system "Save to Files" / save panel, presented by ChatView.
-struct FileToSave: Identifiable {
-    let url: URL
-    var id: URL { url }
-}
-
-/// UIDocumentPickerViewController in export mode: iOS "Save to Files", a save panel on Mac.
-/// asCopy keeps the app's own cached copy where it is.
-struct FileExportPicker: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        UIDocumentPickerViewController(forExporting: [url], asCopy: true)
-    }
-    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
-}
-
-extension EnvironmentValues {
-    var openFilePreview: FileURLAction {
-        get { self[OpenFilePreviewKey.self] }
-        set { self[OpenFilePreviewKey.self] = newValue }
-    }
-
-    var saveFile: FileURLAction {
-        get { self[SaveFileKey.self] }
-        set { self[SaveFileKey.self] = newValue }
-    }
-}
-
-/// A file the assistant created (bluefunda/cai-ios#371): icon, name, type and size. Tapping
-/// downloads it (or reuses the saved copy) and opens Quick Look, whose share button covers
-/// Share, Save to Files and Open In.
-struct GeneratedFileCard: View {
-    let file: MessageFileMetadata
-    @EnvironmentObject private var chatManager: ChatManager
-    @Environment(\.openFilePreview) private var openFilePreview
-    @Environment(\.saveFile) private var saveFile
-    @State private var isHoveringDownload = false
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-
-    private var name: String {
-        file.fileName ?? URL(string: file.downloadURL ?? "")?.lastPathComponent ?? "File"
-    }
-
-    private var fileExtension: String { (name as NSString).pathExtension.lowercased() }
-
-    private var kind: (label: String, symbol: String) {
-        switch fileExtension {
-        case "xlsx", "xls": return ("Excel", "tablecells")
-        case "csv", "tsv": return ("CSV", "tablecells")
-        case "docx", "doc": return ("Word", "doc.text")
-        case "pptx", "ppt": return ("PowerPoint", "rectangle.on.rectangle")
-        case "pdf": return ("PDF", "doc.richtext")
-        case "png", "jpg", "jpeg", "gif", "webp", "svg": return ("Image", "photo")
-        case "zip": return ("ZIP", "doc.zipper")
-        case "json", "md", "txt", "html", "xml": return (fileExtension.uppercased(), "doc.plaintext")
-        default: return (fileExtension.isEmpty ? "File" : fileExtension.uppercased(), "doc")
-        }
-    }
-
-    private var subtitle: String {
-        guard let size = file.fileSize, size > 0 else { return kind.label }
-        return "\(kind.label) · \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                // Tap the card: preview. Tap the download button: save to Files / a folder.
-                Button { Task { await open(.preview) } } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: kind.symbol)
-                            .font(.system(size: 20))
-                            .foregroundStyle(BFColor.primary)
-                            .frame(width: 40, height: 40)
-                            .background(BFColor.primaryTint, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(name).font(BFFont.bodySmall.weight(.medium)).lineLimit(1).truncationMode(.middle)
-                            Text(subtitle).font(BFFont.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(name), \(subtitle). Opens a preview.")
-
-                Button { Task { await open(.save) } } label: {
-                    Group {
-                        if isLoading {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            // Filled + brand blue on hover (Mac / iPad pointer): a separate action
-                            // from the card, which opens the preview.
-                            Image(systemName: isHoveringDownload ? "arrow.down.circle.fill" : "arrow.down.circle")
-                                .font(.system(size: 22))
-                        }
-                    }
-                    .foregroundStyle(isHoveringDownload ? AnyShapeStyle(BFColor.primary) : AnyShapeStyle(.secondary))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                    .animation(.easeOut(duration: 0.12), value: isHoveringDownload)
-                }
-                .buttonStyle(.plain)
-                .onHover { isHoveringDownload = $0 }
-                .help("Download")
-                .accessibilityLabel("Download \(name)")
-            }
-            .padding(.leading, 12)
-            .padding(.trailing, 4)
-            .padding(.vertical, 6)
-            .frame(maxWidth: 360, alignment: .leading)
-            .background(BFColor.surfaceSunken, in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous)
-                    .strokeBorder(BFColor.hairline, lineWidth: 0.5)
-            )
-            .disabled(isLoading)
-            .bfPointerHover()
-
-            if let errorMessage {
-                Text(errorMessage).font(BFFont.caption).foregroundStyle(BFColor.error)
-            }
-        }
-    }
-
-    private enum Action { case preview, save }
-
-    private func open(_ action: Action) async {
-        guard let conversationId = chatManager.currentConversation?.id else { return }
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        do {
-            let url = try await chatManager.localFileURL(for: file, conversationId: conversationId)
-            switch action {
-            case .preview: openFilePreview(url)
-            case .save: saveFile(url)
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        Text(text)
+            .font(.subheadline)
+            .lineLimit(8)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: 320, alignment: .leading)
+            .padding(16)
+            .background(BFColor.surfaceCard)
     }
 }
 
@@ -1254,4 +1132,46 @@ struct ST22DumpBanner: View {
     ChatView()
         .environmentObject(ChatManager(service: BFFChatService()))
         .environmentObject(AuthManager())
+}
+
+/// Above the composer while a chat started from a change request hasn't sent its first
+/// message: the request it's about, with a mini stage rail, removable.
+private struct RequestContextChip: View {
+    let context: RequestChatContext
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.text")
+                .foregroundStyle(BFColor.primary)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(context.number)
+                        .font(RQFont.number)
+                        .foregroundStyle(.secondary)
+                    Text(context.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                }
+                StageRail(stage: context.stage, totalStages: context.totalStages, status: context.railStatus)
+            }
+            Spacer(minLength: 0)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(context.number) from this chat")
+            .bfPointerHover()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(BFColor.surfaceCard, in: RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: BFRadius.card, style: .continuous).strokeBorder(BFColor.hairline, lineWidth: 0.5))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Asking about \(context.number), \(context.title)")
+        .accessibilityIdentifier("chat.requestContext")
+    }
 }

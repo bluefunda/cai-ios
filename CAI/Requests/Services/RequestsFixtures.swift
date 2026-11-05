@@ -47,7 +47,7 @@ enum RequestsFixtures {
             status: ChangeRequestStatus(raw: "inreview"), severity: "High", requestTypeLabel: "Database",
             requestedByUserId: "u-2", createdByName: "John Doe",
             projectId: "28", projectName: "Finance Core — S/4HANA",
-            platforms: [ChangeRequestPlatform(sap: "PRD-EU2", description: "Production EU2")],
+            platforms: [ChangeRequestPlatform(description: "Production EU2", isSAP: true)],
             timeline: crTimeline, createdAt: Date().addingTimeInterval(-86400 * 2),
             stage: 2, totalStages: 2, stageStatus: "Review"
         ),
@@ -132,6 +132,14 @@ struct FixtureChangeRequestService: ChangeRequestServicing {
     }
 
     func update(_ payload: ChangeRequestUpdatePayload) async throws {}
+
+    func delete(id: String, updatedBy: String) async throws {}
+}
+
+struct FixtureChangeRequestWorkflowService: ChangeRequestWorkflowServicing {
+    func moveStage(_ payload: StageUpdatePayload) async throws {}
+    func workflow(changeRequestId: String) async throws -> RQWorkflow { RQWorkflow(enforced: false, steps: []) }
+    func decide(changeRequestId: String, order: Int, _ payload: WorkflowDecisionPayload) async throws {}
 }
 
 struct FixtureCommentService: CommentServicing {
@@ -139,8 +147,15 @@ struct FixtureCommentService: CommentServicing {
         RequestsFixtures.comments[id] ?? []
     }
 
-    func postComment(_ body: String, attachments: [RQAttachment], forChangeRequestId id: String) async throws -> RQComment {
+    func postComment(_ body: String, attachments: [RQAttachment], mentions: [String], forChangeRequestId id: String) async throws -> RQComment {
         RQComment(bodyHTML: body, authorName: "Jane Doe", createdAt: Date(), attachments: attachments)
+    }
+
+    func markSeen(changeRequestId: String, userId: String) async throws {}
+
+    func mentionCandidates(projectId: String) async throws -> [ProjectTeamMember] {
+        [ProjectTeamMember(id: "u-1", name: "Jane Doe", profileImageURL: nil),
+         ProjectTeamMember(id: "u-2", name: "John Doe", profileImageURL: nil)]
     }
 }
 
@@ -174,6 +189,8 @@ struct FixtureCRFileService: CRFileServicing {
     func upload(projectId: String, changeRequestId: String, fileURL: URL) async throws -> CRFile {
         CRFile(name: fileURL.lastPathComponent, size: 0, uploaderName: "Jane Doe", url: "https://example.com")
     }
+
+    func delete(projectId: String, changeRequestId: String, fileName: String) async throws {}
 }
 
 struct FixtureTeamService: TeamServicing {
@@ -188,11 +205,16 @@ struct FixtureTeamService: TeamServicing {
             ])
         ]
     }
+
+    func members(teamId: String, search: String) async throws -> [RQAdminUser] { [] }
 }
 
 struct FixtureNotificationsService: NotificationsServicing {
-    func unreadCounts() async throws -> UnreadCounts {
-        UnreadCounts(totalUnreadMessages: 2, perCRUnreadCounts: [.init(crNumber: "32", count: 2)])
+    func unreadCountUpdates() -> AsyncThrowingStream<UnreadCounts, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(UnreadCounts(totalUnreadMessages: 2, perCRUnreadCounts: [.init(crNumber: "32", count: 2)]))
+            continuation.finish()
+        }
     }
 }
 
@@ -206,9 +228,14 @@ struct FixtureProfileService: ProfileServicing {
     }
 
     func updateNotificationPreference(_ enabled: Bool, userId: String) async throws {}
+    func uploadProfileImage(_ jpeg: Data, userId: String) async throws -> String { "" }
+    func setProfileImage(_ url: String, userId: String) async throws {}
 }
 
 struct FixtureProjectService: ProjectServicing {
+    func createProject(_ payload: NewProjectPayload) async throws {}
+    func updateProject(_ payload: ProjectUpdatePayload) async throws {}
+
     func listProjects(forceRefresh: Bool = false) async throws -> [RQProject] {
         RequestsFixtures.projects
     }
@@ -242,4 +269,12 @@ struct FixtureReleaseService: ReleaseServicing {
     func listReleases(limit: Int? = nil) async throws -> [RQRelease] {
         RequestsFixtures.releases
     }
+
+    func schedule(_ payload: ReleaseSchedulePayload) async throws {}
+    func reschedule(_ payload: ReleaseSchedulePayload) async throws {}
+
+    func releaseCycle() async throws -> RQReleaseCycle? { .default }
+    func saveReleaseCycle(_ payload: ReleaseCyclePayload) async throws {}
+    func customReleases() async throws -> [RQCustomRelease] { [] }
+    func addCustomRelease(_ payload: CustomReleasePayload) async throws {}
 }

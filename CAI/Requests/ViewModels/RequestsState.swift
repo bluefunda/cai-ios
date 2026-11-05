@@ -24,9 +24,11 @@ final class RequestsState: ObservableObject {
 
     /// The Requests destination's NavigationStack path (change request ids).
     @Published var requestsPath: [String] = []
-    @Published var viewMode: ChangeRequestViewMode = .list
+    @Published var viewMode: ChangeRequestViewMode = .grid
     /// Set by ⌘N (or the toolbar) while the Requests space is active.
     @Published var isCreatingRequest = false
+    /// New Request from an assistant answer ("Create change request…"), from any space.
+    @Published var newRequestPrefill: NewRequestPrefill?
 
     let recents: RecentRequestsStore
 
@@ -61,12 +63,16 @@ final class RequestsState: ObservableObject {
         }
         changeRequests = ChangeRequestListViewModel(
             service: services.changeRequestService,
+            workflowService: services.workflowService,
             currentUserId: currentUserId
         )
         projects = ProjectsListViewModel(service: services.projectService)
-        releases = ReleasesListViewModel(service: services.releaseService)
+        releases = ReleasesListViewModel(
+            service: services.releaseService, changeRequestService: services.changeRequestService,
+            currentUserId: currentUserId)
         teams = TeamsListViewModel(service: services.teamService)
-        messages = MessagesListViewModel(service: services.messagesService, currentUserId: currentUserId)
+        messages = MessagesListViewModel(service: services.messagesService, currentUserId: currentUserId,
+                                         attachmentService: services.attachmentService)
     }
 
     func makeNewRequestModel(lockedProjectId: String? = nil) -> NewChangeRequestViewModel? {
@@ -75,8 +81,19 @@ final class RequestsState: ObservableObject {
             changeRequestService: services.changeRequestService,
             projectService: services.projectService,
             referenceDataService: services.referenceDataService,
+            sources: NewRequestFormSources(admin: services.adminService),
             currentUserId: currentUserId,
             lockedProjectId: lockedProjectId
+        )
+    }
+
+    func makeNewConversationModel() -> NewConversationViewModel? {
+        guard let services else { return nil }
+        let adminService = services.adminService
+        return NewConversationViewModel(
+            messagesService: services.messagesService,
+            searchUsers: { _ in try await adminService.allUsers() },
+            currentUserId: currentUserId
         )
     }
 

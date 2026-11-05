@@ -24,15 +24,18 @@ private struct UserManagementScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ListScreenHeader(searchText: $searchText, searchPrompt: "Search users") {
+            AdminScreenHeader(
+                title: "User Management",
+                subtitle: adminCount(loader.items.count, showsActive ? "active user" : "inactive user", loaded: loader.hasLoaded),
+                actionTitle: "Add user", actionIcon: "person.badge.plus", actionIdentifier: "admin.users.add",
+                action: { editing = .new }, search: $searchText, searchPrompt: "Search users"
+            ) {
                 Picker("Status", selection: $showsActive) {
                     Text("Active").tag(true)
                     Text("Inactive").tag(false)
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
-            } secondaryRowTrailing: {
-                EmptyView()
             }
             AdminListContent(loader: loader, subject: "users", emptyTitle: "No users",
                              emptyIcon: "person.badge.key", reload: reload) {
@@ -41,14 +44,9 @@ private struct UserManagementScreen: View {
                 }
             }
         }
-        .background(BFColor.surfaceCanvas)
+        .adminColumn()
         .navigationTitle("User Management")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { editing = .new } label: { Label("Add User", systemImage: "plus") }
-            }
-        }
         .navigationDestination(for: RQAdminUser.self) { user in
             UserDetailScreen(context: context, userId: user.id, onChange: reload)
         }
@@ -108,54 +106,55 @@ private struct UserDetailScreen: View {
     @State private var user: RQAdminUser?
     @State private var error: String?
     @State private var isWorking = false
-    @State private var confirmsDeactivate = false
+    @State private var confirmsStatusChange = false
     @State private var editing: UserFormTarget?
 
     var body: some View {
-        Form {
-            if let error {
-                InlineErrorBanner(message: error) { Task { await load() } }
-            }
+        VStack(spacing: 0) {
             if let user {
-                Section {
-                    HStack(spacing: BFSpacing._3) {
-                        RQAvatar(urlString: user.profileImage, size: 48)
-                        VStack(alignment: .leading) {
-                            Text(user.name).font(RQFont.rowTitle)
-                            Text(user.isActive ? "Active" : "Inactive")
-                                .font(RQFont.meta)
-                                .foregroundStyle(user.isActive ? Color.green : Color.secondary)
+                identityHeader(user)
+            }
+            Form {
+                if let error {
+                    InlineErrorBanner(message: error) { Task { await load() } }
+                }
+                if let user {
+                    Section {
+                        AdminField(label: "Email", value: user.email)
+                        AdminField(label: "Department", value: user.department)
+                        AdminField(label: "Role", value: user.role)
+                        AdminField(label: "Teams", value: user.teamNames.joined(separator: ", "))
+                        AdminField(label: "Last seen", value: user.lastSeen ?? "")
+                    }
+                    // Not on your own account, so an admin can't lock themselves out.
+                    if user.id != context.userId {
+                        Section {
+                            Button(user.isActive ? "Deactivate User" : "Activate User",
+                                   role: user.isActive ? .destructive : nil) { confirmsStatusChange = true }
+                                .disabled(isWorking)
+                                .accessibilityIdentifier("admin.user.status")
                         }
                     }
+                } else if error == nil {
+                    ProgressView().frame(maxWidth: .infinity)
                 }
-                Section {
-                    AdminField(label: "Email", value: user.email)
-                    AdminField(label: "Department", value: user.department)
-                    AdminField(label: "Role", value: user.role)
-                    AdminField(label: "Teams", value: user.teamNames.joined(separator: ", "))
-                    AdminField(label: "Last seen", value: user.lastSeen ?? "")
-                }
-                if user.isActive {
-                    Section {
-                        Button("Deactivate User", role: .destructive) { confirmsDeactivate = true }
-                            .disabled(isWorking)
-                    }
-                }
-            } else if error == nil {
-                ProgressView().frame(maxWidth: .infinity)
             }
+            .scrollContentBackground(.hidden)
         }
+        .adminColumn()
         .navigationTitle("User Details")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let user {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Edit") { editing = .edit(user) }
-                }
+        .confirmationDialog(user?.isActive == false ? "Activate this user?" : "Deactivate this user?",
+                            isPresented: $confirmsStatusChange, titleVisibility: .visible) {
+            if user?.isActive == false {
+                Button("Activate") { Task { await setActive(true) } }
+            } else {
+                Button("Deactivate", role: .destructive) { Task { await setActive(false) } }
             }
-        }
-        .confirmationDialog("Deactivate this user?", isPresented: $confirmsDeactivate, titleVisibility: .visible) {
-            Button("Deactivate", role: .destructive) { Task { await deactivate() } }
+        } message: {
+            // Organization tenants keep the sign-in account; this is the BlueRequests status.
+            Text(user?.isActive == false ? "They'll show as active and can be picked again."
+                                         : "They'll show as inactive and won't be offered when picking people.")
         }
         .sheet(item: $editing) { target in
             UserFormSheet(context: context, target: target) {
@@ -164,6 +163,35 @@ private struct UserDetailScreen: View {
             }
         }
         .task { await load() }
+    }
+
+    /// Who this is, with room around it, and Edit beside it rather than in the window's corner.
+    private func identityHeader(_ user: RQAdminUser) -> some View {
+        HStack(alignment: .center, spacing: BFSpacing._4) {
+            RQAvatar(urlString: user.profileImage, size: 56)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(user.name)
+                    .font(.title2.weight(.semibold))
+                    .lineLimit(1)
+                Text(user.isActive ? "Active" : "Inactive")
+                    .font(RQFont.pill)
+                    .foregroundStyle(user.isActive ? BFColor.statusGreenText : BFColor.statusNeutralText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(user.isActive ? BFColor.statusGreenFill : BFColor.statusNeutralFill, in: Capsule())
+            }
+            Spacer(minLength: BFSpacing._3)
+            Button {
+                editing = .edit(user)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .buttonStyle(.borderedProminent)
+            .bfPointerHover()
+            .accessibilityIdentifier("admin.user.edit")
+        }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.vertical, BFSpacing._4)
     }
 
     private func load() async {
@@ -175,10 +203,10 @@ private struct UserDetailScreen: View {
         }
     }
 
-    private func deactivate() async {
+    private func setActive(_ active: Bool) async {
         isWorking = true
         do {
-            try await context.service.deactivateUser(id: userId, updatedBy: context.userId)
+            try await context.service.setUserActive(id: userId, active: active, updatedBy: context.userId)
             await load()
             await onChange()
         } catch {
@@ -305,6 +333,8 @@ private struct UserFormSheet: View {
             switch target {
             case .new:
                 payload.createdBy = context.userId
+                // The web's invite form starts everyone on List View, with notifications on.
+                if payload.workPlace.isEmpty { payload.workPlace = "List View" }
                 payload.roleName = roles.first { $0.id == roleId }?.name
                 payload.departmentName = departments.first { $0.id == departmentId }?.name
                 try await context.service.createUser(payload)

@@ -17,6 +17,8 @@ private let minSearchLength = 2
 
 struct SidebarConversationList: View {
     @EnvironmentObject var chatManager: ChatManager
+    /// Chats linked to a change request show its number (P8); nil without Requests.
+    @Environment(\.requestChatLinks) private var requestChatLinks
     /// iPhone drawer: rows swipe to pin (leading) and delete (trailing). Swipe actions
     /// only exist inside a List, so this switches the container; the split-view column
     /// keeps its ScrollView and offers the hover `···` menu instead.
@@ -129,7 +131,9 @@ struct SidebarConversationList: View {
         // time on the Mac — the stalls in the answer's reveal. The rows only redraw when a title,
         // a pin, the selection or the paging state actually changes.
         SidebarConversationRows(
-            rows: chatManager.conversations.map(SidebarRowItem.init),
+            rows: chatManager.conversations.map {
+                SidebarRowItem($0, requestNumber: requestChatLinks?.link(forConversation: $0.id)?.number)
+            },
             selectedId: chatManager.currentConversation?.id,
             hasMorePages: chatManager.chatListNextCursor != nil,
             allowsSwipeActions: allowsSwipeActions,
@@ -322,12 +326,15 @@ struct SidebarRowItem: Identifiable, Equatable {
     let title: String
     let isPinned: Bool
     let createdAt: Date
+    /// The change request this chat is linked to, shown in the row's meta line.
+    var requestNumber: String?
 
-    init(_ conversation: Conversation) {
+    init(_ conversation: Conversation, requestNumber: String? = nil) {
         id = conversation.id
         title = conversation.title
         isPinned = conversation.isPinned
         createdAt = conversation.createdAt
+        self.requestNumber = requestNumber
     }
 }
 
@@ -400,6 +407,7 @@ private struct SidebarConversationRows: View, Equatable {
         SidebarConversationRow(
             title: item.title,
             meta: item.createdAt.formatted(.relative(presentation: .named)),
+            requestNumber: item.requestNumber,
             isSelected: selectedId == item.id,
             isPinned: item.isPinned,
             hoverMenuRows: [

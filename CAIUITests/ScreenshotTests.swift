@@ -97,3 +97,184 @@ final class ScreenshotTests: CAIUITests {
         }
     }
 }
+
+/// Requests screenshots (Requests list, request detail, Ask AI chat), from the Requests
+/// fixtures — `-bf_requests_fixtures YES` gives the demo user the Requests space with
+/// RequestsFixtures data, no backend. Each scene is also attached to the test result.
+final class RequestsScreenshotTests: CAIUITests {
+    @MainActor
+    override func setUpWithError() throws {
+        app.launchArguments += ["-bf_feature_requests", "YES", "-bf_requests_fixtures", "YES"]
+        try super.setUpWithError()
+    }
+
+    @MainActor
+    func testRequestsScreenshots() throws {
+        openSidebarIfNeeded()
+        let requestsSpace = app.descendants(matching: .any)["sidebar.space.requests"].firstMatch
+        XCTAssertTrue(requestsSpace.waitForExistence(timeout: 10), "Requests space missing — check the fixtures flags")
+        requestsSpace.tap()
+        let requestsRow = app.descendants(matching: .any)["sidebar.destination.requests"].firstMatch
+        if requestsRow.waitForExistence(timeout: 3) { requestsRow.tap() }
+        closeSidebarIfNeeded()
+
+        let request = app.descendants(matching: .any)["requests.crRow.32"].firstMatch
+        XCTAssertTrue(request.waitForExistence(timeout: 10), "Expected fixture request CR-1042 (id 32)")
+        capture("05-Requests")
+
+        request.tap()
+        let commentsTab = app.descendants(matching: .any)["requests.detail.tab.comments"].firstMatch
+        let askAI = app.buttons["requests.detail.askAI"]
+        XCTAssertTrue(askAI.waitForExistence(timeout: 10), "Ask AI on the request detail")
+        sleep(1)
+        if commentsTab.exists {
+            XCTAssertTrue(commentsTab.isHittable, "Comments isn't cut off")
+        }
+        capture("06-Request")
+
+        askAI.tap()
+        let chip = app.descendants(matching: .any)["chat.requestContext"].firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 10), "the new chat shows the request it's about")
+        // A new chat focuses the composer; iPhone has no Hide keyboard key, so drag the
+        // keyboard down from the chat area for a clean shot.
+        dismissKeyboardIfNeeded()
+        if app.keyboards.count > 0 {
+            app.staticTexts["How can I help you today?"].firstMatch.swipeDown()
+        }
+        capture("07-AskAI")
+
+        // An answer's action row, with Create change request beside Copy and Share.
+        openSidebarIfNeeded()
+        let chat = app.staticTexts["Q3 Revenue Analysis"].firstMatch
+        if chat.waitForExistence(timeout: 5) {
+            chat.tap()
+            let createRequest = app.buttons["chat.message.createRequest"].firstMatch
+            XCTAssertTrue(createRequest.waitForExistence(timeout: 10), "Create change request on an answer")
+            sleep(1)
+            capture("07b-AnswerActions")
+        }
+    }
+
+    /// The board (regular width only), Configurations and User Details, for checking the
+    /// layouts on iPhone, iPad and Mac.
+    @MainActor
+    func testRequestsLayoutScreenshots() throws {
+        openSidebarIfNeeded()
+        let requestsSpace = app.descendants(matching: .any)["sidebar.space.requests"].firstMatch
+        XCTAssertTrue(requestsSpace.waitForExistence(timeout: 10), "Requests space missing — check the fixtures flags")
+        requestsSpace.tap()
+        let requestsRow = app.descendants(matching: .any)["sidebar.destination.requests"].firstMatch
+        if requestsRow.waitForExistence(timeout: 3) { requestsRow.tap() }
+        closeSidebarIfNeeded()
+        XCTAssertTrue(app.descendants(matching: .any)["requests.crRow.32"].firstMatch.waitForExistence(timeout: 10))
+
+        let viewMode = app.segmentedControls["requests.viewMode"].firstMatch
+        if viewMode.waitForExistence(timeout: 3) {
+            viewMode.buttons.element(boundBy: 1).tap()
+            sleep(1)
+            capture("08-Board")
+        }
+
+        let newRequest = app.buttons["requests.newRequest"].firstMatch
+        if newRequest.waitForExistence(timeout: 3) {
+            newRequest.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["requests.new.create"].firstMatch.waitForExistence(timeout: 10))
+            sleep(1)
+            capture("08b-NewRequest")
+            app.buttons["Cancel"].firstMatch.tap()
+            let create = app.descendants(matching: .any)["requests.new.create"].firstMatch
+            _ = create.waitForNonExistence(timeout: 5)
+        }
+
+        openAdmin("configurations")
+        XCTAssertTrue(app.staticTexts["Request Types"].firstMatch.waitForExistence(timeout: 10), "Configurations cards")
+        sleep(1)
+        capture("09-Configurations")
+
+        openAdmin("userManagement")
+        let user = app.staticTexts["Priya Shah"].firstMatch
+        XCTAssertTrue(user.waitForExistence(timeout: 10), "fixture user in User Management")
+        capture("10-Users")
+        user.tap()
+        XCTAssertTrue(app.buttons["admin.user.status"].firstMatch.waitForExistence(timeout: 10), "Activate/Deactivate button")
+        sleep(1)
+        capture("11-UserDetails")
+
+        openAdmin("projects")
+        let newProject = app.buttons["projects.new"].firstMatch
+        XCTAssertTrue(newProject.waitForExistence(timeout: 10), "New project in the Projects toolbar")
+        newProject.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["projects.new.create"].firstMatch.waitForExistence(timeout: 10))
+        sleep(1)
+        capture("12-NewProject")
+        app.buttons["Cancel"].firstMatch.tap()
+        _ = app.descendants(matching: .any)["projects.new.create"].firstMatch.waitForNonExistence(timeout: 5)
+
+        let firstProject = app.staticTexts["Finance Core — S/4HANA"].firstMatch
+        if firstProject.waitForExistence(timeout: 5) {
+            firstProject.tap()
+            let edit = app.buttons["projects.edit"].firstMatch
+            XCTAssertTrue(edit.waitForExistence(timeout: 10), "Edit project on the project screen")
+            edit.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["projects.new.create"].firstMatch.waitForExistence(timeout: 10))
+            sleep(1)
+            capture("13-EditProject")
+            app.buttons["Cancel"].firstMatch.tap()
+        }
+    }
+
+    @MainActor
+    private func openAdmin(_ destination: String) {
+        let row = app.descendants(matching: .any)["sidebar.destination.\(destination)"].firstMatch
+        // iPhone's drawer keeps its rows in the hierarchy while closed, off screen to the
+        // left; isHittable can throw for those, so go by the frame.
+        let onScreen = { row.exists && row.frame.minX >= 0 }
+        // On iPhone a pushed screen (User Details) has a back button where the menu is.
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        if !app.buttons["hamburgerButton"].exists, !onScreen(), back.exists { back.tap() }
+        if !onScreen() { openSidebarIfNeeded() }
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "\(destination) in the sidebar")
+        row.tap()
+        let hamburger = app.buttons["hamburgerButton"]
+        if onScreen(), hamburger.exists { hamburger.tap() }
+    }
+
+    @MainActor
+    private func capture(_ name: String) {
+        snapshot(name)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    private func openSidebarIfNeeded() {
+        let hamburger = app.buttons["hamburgerButton"]
+        if hamburger.waitForExistence(timeout: 5) {
+            hamburger.tap()
+            return
+        }
+        let showSidebar = app.buttons["Show Sidebar"]
+        if showSidebar.waitForExistence(timeout: 3) { showSidebar.tap() }
+    }
+
+    /// iPhone's drawer stays over the content after picking a destination on some runs.
+    @MainActor
+    private func closeSidebarIfNeeded() {
+        let hamburger = app.buttons["hamburgerButton"]
+        if !app.descendants(matching: .any)["requests.crRow.32"].firstMatch.waitForExistence(timeout: 3),
+           hamburger.exists {
+            hamburger.tap()
+        }
+    }
+
+    @MainActor
+    private func dismissKeyboardIfNeeded() {
+        guard app.keyboards.count > 0 else { return }
+        let hideKeyboard = app.buttons["Hide keyboard"]
+        if hideKeyboard.waitForExistence(timeout: 2) {
+            hideKeyboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+    }
+}

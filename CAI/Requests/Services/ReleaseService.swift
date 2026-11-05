@@ -7,6 +7,14 @@ import Foundation
 
 protocol ReleaseServicing {
     func listReleases(limit: Int?) async throws -> [RQRelease]
+    /// POST /rest/trm/v1/release — a completed request onto a release date.
+    func schedule(_ payload: ReleaseSchedulePayload) async throws
+    /// PUT /rest/trm/v1/release — a scheduled release onto another date.
+    func reschedule(_ payload: ReleaseSchedulePayload) async throws
+    func releaseCycle() async throws -> RQReleaseCycle?
+    func saveReleaseCycle(_ payload: ReleaseCyclePayload) async throws
+    func customReleases() async throws -> [RQCustomRelease]
+    func addCustomRelease(_ payload: CustomReleasePayload) async throws
 }
 
 struct ReleaseService: ReleaseServicing {
@@ -21,5 +29,32 @@ struct ReleaseService: ReleaseServicing {
         if let limit, limit > 0 { queryItems.append(URLQueryItem(name: "limit", value: String(limit))) }
         let response: ReleaseListResponse = try await client.get("/rest/trm/v1/release", queryItems: queryItems)
         return response.releases
+    }
+
+    func schedule(_ payload: ReleaseSchedulePayload) async throws {
+        try await client.postDiscardingResponse("/rest/trm/v1/release", body: payload)
+    }
+
+    func reschedule(_ payload: ReleaseSchedulePayload) async throws {
+        try await client.putDiscardingResponse("/rest/trm/v1/release", body: payload)
+    }
+
+    func releaseCycle() async throws -> RQReleaseCycle? {
+        let envelope: RQListEnvelope<RQReleaseCycle> = try await client.get("/rest/trm/v1/release-cycle")
+        return envelope.items.first
+    }
+
+    func saveReleaseCycle(_ payload: ReleaseCyclePayload) async throws {
+        try await client.putDiscardingResponse("/rest/trm/v1/release-cycle", body: payload)
+    }
+
+    /// The backend answers an error entry when there are none; that reads as an empty list.
+    func customReleases() async throws -> [RQCustomRelease] {
+        let envelope: RQListEnvelope<RQCustomRelease> = try await client.get("/rest/trm/v1/custom-release")
+        return envelope.items.filter { $0.date != nil }
+    }
+
+    func addCustomRelease(_ payload: CustomReleasePayload) async throws {
+        try await client.postDiscardingResponse("/rest/trm/v1/custom-release", body: payload)
     }
 }

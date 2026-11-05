@@ -33,6 +33,9 @@ struct CommentThreadView: View {
 
             BFHairline()
             VStack(alignment: .leading, spacing: BFSpacing._2) {
+                if !mentionSuggestions.isEmpty {
+                    mentionStrip
+                }
                 if !pendingAttachments.isEmpty {
                     pendingAttachmentChips
                 }
@@ -45,6 +48,35 @@ struct CommentThreadView: View {
             Button("OK") { uploadError = nil }
         } message: {
             Text(uploadError ?? "")
+        }
+    }
+
+    /// People matching the "@…" being typed at the end of the comment.
+    private var mentionSuggestions: [ProjectTeamMember] {
+        guard let query = CommentComposition.activeQuery(in: draft) else { return [] }
+        let matches = query.isEmpty ? model.mentionCandidates
+            : model.mentionCandidates.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        return Array(matches.prefix(8))
+    }
+
+    private var mentionStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: BFSpacing._2) {
+                ForEach(mentionSuggestions) { person in
+                    Button {
+                        draft = CommentComposition.complete(draft, with: person)
+                    } label: {
+                        Label(person.name, systemImage: "at")
+                            .font(RQFont.meta)
+                            .padding(.horizontal, BFSpacing._2)
+                            .padding(.vertical, 4)
+                            .background(BFColor.surfaceSunken, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("requests.comment.mention")
+                    .bfPointerHover()
+                }
+            }
         }
     }
 
@@ -99,7 +131,7 @@ struct CommentThreadView: View {
                 }
             }
 
-            TextField("Add a comment", text: $draft, axis: .vertical)
+            TextField("Add a comment, @ to mention", text: $draft, axis: .vertical)
                 .font(RQFont.body)
                 .lineLimit(1...5)
                 .padding(.horizontal, BFSpacing._3)

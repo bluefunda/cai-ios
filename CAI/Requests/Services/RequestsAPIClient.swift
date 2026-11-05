@@ -33,6 +33,9 @@ enum RequestsAPIError: LocalizedError {
     /// trm-gw answered 401 or 403. Non-fatal by design, see above.
     case requestsUnavailable(statusCode: Int)
     case serverError(Int, String)
+    /// A refusal the backend names with a code — the `{"error": {"code", "message"}}`
+    /// envelope (trm-backend-go apiError.go), e.g. a workflow step that isn't current.
+    case rejected(status: Int, code: String, message: String)
     case decodingError(Error, bodyPreview: String)
     case networkError(Error)
 
@@ -46,6 +49,8 @@ enum RequestsAPIError: LocalizedError {
             return "BlueRequests is unavailable right now. Try again in a moment."
         case .serverError(let code, let message):
             return "Server error \(code): \(message)"
+        case .rejected(_, _, let message):
+            return message
         case .decodingError(let err, let bodyPreview):
             let detail = RequestsAPIError.decodingErrorDetail(err) ?? err.localizedDescription
             let body = bodyPreview.isEmpty ? "" : " — response starts: \(bodyPreview)"
@@ -174,6 +179,21 @@ struct RequestsAPIClient {
         let request = try await buildRequest(method: "POST", path: path, body: bodyData)
         let (data, response) = try await gatedRequest(request)
         try validateStatus(response, data: data)
+        try Self.throwIfBodyReportsError(data)
+    }
+
+    /// trm-backend-go answers a failed write with 200 and `[{"status":"error","message":…}]`
+    /// (errorResponse) or `{"status":"error","message":…}`. Discarding the body would report
+    /// those as saved.
+    static func throwIfBodyReportsError(_ data: Data) throws {
+        struct Entry: Decodable { let status: String?; let message: String? }
+        let entry = (try? JSONDecoder().decode([Entry].self, from: data))?.first
+            ?? (try? JSONDecoder().decode(Entry.self, from: data))
+        guard let entry, entry.status == "error" else { return }
+        #if DEBUG
+        print("[RequestsAPIClient] 200 with an error body: \(String(decoding: data, as: UTF8.self))")
+        #endif
+        throw RequestsAPIError.serverError(200, entry.message ?? "The change couldn't be saved.")
     }
 
     // MARK: - PUT
@@ -189,6 +209,22 @@ struct RequestsAPIClient {
         let request = try await buildRequest(method: "PUT", path: path, queryItems: queryItems, body: bodyData)
         let (data, response) = try await gatedRequest(request)
         try validateStatus(response, data: data)
+        try Self.throwIfBodyReportsError(data)
+    }
+
+    func put<T: Decodable>(_ path: String, body: some Encodable) async throws -> T {
+        let bodyData = try JSONEncoder().encode(body)
+        let request = try await buildRequest(method: "PUT", path: path, body: bodyData)
+        return try await perform(request)
+    }
+
+    // MARK: - DELETE
+
+    func deleteDiscardingResponse(_ path: String, queryItems: [URLQueryItem] = []) async throws {
+        let request = try await buildRequest(method: "DELETE", path: path, queryItems: queryItems, body: nil)
+        let (data, response) = try await gatedRequest(request)
+        try validateStatus(response, data: data)
+        try Self.throwIfBodyReportsError(data)
     }
 
     // MARK: - Multipart Upload
@@ -201,6 +237,7 @@ struct RequestsAPIClient {
         data fileData: Data,
         filename: String,
         mimeType: String,
+        fileField: String = "file",
         fields: [String: String] = [:],
         queryItems: [URLQueryItem] = [],
         includeAccessTokenHeader: Bool = true
@@ -231,7 +268,7 @@ struct RequestsAPIClient {
         }
 
         append("--\(boundary)\r\n")
-        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        append("Content-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(filename)\"\r\n")
         append("Content-Type: \(mimeType)\r\n\r\n")
         body.append(fileData)
         append("\r\n--\(boundary)--\r\n")
@@ -241,6 +278,38 @@ struct RequestsAPIClient {
         let (responseData, response) = try await gatedRequest(request)
         try validateStatus(response, data: responseData)
         return responseData
+    }
+
+    // MARK: - Server-Sent Events
+
+    /// Opens a text/event-stream GET and yields each `data:` payload, as trm's web
+    /// `createSSEConnection` (messagesApis.js) reads them. Deliberately NOT through
+    /// `RequestGate`: the stream stays open, and holding the gate would block every
+    /// other call. Ends when the server closes it; the caller decides when to reconnect.
+    func eventStream(_ path: String) -> AsyncThrowingStream<Data, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var request = try await buildRequest(method: "GET", path: path)
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    // Idle time between events, not total duration — a quiet stream
+                    // times out here and the caller reconnects.
+                    request.timeoutInterval = 300
+                    let (bytes, response) = try await session.bytes(for: request)
+                    try validateStatus(response)
+                    for try await line in bytes.lines {
+                        guard line.hasPrefix("data:") else { continue }
+                        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                        guard !payload.isEmpty, payload != "[DONE]" else { continue }
+                        continuation.yield(Data(payload.utf8))
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     // MARK: - Private
@@ -307,6 +376,9 @@ struct RequestsAPIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        // prd trm-gw sends Cache-Control max-age=5 (cache_ttl): a reload right after a
+        // write would otherwise get the list from before it (a board drop snapping back).
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         // trm-gw (KrakenD) validates the Authorization bearer; trm-backend-go's
         // jwtMiddleware reads Access-Token first and only falls back to
         // Authorization — send both so either hop works. No X-Realm: the tenant
@@ -472,6 +544,11 @@ struct RequestsAPIClient {
             print("[RequestsAPIClient] HTTP \(http.statusCode) for \(response.url?.absoluteString ?? "?")")
             print("[RequestsAPIClient] Full error body (\(data?.count ?? 0) bytes): \(body)")
             #endif
+            if let data, let dto = try? JSONDecoder().decode(RequestsErrorBody.self, from: data),
+               let code = dto.code, !code.isEmpty {
+                throw RequestsAPIError.rejected(
+                    status: http.statusCode, code: code, message: dto.message ?? "HTTP \(http.statusCode)")
+            }
             let message: String
             if let data, let dto = try? JSONDecoder().decode(RequestsErrorBody.self, from: data),
                let msg = dto.message ?? dto.error, !msg.isEmpty {
@@ -484,8 +561,26 @@ struct RequestsAPIClient {
     }
 }
 
-/// trm-backend-go's error envelope.
+/// trm-backend-go's error envelopes: the older `{"error": "...", "message": "..."}`, and
+/// apiError.go's `{"error": {"code": "...", "message": "..."}}`.
 private struct RequestsErrorBody: Decodable {
     let error: String?
     let message: String?
+    let code: String?
+
+    private enum CodingKeys: String, CodingKey { case error, message }
+    private struct Detail: Decodable { let code: String?; let message: String? }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let detail = try? c.decode(Detail.self, forKey: .error) {
+            error = nil
+            code = detail.code
+            message = detail.message ?? (try? c.decodeIfPresent(String.self, forKey: .message)) ?? nil
+        } else {
+            error = (try? c.decodeIfPresent(String.self, forKey: .error)) ?? nil
+            code = nil
+            message = (try? c.decodeIfPresent(String.self, forKey: .message)) ?? nil
+        }
+    }
 }

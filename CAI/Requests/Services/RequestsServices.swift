@@ -8,6 +8,7 @@ import SwiftUI
 
 struct RequestsServices {
     let changeRequestService: ChangeRequestServicing
+    let workflowService: ChangeRequestWorkflowServicing
     let commentService: CommentServicing
     let notificationsService: NotificationsServicing
     let profileService: ProfileServicing
@@ -24,6 +25,7 @@ struct RequestsServices {
         if useFixtures {
             projectService = FixtureProjectService()
             changeRequestService = FixtureChangeRequestService()
+            workflowService = FixtureChangeRequestWorkflowService()
             commentService = FixtureCommentService()
             notificationsService = FixtureNotificationsService()
             profileService = FixtureProfileService()
@@ -49,6 +51,7 @@ struct RequestsServices {
 
         projectService = ProjectService(client: client)
         changeRequestService = ChangeRequestService(client: client, projectService: projectService)
+        workflowService = ChangeRequestWorkflowService(client: client)
         commentService = CommentService(client: client, currentUserProvider: currentUserProvider)
         notificationsService = NotificationsService(client: client, currentUserProvider: currentUserProvider)
         profileService = ProfileService(client: client)

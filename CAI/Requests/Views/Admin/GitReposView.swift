@@ -33,7 +33,12 @@ private struct GitReposScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ListScreenHeader(searchText: $searchText, searchPrompt: "Search repos")
+            AdminScreenHeader(
+                title: "Git",
+                subtitle: adminCount(loader.items.count, "repo", loaded: loader.hasLoaded),
+                actionTitle: "New repo", actionIdentifier: "admin.git.new",
+                action: { isCreating = true }, search: $searchText, searchPrompt: "Search repos"
+            )
             AdminListContent(loader: loader, subject: "repos", emptyTitle: "No repos",
                              emptyIcon: "arrow.triangle.branch", reload: reload) {
                 ForEach(filtered) { repo in
@@ -43,14 +48,9 @@ private struct GitReposScreen: View {
                 }
             }
         }
-        .background(BFColor.surfaceCanvas)
+        .adminColumn()
         .navigationTitle("Git")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { isCreating = true } label: { Label("New Repo", systemImage: "plus") }
-            }
-        }
         .sheet(isPresented: $isCreating) {
             NewGitRepoSheet(context: context, onSaved: reload)
         }

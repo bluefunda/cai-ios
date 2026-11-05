@@ -8,6 +8,8 @@ import SwiftUI
 /// (P13 keeps everything around the stage rail quiet).
 struct ChangeRequestGridView: View {
     let requests: [ChangeRequest]
+    /// Cards being saved, shown in the column they were dropped on.
+    var moving: [String: ChangeRequestStatus] = [:]
     /// A card dropped on a status column (id, new status), as the web's board allows.
     var onMove: ((String, ChangeRequestStatus) -> Void)?
 
@@ -26,7 +28,7 @@ struct ChangeRequestGridView: View {
 
     private var columns: [Column] {
         let grouped = Dictionary(grouping: requests) { request -> ColumnKey in
-            switch request.status {
+            switch moving[request.id] ?? request.status {
             case .other: return .other
             default: return .status(request.status)
             }
@@ -45,16 +47,36 @@ struct ChangeRequestGridView: View {
         return result
     }
 
+    /// Narrower than this, a column's title and cards break mid-word (iPad mini, Split
+    /// View): the board scrolls sideways instead of squeezing.
+    static let minColumnWidth: CGFloat = 140
+
+    /// Every column the same width: an equal share of the board, never under
+    /// `minColumnWidth`. A scroll view would otherwise size each one to its content.
+    static func columnWidth(available: CGFloat, count: Int) -> CGFloat {
+        guard count > 0 else { return minColumnWidth }
+        let gaps = BFSpacing._3 * CGFloat(count - 1) + BFSpacing._4 * 2
+        return max(minColumnWidth, ((available - gaps) / CGFloat(count)).rounded(.down))
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: BFSpacing._3) {
-            ForEach(columns) { column in
-                BoardColumn(title: column.title, mark: column.mark, requests: column.requests,
-                            onDrop: dropHandler(for: column.key))
-                    .frame(maxWidth: .infinity)
+        GeometryReader { geo in
+            let columns = self.columns
+            let width = Self.columnWidth(available: geo.size.width, count: columns.count)
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(alignment: .top, spacing: BFSpacing._3) {
+                    ForEach(columns) { column in
+                        BoardColumn(title: column.title, mark: column.mark, requests: column.requests,
+                                    movingIds: Set(moving.keys), onDrop: dropHandler(for: column.key))
+                            .frame(width: width)
+                    }
+                }
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.vertical, BFSpacing._3)
+                .frame(minHeight: geo.size.height, alignment: .top)
             }
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         }
-        .padding(.horizontal, BFSpacing._4)
-        .padding(.vertical, BFSpacing._3)
         .background(BFColor.surfaceCanvas)
     }
 
@@ -69,6 +91,7 @@ private struct BoardColumn: View {
     let title: String
     let mark: Color
     let requests: [ChangeRequest]
+    let movingIds: Set<String>
     let onDrop: ((String) -> Void)?
     @State private var isTargeted = false
 
@@ -79,6 +102,7 @@ private struct BoardColumn: View {
                 Text(title)
                     .font(RQFont.rowTitle)
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
                 Text("\(requests.count)")
                     .font(RQFont.meta)
                     .monospacedDigit()
@@ -98,8 +122,9 @@ private struct BoardColumn: View {
                     LazyVStack(spacing: BFSpacing._2) {
                         ForEach(requests) { request in
                             NavigationLink(value: request.id) {
-                                BoardCard(request: request)
+                                BoardCard(request: request, isMoving: movingIds.contains(request.id))
                             }
+                            .disabled(movingIds.contains(request.id))
                             .buttonStyle(.plain)
                             .bfPointerHover()
                             .draggable(request.id) { BoardCard(request: request).frame(width: 220) }
@@ -127,6 +152,7 @@ private struct BoardColumn: View {
 
 private struct BoardCard: View {
     let request: ChangeRequest
+    var isMoving = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -154,5 +180,14 @@ private struct BoardCard: View {
             RoundedRectangle(cornerRadius: BFRadius.lg, style: .continuous)
                 .strokeBorder(BFColor.hairline, lineWidth: 0.5)
         )
+        .opacity(isMoving ? 0.55 : 1)
+        .overlay {
+            if isMoving {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Moving")
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isMoving)
     }
 }

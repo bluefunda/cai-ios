@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 // MARK: - BlueRequests Settings
@@ -39,8 +40,58 @@ struct RequestsSettingsSection: View {
 
 private struct RequestsProfileRows: View {
     @ObservedObject var model: ProfileViewModel
+    @State private var pickedPhoto: PhotosPickerItem?
 
     var body: some View {
+        Section {
+            HStack(spacing: 14) {
+                RQAvatar(urlString: model.profileImageURL, size: 56)
+                    .overlay {
+                        if model.isSavingPhoto { ProgressView() }
+                    }
+                VStack(alignment: .leading, spacing: 8) {
+                    // Read outside: the picker's label closure is Sendable.
+                    let pickTitle = model.profileImageURL == nil ? "Choose photo" : "Change photo"
+                    PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                        Label(pickTitle, systemImage: "photo")
+                    }
+                    .accessibilityIdentifier("settings.requests.photo.choose")
+                    if model.profileImageURL != nil {
+                        Button("Remove photo", role: .destructive) {
+                            Task { await model.removePhoto() }
+                        }
+                        .accessibilityIdentifier("settings.requests.photo.remove")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(model.profile == nil || model.isSavingPhoto)
+                .bfPointerHover()
+            }
+            .padding(.vertical, 4)
+            .onChange(of: pickedPhoto) { _, item in
+                guard let item else { return }
+                pickedPhoto = nil
+                Task {
+                    guard let data = try? await item.loadTransferable(type: Data.self),
+                          let jpeg = ProfilePhoto.jpeg(from: data) else {
+                        model.error = "That picture couldn't be read."
+                        return
+                    }
+                    await model.setPhoto(jpeg)
+                }
+            }
+            if let error = model.error, model.profile != nil {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Profile photo")
+        } footer: {
+            Text("Shown next to your name in requests, comments and messages.")
+                #if targetEnvironment(macCatalyst)
+                .font(MacSettingsFont.secondary)
+                #endif
+        }
+
         Section {
             Toggle(isOn: Binding(
                 get: { model.notificationsEnabled },
@@ -91,5 +142,20 @@ private struct RequestsProfileRows: View {
         #if targetEnvironment(macCatalyst)
         .font(MacSettingsFont.row)
         #endif
+    }
+}
+
+/// A picked picture as a square-ish JPEG no larger than 512 points on its long side.
+enum ProfilePhoto {
+    static func jpeg(from data: Data, maxSide: CGFloat = 512) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let scale = min(1, maxSide / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.85)
     }
 }

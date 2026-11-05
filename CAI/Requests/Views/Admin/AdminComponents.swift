@@ -94,7 +94,121 @@ struct AdminListContent<Item, Rows: View>: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            // A readable column on a wide Mac or iPad window rather than rows spread edge
+            // to edge; no effect on an iPhone.
+            .frame(maxWidth: AdminLayout.columnWidth)
+            .frame(maxWidth: .infinity)
         }
+    }
+}
+
+enum AdminLayout {
+    static let columnWidth: CGFloat = 760
+}
+
+extension View {
+    /// An admin screen's content as one centred, readable column (header and list together).
+    func adminColumn() -> some View {
+        frame(maxWidth: AdminLayout.columnWidth)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(BFColor.surfaceCanvas)
+    }
+}
+
+/// The top of an admin screen, inside its column: the title and a count, the screen's main
+/// action, then search and any extra control (User Management's Active/Inactive). Replaces
+/// the toolbar "+" and a search field spread to the window's corners on a Mac.
+struct AdminScreenHeader<Extra: View>: View {
+    let title: String
+    var subtitle: String?
+    var actionTitle: String?
+    var actionIcon = "plus"
+    var actionIdentifier: String?
+    var isBusy = false
+    var action: (() -> Void)?
+    var search: Binding<String>?
+    var searchPrompt = "Search"
+    @ViewBuilder var extra: () -> Extra
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: BFSpacing._3) {
+            HStack(alignment: .center, spacing: BFSpacing._3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.title2.weight(.semibold))
+                        .lineLimit(1)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(RQFont.meta)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: BFSpacing._3)
+                if isBusy {
+                    ProgressView().controlSize(.small)
+                }
+                if let actionTitle, let action {
+                    Button(action: action) {
+                        Label(actionTitle, systemImage: actionIcon)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isBusy)
+                    .bfPointerHover()
+                    .accessibilityIdentifier(actionIdentifier ?? "admin.header.action")
+                }
+            }
+            if search != nil || Extra.self != EmptyView.self {
+                HStack(spacing: BFSpacing._3) {
+                    if let search {
+                        AdminSearchField(text: search, prompt: searchPrompt)
+                    }
+                    extra()
+                }
+            }
+        }
+        .padding(.horizontal, BFSpacing._4)
+        .padding(.top, BFSpacing._4)
+        .padding(.bottom, BFSpacing._3)
+    }
+}
+
+extension AdminScreenHeader where Extra == EmptyView {
+    init(title: String, subtitle: String? = nil, actionTitle: String? = nil, actionIcon: String = "plus",
+         actionIdentifier: String? = nil, isBusy: Bool = false, action: (() -> Void)? = nil,
+         search: Binding<String>? = nil, searchPrompt: String = "Search") {
+        self.init(title: title, subtitle: subtitle, actionTitle: actionTitle, actionIcon: actionIcon,
+                  actionIdentifier: actionIdentifier, isBusy: isBusy, action: action, search: search,
+                  searchPrompt: searchPrompt, extra: { EmptyView() })
+    }
+}
+
+/// A count for the header ("1 user", "3 users"); nil until something has loaded.
+func adminCount(_ count: Int, _ noun: String, loaded: Bool) -> String? {
+    guard loaded else { return nil }
+    return count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
+}
+
+struct AdminSearchField: View {
+    @Binding var text: String
+    let prompt: String
+
+    var body: some View {
+        HStack(spacing: BFSpacing._2) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(prompt, text: $text)
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, BFSpacing._3)
+        .padding(.vertical, BFSpacing._2)
+        .background(BFColor.surfaceSunken, in: RoundedRectangle(cornerRadius: BFRadius.row, style: .continuous))
     }
 }
 

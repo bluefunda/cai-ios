@@ -1,7 +1,7 @@
 import Foundation
 
-/// One date-grouped section, mirroring trm web's Kanban date columns — read-only here
-/// instead of drag-and-drop.
+/// One date-grouped section, mirroring trm web's Kanban date columns. Scheduling and
+/// moving a release use a date picker instead of the web's drag and drop.
 struct ReleaseSection: Identifiable {
     let date: Date?  // nil groups releases with no planned date at all
     let releases: [RQRelease]
@@ -15,11 +15,102 @@ final class ReleasesListViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var searchText: String = ""
     @Published var error: String?
+    /// Completed requests with no release yet — the web board's "upcoming" drawer
+    /// (GET change-request?status=completed; the backend leaves out released ones).
+    @Published private(set) var readyToSchedule: [ChangeRequest] = []
+    @Published private(set) var isScheduling = false
 
     private let service: ReleaseServicing
+    private let changeRequestService: ChangeRequestServicing?
+    private let currentUserId: String?
 
-    init(service: ReleaseServicing) {
+    init(service: ReleaseServicing, changeRequestService: ChangeRequestServicing? = nil, currentUserId: String? = nil) {
         self.service = service
+        self.changeRequestService = changeRequestService
+        self.currentUserId = currentUserId
+    }
+
+    var filteredReady: [ChangeRequest] {
+        let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else { return readyToSchedule }
+        return readyToSchedule.filter {
+            $0.title.lowercased().contains(query) || $0.requestNumber.lowercased().contains(query)
+        }
+    }
+
+    /// Puts a completed request on a release date. Returns the error to show, or nil.
+    func schedule(_ request: ChangeRequest, on day: Date) async -> String? {
+        guard let userId = currentUserId, let id = Int(request.id) else { return "Sign in to schedule releases." }
+        return await write {
+            try await self.service.schedule(ReleaseSchedulePayload(
+                changeRequestId: id, description: request.title,
+                plannedOn: ReleaseSchedulePayload.plannedOn(day), createdBy: userId))
+        }
+    }
+
+    /// Moves a scheduled release to another date. Returns the error to show, or nil.
+    func reschedule(_ release: RQRelease, to day: Date) async -> String? {
+        guard let userId = currentUserId, let id = Int(release.changeRequestId) else { return "Sign in to schedule releases." }
+        return await write {
+            try await self.service.reschedule(ReleaseSchedulePayload(
+                changeRequestId: id, description: release.description ?? release.title,
+                plannedOn: ReleaseSchedulePayload.plannedOn(day), updatedBy: userId))
+        }
+    }
+
+    // MARK: Release settings
+
+    @Published private(set) var releaseCycle: RQReleaseCycle?
+    @Published private(set) var customReleases: [RQCustomRelease] = []
+
+    func loadSettings() async -> String? {
+        do {
+            releaseCycle = try await service.releaseCycle() ?? .default
+            customReleases = (try? await service.customReleases()) ?? []
+            return nil
+        } catch {
+            releaseCycle = .default
+            return error.localizedDescription
+        }
+    }
+
+    func saveReleaseCycle(_ cycle: RQReleaseCycle) async -> String? {
+        guard let userId = currentUserId else { return "Sign in to change release settings." }
+        if !cycle.frequency.usesWeekday, cycle.dayOfMonth == nil { return "Pick the day of the month." }
+        isScheduling = true
+        defer { isScheduling = false }
+        do {
+            try await service.saveReleaseCycle(ReleaseCyclePayload(cycle, createdBy: userId))
+            releaseCycle = cycle
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func addCustomRelease(on day: Date, at time: ReleaseTime) async -> String? {
+        guard let userId = currentUserId else { return "Sign in to add a release date." }
+        isScheduling = true
+        defer { isScheduling = false }
+        do {
+            try await service.addCustomRelease(CustomReleasePayload(day: day, time: time, createdBy: userId))
+            customReleases = (try? await service.customReleases()) ?? customReleases
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    private func write(_ operation: () async throws -> Void) async -> String? {
+        isScheduling = true
+        defer { isScheduling = false }
+        do {
+            try await operation()
+        } catch {
+            return error.localizedDescription
+        }
+        await load()
+        return nil
     }
 
     var filteredSections: [ReleaseSection] {
@@ -47,10 +138,16 @@ final class ReleasesListViewModel: ObservableObject {
         isLoading = true
         error = nil
         do {
-            let releases = try await service.listReleases(limit: 5)
+            // No limit, as the web loads the board: a cap here hid every release past the
+            // first few.
+            let releases = try await service.listReleases(limit: nil)
             sections = Self.group(releases)
         } catch {
             self.error = error.localizedDescription
+        }
+        if let changeRequestService {
+            let completed = ChangeRequestFilter(archive: nil, status: ChangeRequestStatus.completed.rawValue)
+            readyToSchedule = (try? await changeRequestService.listChangeRequests(filter: completed)) ?? readyToSchedule
         }
         isLoading = false
         hasLoaded = true

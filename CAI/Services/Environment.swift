@@ -12,6 +12,7 @@
 //
 // BlueRequests API (trm-gw → trm-backend-go), same identity as the BFF
 //   Production: "https://api.bluefunda.com/requests"
+//   Local (debug, -bf_requests_local YES): "http://localhost:8082"
 
 import Foundation
 
@@ -30,7 +31,18 @@ enum AppConfig {
     // same `individual`-realm token as chat — the tenant comes from the token's
     // `organization` claim server-side, never from a client header (see
     // docs/BLUEREQUESTS_INTEGRATION.md P1).
-    static let requestsBaseURL = "https://api.bluefunda.com/requests"
+    //
+    // Debug builds only: the launch argument `-bf_requests_local YES` points Requests
+    // at a local trm stack instead (trm-gw on :8082, local Postgres — see
+    // ~/bluefunda/local-stack). Release builds always use production.
+    static var requestsBaseURL: String {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "bf_requests_local") {
+            return "http://localhost:8082"
+        }
+        #endif
+        return "https://api.bluefunda.com/requests"
+    }
 
     /// Keycloak Organization alias whose members get the BlueRequests space.
     /// Matches the old `trm` realm name, so trm-backend-go's tenant DB map keeps

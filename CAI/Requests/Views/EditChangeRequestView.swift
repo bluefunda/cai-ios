@@ -33,33 +33,38 @@ struct EditChangeRequestView: View {
         self.services = services
         _requestName = State(initialValue: changeRequest.title)
         _description = State(initialValue: changeRequest.description ?? "")
-        _ticketUrl = State(initialValue: "")
+        _ticketUrl = State(initialValue: changeRequest.ticketUrl ?? "")
         _selectedOwnerId = State(initialValue: changeRequest.requestedByUserId)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Request") {
-                    TextField("Request name", text: $requestName)
-                    TextField("Description", text: $description, axis: .vertical)
+                Section {
+                    TextField(required: "Request name", text: $requestName)
+                    TextField(required: "Description", text: $description, axis: .vertical)
                         .lineLimit(3...8)
+                        .formMultilineField()
+                } header: {
+                    Text("Request")
+                } footer: {
+                    RequiredFieldsNote()
                 }
 
                 Section("Classification") {
-                    Picker("Type", selection: $selectedRequestTypeId) {
+                    Picker(required: "Type", selection: $selectedRequestTypeId) {
                         Text("Unchanged").tag(String?.none)
                         ForEach(requestTypes) { option in
                             Text(option.type).tag(String?.some(option.id))
                         }
                     }
-                    Picker("Priority", selection: $selectedSeverityId) {
+                    Picker(required: "Priority", selection: $selectedSeverityId) {
                         Text("Unchanged").tag(String?.none)
                         ForEach(severities) { option in
                             Text(option.type).tag(String?.some(option.id))
                         }
                     }
-                    Picker("Request owner", selection: $selectedOwnerId) {
+                    Picker(required: "Request owner", selection: $selectedOwnerId) {
                         Text("Select…").tag(String?.none)
                         ForEach(users) { user in
                             Text(user.name).tag(String?.some(user.id))
@@ -93,8 +98,13 @@ struct EditChangeRequestView: View {
                                 requestType: selectedRequestTypeId,
                                 severity: selectedSeverityId,
                                 requestedBy: changed(selectedOwnerId, from: changeRequest.requestedByUserId),
-                                ticketUrl: ticketUrl.trimmingCharacters(in: .whitespaces).isEmpty
-                                    ? nil : ticketUrl.trimmingCharacters(in: .whitespaces)
+                                // nil (unchanged) leaves it alone. An emptied link is sent as
+                                // "", but trm-backend-go's update skips empty values
+                                // (partialUpdate), so a link can't be cleared, as on the web.
+                                ticketUrl: changed(
+                                    ticketUrl.trimmingCharacters(in: .whitespaces),
+                                    from: changeRequest.ticketUrl ?? ""
+                                )
                             )
                             isSaving = false
                             dismiss()

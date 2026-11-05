@@ -49,6 +49,7 @@ private struct ChangeRequestListScreen: View {
             )
             ChangeRequestListBody(model: model, viewMode: effectiveViewMode, showsProject: true)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(BFColor.surfaceCanvas)
         .navigationTitle("Requests")
         .navigationBarTitleDisplayMode(.inline)
@@ -159,8 +160,16 @@ struct ChangeRequestListBody: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
         } else {
-            ChangeRequestGridView(requests: model.filteredChangeRequests) { id, status in
-                Task { await model.move(id, to: status) }
+            VStack(spacing: 0) {
+                // A failed drop says so here, as the list's banner does.
+                if let error = model.error {
+                    InlineErrorBanner(message: error) { Task { await model.load() } }
+                        .padding(.horizontal, BFSpacing._4)
+                        .padding(.top, BFSpacing._2)
+                }
+                ChangeRequestGridView(requests: model.filteredChangeRequests, moving: model.moving) { id, status in
+                    Task { await model.move(id, to: status) }
+                }
             }
         }
     }

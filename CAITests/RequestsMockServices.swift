@@ -20,6 +20,10 @@ struct MockChangeRequestService: ChangeRequestServicing {
     }
 
     func update(_ payload: ChangeRequestUpdatePayload) async throws {}
+
+    var deleteResult: Result<Void, Error> = .success(())
+
+    func delete(id: String, updatedBy: String) async throws { try deleteResult.get() }
 }
 
 struct MockCommentService: CommentServicing {
@@ -30,8 +34,11 @@ struct MockCommentService: CommentServicing {
         try commentsResult.get()
     }
 
-    func postComment(_ body: String, attachments: [RQAttachment], forChangeRequestId id: String) async throws -> RQComment {
+    func postComment(_ body: String, attachments: [RQAttachment], mentions: [String], forChangeRequestId id: String) async throws -> RQComment {
         if let postResult { return try postResult.get() }
         return RQComment(bodyHTML: body, authorName: "Me", createdAt: nil, attachments: attachments)
     }
+
+    func markSeen(changeRequestId: String, userId: String) async throws {}
+    func mentionCandidates(projectId: String) async throws -> [ProjectTeamMember] { [] }
 }
