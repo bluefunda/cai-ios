@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.16.0](https://github.com/bluefunda/cai-ios/compare/v2.15.0...v2.16.0) (2026-11-05)
+
+
+### Features
+
+* **requests:** BlueRequests in cai-ios — spaces sidebar, Requests screens ([2b28ac8](https://github.com/bluefunda/cai-ios/commit/2b28ac847dcc3802335d58d7e13667d2b4d97d50))
+* **requests:** web-parity Messages, request routes, role tabs, admin screens ([5696b53](https://github.com/bluefunda/cai-ios/commit/5696b535b542139d3b1052a913b88dc4cd4543e9))
+
 ## [2.15.0](https://github.com/bluefunda/cai-ios/compare/v2.14.0...v2.15.0) (2026-10-22)
 
 
