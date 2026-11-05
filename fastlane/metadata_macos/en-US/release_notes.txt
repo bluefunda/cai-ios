@@ -1,2 +1,3 @@
 New in this release:
-• Connect SAP Analytics (OData); Figma and ABAPer logos
+• BlueRequests in cai-ios — spaces sidebar, Requests screens
+• Web-parity Messages, request routes, role tabs, admin screens
