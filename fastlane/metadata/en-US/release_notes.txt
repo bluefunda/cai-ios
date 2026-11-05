@@ -1,3 +1,4 @@
 New in this release:
-• BlueRequests in cai-ios — spaces sidebar, Requests screens
-• Web-parity Messages, request routes, role tabs, admin screens
+• Bluerequests integration for trm realm
+
+Plus bug fixes and performance improvements.
