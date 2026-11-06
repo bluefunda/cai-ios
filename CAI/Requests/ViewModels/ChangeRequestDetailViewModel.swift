@@ -8,6 +8,10 @@ final class ChangeRequestDetailViewModel: ObservableObject {
     @Published private(set) var savedChanges = 0
     @Published private(set) var comments: [RQComment] = []
     @Published private(set) var crFiles: [CRFile] = []
+    /// True once a load ran to the end. A load cut short (the screen's task cancelled while
+    /// opening) leaves it false, so the next appearance loads again instead of showing an
+    /// empty Files tab.
+    private(set) var hasLoaded = false
     @Published private(set) var isLoading = false
     @Published private(set) var isPostingComment = false
     @Published private(set) var isUploadingFile = false
@@ -69,6 +73,7 @@ final class ChangeRequestDetailViewModel: ObservableObject {
         async let steps: Void = loadWorkflow()
         async let people: Void = loadMentionCandidates()
         _ = await (files, steps, people)
+        if !Task.isCancelled { hasLoaded = true }
     }
 
     func loadMentionCandidates() async {
@@ -93,6 +98,8 @@ final class ChangeRequestDetailViewModel: ObservableObject {
         do {
             crFiles = try await crFileService.list(projectId: projectId, changeRequestId: changeRequestId)
         } catch {
+            // A cancelled call isn't "no files": keep what's shown, the next load fills it.
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled || error is CancellationError { return }
             self.error = error.localizedDescription
         }
     }

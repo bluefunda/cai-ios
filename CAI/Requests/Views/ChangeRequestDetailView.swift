@@ -24,18 +24,20 @@ struct ChangeRequestDetailView: View {
         }
         .background(BFColor.surfaceCanvas)
         .task {
-            guard let services = state.services, box.model == nil else { return }
-            let model = ChangeRequestDetailViewModel(
-                changeRequestId: changeRequestId,
-                changeRequestService: services.changeRequestService,
-                workflowService: services.workflowService,
-                commentService: services.commentService,
-                attachmentService: services.attachmentService,
-                crFileService: services.crFileService,
-                currentUserId: state.currentUserId
-            )
-            box.model = model
-            await model.load()
+            guard let services = state.services else { return }
+            if box.model == nil {
+                box.model = ChangeRequestDetailViewModel(
+                    changeRequestId: changeRequestId,
+                    changeRequestService: services.changeRequestService,
+                    workflowService: services.workflowService,
+                    commentService: services.commentService,
+                    attachmentService: services.attachmentService,
+                    crFileService: services.crFileService,
+                    currentUserId: state.currentUserId
+                )
+            }
+            // Loads again if an earlier load was cut short, so the tabs never stay empty.
+            if let model = box.model, !model.hasLoaded { await model.load() }
         }
     }
 
