@@ -108,15 +108,26 @@ final class RequestsScreenshotTests: CAIUITests {
         try super.setUpWithError()
     }
 
+    /// Switches to the Requests space and opens its Requests list. Switching space closes
+    /// the iPhone drawer, so it's opened again for the destination row.
     @MainActor
-    func testRequestsScreenshots() throws {
+    private func openRequestsList() {
         openSidebarIfNeeded()
         let requestsSpace = app.descendants(matching: .any)["sidebar.space.requests"].firstMatch
         XCTAssertTrue(requestsSpace.waitForExistence(timeout: 10), "Requests space missing — check the fixtures flags")
         requestsSpace.tap()
+        sleep(1) // the drawer's close animation
         let requestsRow = app.descendants(matching: .any)["sidebar.destination.requests"].firstMatch
-        if requestsRow.waitForExistence(timeout: 3) { requestsRow.tap() }
+        if requestsRow.waitForExistence(timeout: 3), !requestsRow.isHittable {
+            openSidebarIfNeeded()
+        }
+        if requestsRow.waitForExistence(timeout: 3), requestsRow.isHittable { requestsRow.tap() }
         closeSidebarIfNeeded()
+    }
+
+    @MainActor
+    func testRequestsScreenshots() throws {
+        openRequestsList()
 
         let request = app.descendants(matching: .any)["requests.crRow.32"].firstMatch
         XCTAssertTrue(request.waitForExistence(timeout: 10), "Expected fixture request CR-1042 (id 32)")
@@ -159,13 +170,7 @@ final class RequestsScreenshotTests: CAIUITests {
     /// layouts on iPhone, iPad and Mac.
     @MainActor
     func testRequestsLayoutScreenshots() throws {
-        openSidebarIfNeeded()
-        let requestsSpace = app.descendants(matching: .any)["sidebar.space.requests"].firstMatch
-        XCTAssertTrue(requestsSpace.waitForExistence(timeout: 10), "Requests space missing — check the fixtures flags")
-        requestsSpace.tap()
-        let requestsRow = app.descendants(matching: .any)["sidebar.destination.requests"].firstMatch
-        if requestsRow.waitForExistence(timeout: 3) { requestsRow.tap() }
-        closeSidebarIfNeeded()
+        openRequestsList()
         XCTAssertTrue(app.descendants(matching: .any)["requests.crRow.32"].firstMatch.waitForExistence(timeout: 10))
 
         let viewMode = app.segmentedControls["requests.viewMode"].firstMatch

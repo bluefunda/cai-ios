@@ -556,41 +556,40 @@ struct MCPServerDTO: Codable, Identifiable {
     }
 }
 
-// MARK: - Storage (/storage/*)
+// MARK: - Storage (cai-gw /rest/{space}/v1/storage/* → trm-s3)
+// The shapes trm-s3's storage.go answers with, as the web's CloudStoragePanel reads them.
 
-struct StorageListDTO: Codable {
-    let objects: [StorageObjectDTO]
-
-    init(from decoder: Decoder) throws {
-        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
-            if let objs = try? container.decode([StorageObjectDTO].self, forKey: .objects) {
-                self.objects = objs; return
-            }
-            if let objs = try? container.decode([StorageObjectDTO].self, forKey: .files) {
-                self.objects = objs; return
-            }
-        }
-        let container = try decoder.singleValueContainer()
-        self.objects = (try? container.decode([StorageObjectDTO].self)) ?? []
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(objects, forKey: .objects)
-    }
-
-    enum CodingKeys: String, CodingKey { case objects, files }
+/// Every storage reply: `{success, data, error}`.
+struct StorageEnvelope<T: Decodable>: Decodable {
+    let success: Bool
+    let data: T?
+    let error: String?
 }
 
+/// GET /storage/list: one folder level, its folders and files apart.
+struct StorageListDTO: Decodable {
+    let folders: [StorageObjectDTO]
+    let files: [StorageObjectDTO]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        folders = (try? container.decodeIfPresent([StorageObjectDTO].self, forKey: .folders)) ?? []
+        files = (try? container.decodeIfPresent([StorageObjectDTO].self, forKey: .files)) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey { case folders, files }
+}
+
+/// A file or folder, named relative to the listed prefix.
 struct StorageObjectDTO: Codable, Identifiable {
-    let key: String
-    let name: String?
+    let name: String
     let size: Int64?
     let lastModified: String?
     let contentType: String?
+    let isDir: Bool?
 
-    var id: String { key }
-    var displayName: String { name ?? key.split(separator: "/").last.map(String.init) ?? key }
+    var id: String { name }
+    var displayName: String { name }
 
     var formattedSize: String {
         guard let size = size else { return "—" }
@@ -601,13 +600,10 @@ struct StorageObjectDTO: Codable, Identifiable {
     }
 }
 
+/// POST /storage/upload: where the file was stored.
 struct FileUploadResultDTO: Codable {
-    let url: String?
     let key: String?
-    let path: String?
     let message: String?
-
-    var resolvedURL: String? { url ?? key ?? path }
 }
 
 /// Response shape for `POST /fileupload` — the shared chat-attachment upload
@@ -626,28 +622,22 @@ struct FileUploadForPromptResponseDTO: Codable {
     var resolvedURL: String? { file?.first?.url }
 }
 
+/// GET /storage/stats. `totalStorage` comes formatted ("1.2 MB").
 struct StorageStatsDTO: Codable {
-    let totalSize: Int64?
-    let fileCount: Int?
-    let bucketName: String?
-
-    enum CodingKeys: String, CodingKey {
-        case totalSize = "total_size"
-        case fileCount = "file_count"
-        case bucketName = "bucket_name"
-    }
+    let totalStorage: String?
+    let totalFiles: Int?
+    let folders: Int?
 }
 
+/// GET /storage/presigned-url: a link valid for an hour.
 struct PresignedURLDTO: Codable {
     let url: String?
-    let presignedUrl: String?
+}
 
-    var resolvedURL: String? { url ?? presignedUrl }
-
-    enum CodingKeys: String, CodingKey {
-        case url
-        case presignedUrl = "presigned_url"
-    }
+/// A storage call trm-s3 refused, with its message.
+struct StorageError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
 }
 
 // MARK: - Greetings (/greetings)

@@ -5,6 +5,9 @@ final class ProjectDetailViewModel: ObservableObject {
     @Published private(set) var project: ProjectDetail?
     @Published private(set) var isLoading = false
     @Published var error: String?
+    @Published private(set) var isDeleting = false
+    /// Why the delete didn't happen, for the confirmation's alert.
+    @Published var deleteError: String?
 
     let projectId: String
     /// The embedded change-request section reuses the exact same view model the top-level
@@ -29,6 +32,27 @@ final class ProjectDetailViewModel: ObservableObject {
             currentUserId: currentUserId,
             projectId: projectId
         )
+    }
+
+    /// Deletes the project; false (with `deleteError`) when the backend refuses, e.g. while
+    /// requests still belong to it.
+    func delete() async -> Bool {
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            try await projectService.deleteProject(id: projectId)
+            return true
+        } catch {
+            deleteError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Admins, the owner and the creator may delete a project, as the backend allows.
+    func canDelete(userId: String?, roles: [String]) -> Bool {
+        if roles.contains(where: { ["admin", "super-admin"].contains($0) }) { return true }
+        guard let userId, let project else { return false }
+        return project.ownerId == userId || project.createdById == userId
     }
 
     /// `forceRefresh: false` (the initial load) reuses the Projects list's own very-recent

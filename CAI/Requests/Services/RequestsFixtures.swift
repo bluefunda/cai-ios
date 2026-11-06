@@ -236,6 +236,8 @@ struct FixtureProjectService: ProjectServicing {
     func createProject(_ payload: NewProjectPayload) async throws {}
     func updateProject(_ payload: ProjectUpdatePayload) async throws {}
 
+    func deleteProject(id: String) async throws {}
+
     func listProjects(forceRefresh: Bool = false) async throws -> [RQProject] {
         RequestsFixtures.projects
     }

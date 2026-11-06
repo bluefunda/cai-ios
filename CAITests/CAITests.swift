@@ -240,12 +240,37 @@ final class APIModelsTests: XCTestCase {
 
     func test_storageObject_formatsSize() throws {
         let json = Data("""
-        {"key":"folder/file.txt","size":1536}
+        {"name":"file.txt","size":1536,"sizeFormatted":"1.5 KB","isDir":false}
         """.utf8)
 
         let dto = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(dto.formattedSize, "1.5 KB")
         XCTAssertEqual(dto.displayName, "file.txt")
+    }
+
+    // trm-s3's list reply, as cai-gw /rest/{space}/v1/storage/list returns it.
+    func test_storageList_readsFoldersAndFilesFromTheEnvelope() throws {
+        let json = Data("""
+        {"success":true,"data":{"folders":[{"name":"docs","isDir":true,"lastModified":"2026-11-01T10:00:00Z"}],
+         "files":[{"name":"a.pdf","size":2048,"sizeFormatted":"2.0 KB","isDir":false,"contentType":"application/pdf"}]}}
+        """.utf8)
+        let envelope = try JSONDecoder().decode(StorageEnvelope<StorageListDTO>.self, from: json)
+        let listing = try XCTUnwrap(envelope.data)
+
+        let folder = try XCTUnwrap(StorageItem(from: listing.folders[0], prefix: "team/", isFolder: true))
+        XCTAssertEqual(folder.key, "team/docs/")
+        XCTAssertTrue(folder.isFolder)
+        let file = try XCTUnwrap(StorageItem(from: listing.files[0], prefix: "team/", isFolder: false))
+        XCTAssertEqual(file.key, "team/a.pdf")
+        XCTAssertEqual(file.size, 2048)
+    }
+
+    func test_storageEnvelope_carriesTheRefusal() throws {
+        let json = Data(#"{"success":false,"error":"bucket not found"}"#.utf8)
+        let envelope = try JSONDecoder().decode(StorageEnvelope<StorageListDTO>.self, from: json)
+        XCTAssertFalse(envelope.success)
+        XCTAssertNil(envelope.data)
+        XCTAssertEqual(envelope.error, "bucket not found")
     }
 
     // MARK: MessageFileMetadata mapping
@@ -1049,13 +1074,13 @@ final class ExtensionsTests: XCTestCase {
     }
 
     func test_storageObject_formattedSizeBytes() throws {
-        let json = Data("{\"key\":\"f.txt\",\"size\":512}".utf8)
+        let json = Data("{\"name\":\"f.txt\",\"size\":512}".utf8)
         let obj = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(obj.formattedSize, "512 B")
     }
 
     func test_storageObject_formattedSizeMB() throws {
-        let json = Data("{\"key\":\"f.bin\",\"size\":2097152}".utf8)
+        let json = Data("{\"name\":\"f.bin\",\"size\":2097152}".utf8)
         let obj = try JSONDecoder().decode(StorageObjectDTO.self, from: json)
         XCTAssertEqual(obj.formattedSize, "2.0 MB")
     }

@@ -230,8 +230,9 @@ struct RequestsAPIClient {
     // MARK: - Multipart Upload
     // trm-s3 (behind /fileupload) checks the Access-Token header directly for the per-user
     // JWT, independent of the standard Authorization header the gateway needs for its own
-    // service-to-service auth on this route. The two trm-ios callers (AttachmentService,
-    // CRFileService) both pass `includeAccessTokenHeader: false` — kept as trm-ios has it.
+    // service-to-service auth on this route. AttachmentService and CRFileService send it too:
+    // trm-gw replaces Authorization with its service credentials there, so without
+    // Access-Token the backend can't tell who's uploading and fails with a 500.
     func uploadMultipart(
         _ path: String,
         data fileData: Data,

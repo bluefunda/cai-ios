@@ -34,6 +34,8 @@ protocol ProjectServicing {
     func projectDetail(id: String, forceRefresh: Bool) async throws -> ProjectDetail
     func createProject(_ payload: NewProjectPayload) async throws
     func updateProject(_ payload: ProjectUpdatePayload) async throws
+    /// DELETE /projects/{id}: refused (409, with how many) while live requests belong to it.
+    func deleteProject(id: String) async throws
 }
 
 /// POST /rest/trm/v1/projects/create, as the web's CreateUpdateProjectForm sends it.
@@ -111,6 +113,10 @@ struct ProjectService: ProjectServicing {
 
     func updateProject(_ payload: ProjectUpdatePayload) async throws {
         try await client.putDiscardingResponse("/projects", body: payload)
+    }
+
+    func deleteProject(id: String) async throws {
+        try await client.deleteDiscardingResponse("/projects/\(id)")
     }
 
     func projectDetail(id: String, forceRefresh: Bool = false) async throws -> ProjectDetail {

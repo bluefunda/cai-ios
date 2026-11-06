@@ -58,7 +58,9 @@ struct AttachmentService: AttachmentServicing {
             filename: fileURL.lastPathComponent,
             mimeType: mimeType,
             fields: ["createdBy": user.id],
-            includeAccessTokenHeader: false
+            // trm-gw swaps Authorization for its service credentials on this route, so the
+            // backend finds the user only in Access-Token (a 500 without it).
+            includeAccessTokenHeader: true
         )
         let decoded = try RequestsAPIClient.makeDecoder().decode(FileUploadResponse.self, from: responseData)
         guard let first = decoded.file.first else {

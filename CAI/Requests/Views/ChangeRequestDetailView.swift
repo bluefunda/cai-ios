@@ -24,18 +24,20 @@ struct ChangeRequestDetailView: View {
         }
         .background(BFColor.surfaceCanvas)
         .task {
-            guard let services = state.services, box.model == nil else { return }
-            let model = ChangeRequestDetailViewModel(
-                changeRequestId: changeRequestId,
-                changeRequestService: services.changeRequestService,
-                workflowService: services.workflowService,
-                commentService: services.commentService,
-                attachmentService: services.attachmentService,
-                crFileService: services.crFileService,
-                currentUserId: state.currentUserId
-            )
-            box.model = model
-            await model.load()
+            guard let services = state.services else { return }
+            if box.model == nil {
+                box.model = ChangeRequestDetailViewModel(
+                    changeRequestId: changeRequestId,
+                    changeRequestService: services.changeRequestService,
+                    workflowService: services.workflowService,
+                    commentService: services.commentService,
+                    attachmentService: services.attachmentService,
+                    crFileService: services.crFileService,
+                    currentUserId: state.currentUserId
+                )
+            }
+            // Loads again if an earlier load was cut short, so the tabs never stay empty.
+            if let model = box.model, !model.hasLoaded { await model.load() }
         }
     }
 
@@ -563,13 +565,22 @@ private struct FilesTab: View {
                 }
             } else {
                 List(model.crFiles) { file in
-                    Group {
+                    HStack(spacing: BFSpacing._2) {
                         if let url = URL(string: file.url) {
                             Link(destination: url) { FileRow(file: file) }
                                 .bfPointerHover()
                         } else {
                             FileRow(file: file)
                         }
+                        // Visible, as on Android and the web; swipe and long-press still work.
+                        Button { pendingDelete = file } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(BFColor.errorDelete)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Delete \(file.name)")
+                        .bfPointerHover()
+                        .accessibilityIdentifier("requests.detail.deleteFile")
                     }
                     .swipeActions {
                         Button("Delete", role: .destructive) { pendingDelete = file }

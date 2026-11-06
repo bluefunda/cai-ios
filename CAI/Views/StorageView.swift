@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct StorageView: View {
     @EnvironmentObject var chatManager: ChatManager
+    @EnvironmentObject var authManager: AuthManager
     @StateObject private var viewModel = StorageViewModel()
     /// Set when shown as the sidebar's Files destination rather than a sheet — see
     /// ShellNavigationControl.
@@ -75,7 +76,9 @@ struct StorageView: View {
         }
         .onAppear {
             guard !viewModel.isBound, let api = chatManager.apiService else { return }
-            viewModel.bind(apiService: api)
+            // The user's Keycloak realm, as the web's Cloud Storage uses it: organization members
+            // on the shared realm share its bucket, where trm-s3 also keeps their requests' files.
+            viewModel.bind(apiService: api, bucket: authManager.realm)
             Task { await viewModel.load() }
         }
     }
@@ -249,17 +252,11 @@ struct StorageView: View {
 private struct StorageStatsRow: View {
     let stats: StorageStatsDTO
 
-    private var formattedTotal: String {
-        guard let size = stats.totalSize else { return "—" }
-        let b = Double(size)
-        if b < 1_048_576      { return String(format: "%.1f KB", b / 1_024) }
-        if b < 1_073_741_824  { return String(format: "%.1f MB", b / 1_048_576) }
-        return String(format: "%.2f GB", b / 1_073_741_824)
-    }
+    private var formattedTotal: String { stats.totalStorage ?? "—" }
 
     var body: some View {
         HStack {
-            Label("\(stats.fileCount ?? 0) files", systemImage: "doc.on.doc")
+            Label("\(stats.totalFiles ?? 0) files", systemImage: "doc.on.doc")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -382,4 +379,5 @@ private struct FileRow: View {
 #Preview {
     StorageView()
         .environmentObject(ChatManager(service: BFFChatService()))
+        .environmentObject(AuthManager())
 }

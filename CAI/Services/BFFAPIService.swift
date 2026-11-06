@@ -234,73 +234,82 @@ final class BFFAPIService {
     }
 
     // MARK: - Storage
+    // The web's Cloud Storage route: cai-gw /rest/{space}/v1/storage/* goes straight to
+    // trm-s3 with the service credentials it requires. (cai-bff's /storage/* forwards only
+    // the user's token, which trm-s3 refuses.) The bucket is the user's space, and the
+    // path segment is that same space, as the web sends it.
 
-    func listStorage(bucket: String, prefix: String = "") async throws -> [StorageObjectDTO] {
-        let response: StorageListDTO = try await client.get(
-            "/storage/list",
-            queryItems: [
-                URLQueryItem(name: "bucket", value: bucket),
-                URLQueryItem(name: "prefix", value: prefix)
-            ]
+    private func storagePath(_ bucket: String, _ action: String) -> String {
+        "/rest/\(bucket)/v1/storage/\(action)"
+    }
+
+    /// The payload of a storage reply, or its error.
+    private func storageData<T>(_ envelope: StorageEnvelope<T>) throws -> T {
+        guard envelope.success, let data = envelope.data else {
+            throw StorageError(message: envelope.error ?? "Files couldn't be reached. Try again in a moment.")
+        }
+        return data
+    }
+
+    func listStorage(bucket: String, prefix: String = "") async throws -> StorageListDTO {
+        let envelope: StorageEnvelope<StorageListDTO> = try await client.get(
+            storagePath(bucket, "list"),
+            queryItems: [URLQueryItem(name: "bucket", value: bucket), URLQueryItem(name: "prefix", value: prefix)]
         )
-        return response.objects
+        return try storageData(envelope)
     }
 
     func storageStats(bucket: String) async throws -> StorageStatsDTO {
-        try await client.get("/storage/stats", queryItems: [URLQueryItem(name: "bucket", value: bucket)])
+        let envelope: StorageEnvelope<StorageStatsDTO> = try await client.get(
+            storagePath(bucket, "stats"), queryItems: [URLQueryItem(name: "bucket", value: bucket)])
+        return try storageData(envelope)
     }
 
-    func getPresignedURL(bucket: String, key: String, action: String = "get") async throws -> String? {
-        let response: PresignedURLDTO = try await client.get(
-            "/storage/presigned-url",
+    /// A download link for `key`, valid for an hour.
+    func getPresignedURL(bucket: String, key: String) async throws -> String? {
+        let envelope: StorageEnvelope<PresignedURLDTO> = try await client.get(
+            storagePath(bucket, "presigned-url"),
             queryItems: [
                 URLQueryItem(name: "bucket", value: bucket),
                 URLQueryItem(name: "key", value: key),
-                URLQueryItem(name: "action", value: action)
+                URLQueryItem(name: "action", value: "download")
             ]
         )
-        return response.resolvedURL
+        return try storageData(envelope).url
     }
 
+    /// Deletes a file, or a folder (a key ending in "/") with everything in it.
     func deleteStorageObject(bucket: String, key: String) async throws {
-        try await client.deleteIgnoringResponse(
-            "/storage/delete",
-            queryItems: [
-                URLQueryItem(name: "bucket", value: bucket),
-                URLQueryItem(name: "key", value: key)
-            ]
+        let envelope: StorageEnvelope<[String: String]> = try await client.delete(
+            storagePath(bucket, "delete"),
+            queryItems: [URLQueryItem(name: "bucket", value: bucket), URLQueryItem(name: "key", value: key)]
         )
+        _ = try storageData(envelope)
     }
 
     func createFolder(bucket: String, folder: String) async throws {
-        try await client.postIgnoringResponse("/storage/folder", body: [
-            "bucket": bucket,
-            "folder": folder
-        ])
+        let envelope: StorageEnvelope<[String: String]> = try await client.post(
+            storagePath(bucket, "folder"), body: ["bucket": bucket, "folderPath": folder])
+        _ = try storageData(envelope)
     }
 
-    func uploadFile(
-        data: Data,
-        filename: String,
-        mimeType: String,
-        bucket: String = "abaper"
-    ) async throws -> String? {
+    /// Uploads into `prefix` (a folder path ending in "/", or "" for the top level).
+    func uploadFile(data: Data, filename: String, mimeType: String, bucket: String, prefix: String) async throws {
         let raw = try await client.uploadMultipart(
-            "/storage/upload",
+            storagePath(bucket, "upload"),
             data: data,
             filename: filename,
             mimeType: mimeType,
+            fields: ["prefix": prefix],
             queryItems: [URLQueryItem(name: "bucket", value: bucket)]
         )
-        let result = try JSONDecoder().decode(FileUploadResultDTO.self, from: raw)
-        return result.resolvedURL
+        _ = try storageData(JSONDecoder().decode(StorageEnvelope<FileUploadResultDTO>.self, from: raw))
     }
 
     /// Uploads a file to attach to a chat prompt via `/fileupload` — the same
     /// endpoint/contract the web app's chat-attach flow uses (no `/api/v1`
     /// prefix, no bucket concept). Deliberately separate from `uploadFile`
-    /// above, which is the bucket-scoped `/storage/upload` proxy the Storage
-    /// browser feature depends on.
+    /// above, the bucket-scoped storage upload the Files browser uses.
     func uploadFileForPrompt(data: Data, filename: String, mimeType: String, userId: String) async throws -> String? {
         let raw = try await client.uploadMultipart(
             "/fileupload",

@@ -208,7 +208,13 @@ struct TeamStack: View {
 struct ProjectFormView: View {
     @StateObject var model: ProjectFormViewModel
     let onCreated: () async -> Void
+    /// Editing only, for someone allowed to: deletes the project and returns why it
+    /// couldn't, or nil once it's gone.
+    var onDelete: (() async -> String?)? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmingDelete = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         NavigationStack {
@@ -247,8 +253,45 @@ struct ProjectFormView: View {
                         .autocorrectionDisabled()
                 }
 
+                if model.editing != nil, onDelete != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            confirmingDelete = true
+                        } label: {
+                            HStack {
+                                Text("Delete project")
+                                if isDeleting {
+                                    Spacer()
+                                    ProgressView()
+                                }
+                            }
+                        }
+                        .disabled(isDeleting)
+                        .accessibilityIdentifier("projects.delete")
+                    } footer: {
+                        Text("Only a project with no requests can be deleted. Move or delete its requests first.")
+                    }
+                }
             }
-            .disabled(model.isSaving)
+            .disabled(model.isSaving || isDeleting)
+            .confirmationDialog("Delete this project?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button("Delete project", role: .destructive) {
+                    Task {
+                        isDeleting = true
+                        deleteError = await onDelete?()
+                        isDeleting = false
+                        if deleteError == nil { dismiss() }
+                    }
+                }
+            } message: {
+                Text("It's removed from Projects for everyone.")
+            }
+            .alert("Couldn't delete the project",
+                   isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+                Button("OK", role: .cancel) { deleteError = nil }
+            } message: {
+                Text(deleteError ?? "")
+            }
             // An alert, not a row at the bottom: a failed save was easy to miss there.
             .alert(model.editing == nil ? "Couldn't create the project" : "Couldn't save the project",
                    isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
