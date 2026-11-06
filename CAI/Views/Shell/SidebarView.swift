@@ -100,9 +100,17 @@ struct SidebarView: View {
             }
             #endif
             if presentation.isDrawer {
+                // In the Requests space this starts a request, not a chat (as ⌘N does).
+                let isRequests = workspace.activeSpace == .requests
                 Button {
-                    workspace.navigate(to: .assistant(.chats))
-                    chatManager.newConversation()
+                    if isRequests {
+                        workspace.navigate(to: .requests(.requests))
+                        requestsState.requestsPath = []
+                        requestsState.isCreatingRequest = true
+                    } else {
+                        workspace.navigate(to: .assistant(.chats))
+                        chatManager.newConversation()
+                    }
                     closeDrawer()
                 } label: {
                     Image(systemName: "square.and.pencil")
@@ -110,7 +118,7 @@ struct SidebarView: View {
                         .foregroundStyle(BFColor.primary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("New chat")
+                .accessibilityLabel(isRequests ? "New request" : "New chat")
                 .accessibilityIdentifier("sidebar.newChat")
             }
         }
@@ -374,6 +382,8 @@ struct SidebarView: View {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: BFMotion.normal)) {
             workspace.activeSpace = space
         }
+        // Switching space goes straight to it: the iPhone drawer closes, as picking a destination does.
+        closeDrawer()
     }
 
     /// Closes the iPhone drawer; a no-op for the persistent split-view column.

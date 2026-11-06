@@ -563,13 +563,22 @@ private struct FilesTab: View {
                 }
             } else {
                 List(model.crFiles) { file in
-                    Group {
+                    HStack(spacing: BFSpacing._2) {
                         if let url = URL(string: file.url) {
                             Link(destination: url) { FileRow(file: file) }
                                 .bfPointerHover()
                         } else {
                             FileRow(file: file)
                         }
+                        // Visible, as on Android and the web; swipe and long-press still work.
+                        Button { pendingDelete = file } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(BFColor.errorDelete)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Delete \(file.name)")
+                        .bfPointerHover()
+                        .accessibilityIdentifier("requests.detail.deleteFile")
                     }
                     .swipeActions {
                         Button("Delete", role: .destructive) { pendingDelete = file }

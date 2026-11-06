@@ -74,6 +74,11 @@ struct APIClient {
         try validateStatus(response, data: data)
     }
 
+    func delete<T: Decodable>(_ path: String, queryItems: [URLQueryItem] = []) async throws -> T {
+        let request = try await buildRequest(method: "DELETE", path: path, queryItems: queryItems)
+        return try await perform(request)
+    }
+
     func deleteIgnoringResponse(_ path: String, queryItems: [URLQueryItem] = []) async throws {
         let request = try await buildRequest(method: "DELETE", path: path, queryItems: queryItems)
         let (data, response) = try await session.data(for: request)

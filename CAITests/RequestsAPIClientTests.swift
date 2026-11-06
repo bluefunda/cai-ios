@@ -322,6 +322,22 @@ extension RequestsAPIClientTests {
         }
     }
 
+    func test_deleteProject_deletesByIdAndShowsTheRefusal() async throws {
+        respond(status: 204, body: "")
+        try await ProjectService(client: makeClient()).deleteProject(id: "28")
+        let request = try XCTUnwrap(MockURLProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "DELETE")
+        XCTAssertEqual(request.url?.path, path("/projects/28"))
+
+        respond(status: 409, body: #"{"error":{"code":"project_has_requests","message":"This project still has 2 requests. Move or delete them first."}}"#)
+        do {
+            try await ProjectService(client: makeClient()).deleteProject(id: "28")
+            XCTFail("Expected a throw")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This project still has 2 requests. Move or delete them first.")
+        }
+    }
+
     // MARK: Profile photo
 
     func test_uploadProfileImage_sendsTheWebsFormAndDropsThePort() async throws {

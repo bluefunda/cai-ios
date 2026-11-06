@@ -19,23 +19,15 @@ struct StorageItem: Identifiable {
         self.lastModified = lastModified
     }
 
-    // Init from server DTO, stripping the current path prefix.
-    // Returns nil when the entry represents the prefix itself or a nested path.
-    init?(from dto: StorageObjectDTO, prefix: String) {
-        guard dto.key != prefix else { return nil }
-
-        self.key = dto.key
-        self.isFolder = dto.key.hasSuffix("/") || dto.contentType == "application/x-directory"
-
-        // Strip prefix; remove trailing slash for folders
-        let relative = String(dto.key.dropFirst(prefix.count))
-        let displayName = relative.hasSuffix("/") ? String(relative.dropLast()) : relative
-
-        // Skip entries that contain a path separator — they live in a sub-folder
-        guard !displayName.contains("/"), !displayName.isEmpty else { return nil }
-
-        self.name = displayName
-        self.size = dto.size
+    /// A listed entry: trm-s3 names it relative to the listed `prefix`, so its key is the
+    /// prefix plus the name (a folder's ends in "/").
+    init?(from dto: StorageObjectDTO, prefix: String, isFolder: Bool) {
+        let name = dto.name.hasSuffix("/") ? String(dto.name.dropLast()) : dto.name
+        guard !name.isEmpty, !name.contains("/") else { return nil }
+        self.key = prefix + name + (isFolder ? "/" : "")
+        self.name = name
+        self.isFolder = isFolder
+        self.size = isFolder ? nil : dto.size
         self.lastModified = dto.lastModified
     }
 
@@ -85,7 +77,8 @@ final class StorageViewModel: ObservableObject {
     private(set) var isBound = false
     private var apiService: BFFAPIService?
 
-    let bucket = "abaper"
+    /// The signed-in user's realm, as the web's Cloud Storage uses it.
+    private(set) var bucket = ""
 
     // MARK: - Derived
 
@@ -103,8 +96,9 @@ final class StorageViewModel: ObservableObject {
 
     // MARK: - Binding
 
-    func bind(apiService: BFFAPIService) {
+    func bind(apiService: BFFAPIService, bucket: String) {
         self.apiService = apiService
+        self.bucket = bucket
         isBound = true
     }
 
@@ -117,16 +111,18 @@ final class StorageViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            async let objectsTask = api.listStorage(bucket: bucket, prefix: currentPrefix)
-            async let statsTask   = api.storageStats(bucket: bucket)
-            let (dtos, statsDTO)  = try await (objectsTask, statsTask)
+            let prefix = currentPrefix
+            async let listTask  = api.listStorage(bucket: bucket, prefix: prefix)
+            // The totals are a nicety; a failure there doesn't hide the files.
+            async let statsTask = try? api.storageStats(bucket: bucket)
+            let (listing, statsDTO) = try await (listTask, statsTask)
 
-            items = dtos.compactMap { StorageItem(from: $0, prefix: currentPrefix) }
-                        .sorted { lhs, rhs in
-                            // Folders first, then alphabetical
-                            if lhs.isFolder != rhs.isFolder { return lhs.isFolder }
-                            return lhs.name.localizedCompare(rhs.name) == .orderedAscending
-                        }
+            let byName: (StorageItem, StorageItem) -> Bool = {
+                $0.name.localizedCompare($1.name) == .orderedAscending
+            }
+            // Folders first, then files, each alphabetical.
+            items = listing.folders.compactMap { StorageItem(from: $0, prefix: prefix, isFolder: true) }.sorted(by: byName)
+                + listing.files.compactMap { StorageItem(from: $0, prefix: prefix, isFolder: false) }.sorted(by: byName)
             stats = statsDTO
         } catch {
             self.error = error.localizedDescription
@@ -174,7 +170,7 @@ final class StorageViewModel: ObservableObject {
         guard let api = apiService else { return }
         isUploading = true
         defer { isUploading = false }
-        _ = try await api.uploadFile(data: data, filename: filename, mimeType: mimeType, bucket: bucket)
+        try await api.uploadFile(data: data, filename: filename, mimeType: mimeType, bucket: bucket, prefix: currentPrefix)
         await load()
     }
 
@@ -182,7 +178,7 @@ final class StorageViewModel: ObservableObject {
 
     func downloadURL(for item: StorageItem) async -> URL? {
         guard let api = apiService,
-              let urlString = try? await api.getPresignedURL(bucket: bucket, key: item.key, action: "get"),
+              let urlString = try? await api.getPresignedURL(bucket: bucket, key: item.key),
               let url = URL(string: urlString) else { return nil }
         return url
     }

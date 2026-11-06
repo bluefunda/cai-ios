@@ -45,6 +45,8 @@ private struct ProjectDetailBody: View {
     @ObservedObject var state: RequestsState
 
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var workspace: WorkspaceStore
     @State private var showFilterSheet = false
     @State private var showCreateSheet = false
     @State private var showEditSheet = false
@@ -99,10 +101,16 @@ private struct ProjectDetailBody: View {
                     users: { try await services.referenceDataService.users(forceRefresh: false) },
                     currentUserId: userId,
                     editing: project
-                )) {
+                ), onCreated: {
                     await model.load(forceRefresh: true)
                     await state.projects?.load(forceRefresh: true)
-                }
+                }, onDelete: model.canDelete(userId: userId, roles: workspace.requestsRoles) ? {
+                    guard await model.delete() else { return model.deleteError ?? "The project wasn't deleted." }
+                    // Gone: back to Projects, which no longer lists it.
+                    await state.projects?.load(forceRefresh: true)
+                    dismiss()
+                    return nil
+                } : nil)
             }
         }
         .refreshable { await model.load(forceRefresh: true) }
