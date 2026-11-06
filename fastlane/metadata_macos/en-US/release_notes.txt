@@ -1,4 +1,1 @@
-New in this release:
-• Bluerequests integration for trm realm
-
-Plus bug fixes and performance improvements.
+This release includes bug fixes and performance improvements.
