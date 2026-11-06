@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.17.1](https://github.com/bluefunda/cai-ios/compare/v2.17.0...v2.17.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* a request's Files tab no longer opens empty after an interrupted load ([ce69512](https://github.com/bluefunda/cai-ios/commit/ce695121c7959e243419ba6596825ab265bfdbd3))
+* Files, request uploads and file delete; project delete; new request from the drawer ([57c819e](https://github.com/bluefunda/cai-ios/commit/57c819efd686856d129d9b9a704a6d22e69c1013))
+* Files, request uploads and file delete; project delete; new request from the drawer ([78ac426](https://github.com/bluefunda/cai-ios/commit/78ac426ba49d4af1318bcfaccd3368a8971a9ed7))
+
 ## [2.17.0](https://github.com/bluefunda/cai-ios/compare/v2.16.0...v2.17.0) (2026-11-05)
 
 
