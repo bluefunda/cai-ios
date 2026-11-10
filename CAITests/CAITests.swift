@@ -631,6 +631,25 @@ final class AuthSecurityTests: XCTestCase {
         super.tearDown()
     }
 
+    // trm-s3 reads the user from Access-Token: the gateway replaces Authorization with its own
+    // service credentials on the storage routes, so without it Files gets a 401 (a 500 to us).
+    func test_storageList_sendsTheUserTokenAsAccessToken() async throws {
+        var sent: URLRequest?
+        MockURLProtocol.requestHandler = { request in
+            sent = request
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"success":true,"data":{"folders":[],"files":[]}}"#.utf8))
+        }
+        let service = BFFAPIService(baseURL: "https://api.example.com/ai", tokenProvider: { "jwt-123" }, session: makeMockSession())
+
+        _ = try await service.listStorage(bucket: "individual")
+
+        let request = try XCTUnwrap(sent)
+        XCTAssertEqual(request.url?.path, "/ai/rest/individual/v1/storage/list")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Access-Token"), "jwt-123")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer jwt-123")
+    }
+
     // MARK: - P0: Nonce Uniqueness (Replay Attack Prevention)
 
     func test_makeAuthNonce_isUniquePerCall() {
