@@ -235,9 +235,9 @@ final class BFFAPIService {
 
     // MARK: - Storage
     // The web's Cloud Storage route: cai-gw /rest/{space}/v1/storage/* goes straight to
-    // trm-s3 with the service credentials it requires. (cai-bff's /storage/* forwards only
-    // the user's token, which trm-s3 refuses.) The bucket is the user's space, and the
-    // path segment is that same space, as the web sends it.
+    // trm-s3 with the service credentials it requires, and trm-s3 reads the user from the
+    // Access-Token header every APIClient request carries. The bucket is the user's space,
+    // and the path segment is that same space, as the web sends it.
 
     private func storagePath(_ bucket: String, _ action: String) -> String {
         "/rest/\(bucket)/v1/storage/\(action)"
@@ -316,8 +316,7 @@ final class BFFAPIService {
             data: data,
             filename: filename,
             mimeType: mimeType,
-            fields: ["userid": userId, "path": userId],
-            includeAccessTokenHeader: true
+            fields: ["userid": userId, "path": userId]
         )
         let result = try JSONDecoder().decode(FileUploadForPromptResponseDTO.self, from: raw)
         return result.resolvedURL

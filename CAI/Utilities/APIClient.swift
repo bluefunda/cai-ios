@@ -93,8 +93,7 @@ struct APIClient {
         filename: String,
         mimeType: String,
         fields: [String: String] = [:],
-        queryItems: [URLQueryItem] = [],
-        includeAccessTokenHeader: Bool = false
+        queryItems: [URLQueryItem] = []
     ) async throws -> Data {
         let boundary = "Boundary-\(UUID().uuidString)"
         let token = try await tokenProvider()
@@ -105,13 +104,7 @@ struct APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        // trm-s3 (behind /fileupload) checks this header directly for the
-        // per-user JWT, independent of the standard Authorization header the
-        // gateway needs for its own service-to-service auth on this route.
-        if includeAccessTokenHeader {
-            request.setValue(token, forHTTPHeaderField: "Access-Token")
-        }
+        Self.setAuthHeaders(on: &request, token: token)
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 60
 
@@ -139,6 +132,14 @@ struct APIClient {
 
     // MARK: - Private
 
+    /// The user's token both ways, as the web's axios interceptor sends it. On routes that
+    /// reach trm-s3 (Files, chat attachments) the gateway swaps `Authorization` for its own
+    /// service credentials, so trm-s3 reads the user from `Access-Token`.
+    static func setAuthHeaders(on request: inout URLRequest, token: String) {
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(token, forHTTPHeaderField: "Access-Token")
+    }
+
     private func buildRequest(
         method: String,
         path: String,
@@ -158,7 +159,7 @@ struct APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        Self.setAuthHeaders(on: &request, token: token)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 30
