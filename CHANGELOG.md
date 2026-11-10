@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.17.2](https://github.com/bluefunda/cai-ios/compare/v2.17.1...v2.17.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* Files loads again by sending Access-Token on every request ([4aea9ac](https://github.com/bluefunda/cai-ios/commit/4aea9aceba8429703af38b480a41f934cf5ab506))
+* Files loads again by sending Access-Token on every request ([d9963d8](https://github.com/bluefunda/cai-ios/commit/d9963d8f563447d3636d412ab5314f75eff53bbe))
+
 ## [2.17.1](https://github.com/bluefunda/cai-ios/compare/v2.17.0...v2.17.1) (2026-11-06)
 
 
