@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.18.0](https://github.com/bluefunda/cai-ios/compare/v2.17.2...v2.18.0) (2026-11-11)
+
+
+### Features
+
+* **requests:** GitHub integration from the BlueRequests web ([244de52](https://github.com/bluefunda/cai-ios/commit/244de52c46053c18f997fc2f5a5bc2188bda0a86))
+* **requests:** GitHub integration from the BlueRequests web ([c72e616](https://github.com/bluefunda/cai-ios/commit/c72e61688d84462d6d906e4886b6a0a25a9668e2))
+
 ## [2.17.2](https://github.com/bluefunda/cai-ios/compare/v2.17.1...v2.17.2) (2026-11-10)
 
 
