@@ -1,9 +1,11 @@
 import SwiftUI
 
 // MARK: - Git
-// trm's web Git screen (components/git/gitHome): the abapGit repos, and adding one.
-// Diffs, staging and push need the user's GitHub credentials, which the web encrypts
-// with a key built into the web app — not ported.
+// The GitHub integration (trm's adminConfig/githubIntegration: connected accounts and their
+// repositories, Connect / Disconnect for admins), then trm's web Git screen
+// (components/git/gitHome): the abapGit repos, and adding one — shown only when there are
+// some, as trm now hides abapGit behind a flag. Diffs, staging and push need the user's
+// GitHub credentials, which the web encrypts with a key built into the web app — not ported.
 
 struct GitReposView: View {
     @ObservedObject var state: RequestsState
@@ -11,14 +13,19 @@ struct GitReposView: View {
 
     var body: some View {
         AdminDestination(state: state, navigationControl: navigationControl) { context in
-            GitReposScreen(context: context)
+            if let services = state.services {
+                GitReposScreen(context: context, githubService: services.githubService)
+            }
         }
     }
 }
 
 private struct GitReposScreen: View {
     let context: AdminContext
+    let githubService: GitHubServicing
     @StateObject private var loader = AdminLoader<RQGitRepo>()
+    @StateObject private var github = GitHubBox()
+    @EnvironmentObject private var workspace: WorkspaceStore
     @State private var searchText = ""
     @State private var isCreating = false
     @Environment(\.openURL) private var openURL
@@ -33,19 +40,19 @@ private struct GitReposScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            AdminScreenHeader(
-                title: "Git",
-                subtitle: adminCount(loader.items.count, "repo", loaded: loader.hasLoaded),
-                actionTitle: "New repo", actionIdentifier: "admin.git.new",
-                action: { isCreating = true }, search: $searchText, searchPrompt: "Search repos"
-            )
-            AdminListContent(loader: loader, subject: "repos", emptyTitle: "No repos",
-                             emptyIcon: "arrow.triangle.branch", reload: reload) {
-                ForEach(filtered) { repo in
-                    GitRepoRow(repo: repo) {
-                        if let url = URL(string: repo.url) { openURL(url) }
+            AdminScreenHeader(title: "Git")
+            ScrollView {
+                VStack(alignment: .leading, spacing: BFSpacing._6) {
+                    if let model = github.model {
+                        GitHubIntegrationSection(model: model)
+                    }
+                    if !loader.items.isEmpty {
+                        abapGitSection
                     }
                 }
+                .padding(.horizontal, BFSpacing._4)
+                .padding(.bottom, BFSpacing._6)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .adminColumn()
@@ -54,8 +61,62 @@ private struct GitReposScreen: View {
         .sheet(isPresented: $isCreating) {
             NewGitRepoSheet(context: context, onSaved: reload)
         }
-        .task { if !loader.hasLoaded { await reload() } }
-        .refreshable { await reload() }
+        .task {
+            if github.model == nil {
+                github.model = GitHubIntegrationViewModel(service: githubService, roles: workspace.requestsRoles)
+                await github.model?.load()
+            }
+            if !loader.hasLoaded { await reload() }
+        }
+        .refreshable {
+            await github.model?.refresh()
+            await reload()
+        }
+    }
+
+    /// Hidden while loading, on a failed load and when there are no repos.
+    private var abapGitSection: some View {
+        VStack(alignment: .leading, spacing: BFSpacing._3) {
+            HStack(alignment: .center, spacing: BFSpacing._3) {
+                VStack(alignment: .leading, spacing: 2) {
+                    GitSectionTitle("abapGit repositories")
+                    if let count = adminCount(loader.items.count, "repo", loaded: loader.hasLoaded) {
+                        Text(count)
+                            .font(RQFont.meta)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: BFSpacing._3)
+                Button { isCreating = true } label: {
+                    Label("New repo", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+                .bfPointerHover()
+                .accessibilityIdentifier("admin.git.new")
+            }
+            AdminSearchField(text: $searchText, prompt: "Search repos")
+            if let error = loader.error {
+                InlineErrorBanner(message: error) { Task { await reload() } }
+            }
+            VStack(spacing: 0) {
+                ForEach(filtered) { repo in
+                    GitRepoRow(repo: repo) {
+                        if let url = URL(string: repo.url) { openURL(url) }
+                    }
+                    .padding(.horizontal, BFSpacing._3)
+                    if repo.id != filtered.last?.id { BFHairline() }
+                }
+            }
+            .background(BFColor.surfaceRaised, in: RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous)
+                    .strokeBorder(BFColor.hairline, lineWidth: 0.5)
+            )
+        }
+    }
+
+    private final class GitHubBox: ObservableObject {
+        @Published var model: GitHubIntegrationViewModel?
     }
 
     private func reload() async {

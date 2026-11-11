@@ -182,6 +182,24 @@ struct RequestsAPIClient {
         try Self.throwIfBodyReportsError(data)
     }
 
+    /// For POSTs whose created object is only a convenience (trm-bff's GitHub routes answer
+    /// 201 with it): validates the status, then decodes the body if it can. nil means
+    /// "saved, reload to see it" rather than a failure.
+    func postDecodingIfPresent<T: Decodable>(_ path: String, body: some Encodable) async throws -> T? {
+        let bodyData = try JSONEncoder().encode(body)
+        let request = try await buildRequest(method: "POST", path: path, body: bodyData)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await gatedRequest(request)
+        } catch {
+            throw RequestsAPIError.networkError(error)
+        }
+        try validateStatus(response, data: data)
+        try Self.throwIfBodyReportsError(data)
+        return try? RequestsAPIClient.makeDecoder().decode(T.self, from: data)
+    }
+
     /// trm-backend-go answers a failed write with 200 and `[{"status":"error","message":…}]`
     /// (errorResponse) or `{"status":"error","message":…}`. Discarding the body would report
     /// those as saved.
@@ -536,6 +554,15 @@ struct RequestsAPIClient {
 
         // Never escalated to AuthManager.expireSession() — see RequestsAPIError.
         if http.statusCode == 401 || http.statusCode == 403 {
+            // A 403 that names its reason in the `{"error": {"code", "message"}}` envelope is
+            // the backend refusing this one action (GitHub integration's
+            // not_available_in_public_tenant, a step's not_an_approver), not trm-gw failing
+            // the token: keep the code so the screen can say why. Still never a sign-out.
+            if http.statusCode == 403, let data,
+               let dto = try? JSONDecoder().decode(RequestsErrorBody.self, from: data),
+               let code = dto.code, !code.isEmpty {
+                throw RequestsAPIError.rejected(status: 403, code: code, message: dto.message ?? "HTTP 403")
+            }
             throw RequestsAPIError.requestsUnavailable(statusCode: http.statusCode)
         }
 

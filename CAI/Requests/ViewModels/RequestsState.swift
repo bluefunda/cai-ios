@@ -29,6 +29,9 @@ final class RequestsState: ObservableObject {
     @Published var isCreatingRequest = false
     /// New Request from an assistant answer ("Create change request…"), from any space.
     @Published var newRequestPrefill: NewRequestPrefill?
+    /// Why a new request's GitHub issue wasn't created, by change request id: its detail
+    /// shows the notice until dismissed.
+    @Published var githubIssueNotices: [String: String] = [:]
 
     let recents: RecentRequestsStore
 
@@ -51,6 +54,7 @@ final class RequestsState: ObservableObject {
         self.services = services
         self.currentUserId = currentUserId
         requestsPath = []
+        githubIssueNotices = [:]
         if userChanged { recents.removeAll() }
 
         guard let services, currentUserId != nil else {
@@ -83,7 +87,9 @@ final class RequestsState: ObservableObject {
             referenceDataService: services.referenceDataService,
             sources: NewRequestFormSources(admin: services.adminService),
             currentUserId: currentUserId,
-            lockedProjectId: lockedProjectId
+            lockedProjectId: lockedProjectId,
+            githubService: services.githubService,
+            onGitHubIssueNotice: { [weak self] id, notice in self?.githubIssueNotices[id] = notice }
         )
     }
 

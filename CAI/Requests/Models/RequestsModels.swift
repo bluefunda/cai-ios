@@ -92,6 +92,8 @@ struct ChangeRequest: Identifiable {
     var currentStage: RQStage? = nil  // envelope `stage[0].stage` — the stage the request is at
     var stages: [RQStage] = []        // envelope `stageData` — every stage, in order
     var currentStageOwnerName: String? = nil  // envelope `stage[0].user.name`
+    var templateKind: String? = nil   // envelope `templateData.kind` — "tech" requests get the
+                                       // GitHub tab (trm's isTechChangeRequest)
 
     /// The web offers Edit and Delete only at the first stage (changeRequestDetail.js). A
     /// request with no stages (created without a template) has nothing to be past.
@@ -194,7 +196,10 @@ extension ChangeRequest: Hashable {
 extension ChangeRequest: Decodable {
     private enum EnvelopeKeys: String, CodingKey {
         case changeRequest, requestId, severityData, requestTypeData, userTimeline
-        case stage, stageData
+        case stage, stageData, templateData
+    }
+    private enum TemplateKeys: String, CodingKey {
+        case kind
     }
     private enum CoreKeys: String, CodingKey {
         case id, description, shortDescription, status, requestedBy, projectId, platform, createdAt
@@ -251,6 +256,10 @@ extension ChangeRequest: Decodable {
             requestTypeLabel = nil
         }
         timeline = (try? envelope.decodeIfPresent([ChangeRequestTimelineEntry].self, forKey: .userTimeline)) ?? []
+        if let template = try? envelope.nestedContainer(keyedBy: TemplateKeys.self, forKey: .templateData) {
+            templateKind = ((try? template.decodeIfPresent(String.self, forKey: .kind)) ?? nil)
+                .flatMap { $0.isEmpty ? nil : $0 }
+        }
     }
 }
 

@@ -62,6 +62,7 @@ final class NewChangeRequestViewModel: ObservableObject {
         didSet {
             guard oldValue != selectedProjectId else { return }
             if !repos.contains(selectedRepo) { selectedRepo = "" }
+            refreshGitHubRepos()
         }
     }
     @Published var selectedRequestTypeId: String?
@@ -84,6 +85,7 @@ final class NewChangeRequestViewModel: ObservableObject {
                     qaDeploy: stage.qaDeploy
                 )
             }
+            refreshGitHubRepos()
         }
     }
     @Published var stages: [DraftStage] = []
@@ -104,6 +106,23 @@ final class NewChangeRequestViewModel: ObservableObject {
     @Published var selectedRepo = ""
     @Published var qaBranch = NewChangeRequestPayload.DeploymentBranch(system: "qa")
     @Published var prdBranch = NewChangeRequestPayload.DeploymentBranch(system: "prd")
+
+    // "Create GitHub issue" (trm's createCrGitHubIssueOption): only for a tech template
+    // whose project has bound repos. The repos are read here, so the form is unchanged
+    // when there are none or the integration is unavailable.
+    @Published private(set) var githubRepos: [ProjectRepo] = []
+    @Published private(set) var isLoadingGitHubRepos = false
+    @Published var createGitHubIssue = false {
+        didSet {
+            guard oldValue != createGitHubIssue else { return }
+            githubIssueRepoId = createGitHubIssue ? (githubIssueRepoId ?? githubRepos.first?.id) : nil
+        }
+    }
+    @Published var githubIssueRepoId: String?
+    /// Why the issue wasn't created, after a submit whose request was: shown on the new
+    /// request's detail.
+    private(set) var githubIssueNotice: String?
+    private var githubReposRequest = 0
 
     @Published private(set) var projects: [RQProject] = []
     @Published private(set) var requestTypes: [RequestTypeOption] = []
@@ -131,6 +150,9 @@ final class NewChangeRequestViewModel: ObservableObject {
     private let referenceDataService: ReferenceDataServicing
     private let sources: NewRequestFormSources
     private let currentUserId: String?
+    private let githubService: GitHubServicing?
+    /// Hands the new request's id and the GitHub notice to whoever shows its detail.
+    private let onGitHubIssueNotice: ((_ changeRequestId: String, _ notice: String) -> Void)?
 
     init(
         changeRequestService: ChangeRequestServicing,
@@ -138,7 +160,9 @@ final class NewChangeRequestViewModel: ObservableObject {
         referenceDataService: ReferenceDataServicing,
         sources: NewRequestFormSources = NewRequestFormSources(),
         currentUserId: String?,
-        lockedProjectId: String? = nil
+        lockedProjectId: String? = nil,
+        githubService: GitHubServicing? = nil,
+        onGitHubIssueNotice: ((_ changeRequestId: String, _ notice: String) -> Void)? = nil
     ) {
         self.changeRequestService = changeRequestService
         self.projectService = projectService
@@ -146,6 +170,8 @@ final class NewChangeRequestViewModel: ObservableObject {
         self.sources = sources
         self.currentUserId = currentUserId
         self.lockedProjectId = lockedProjectId
+        self.githubService = githubService
+        self.onGitHubIssueNotice = onGitHubIssueNotice
     }
 
     /// Matches the real web form's own required-field set exactly (see the trm-ios plan's
@@ -161,6 +187,31 @@ final class NewChangeRequestViewModel: ObservableObject {
     }
 
     var selectedTemplate: RQRequestTemplate? { templates.first { $0.id == selectedTemplateId } }
+
+    var isTechTemplate: Bool { selectedTemplate?.kind == .tech }
+
+    /// The option shows for a tech template whose project has bound repos.
+    var showsGitHubIssueOption: Bool { isTechTemplate && !githubRepos.isEmpty && githubService != nil }
+
+    /// Reads the chosen project's bound repos when a tech template is picked; anything
+    /// else (or a failed read) hides the option and turns it off.
+    func refreshGitHubRepos() {
+        githubReposRequest += 1
+        let request = githubReposRequest
+        githubRepos = []
+        createGitHubIssue = false
+        guard isTechTemplate, let projectId = selectedProjectId, let githubService else {
+            isLoadingGitHubRepos = false
+            return
+        }
+        isLoadingGitHubRepos = true
+        Task {
+            let repos = (try? await githubService.projectRepos(projectId: projectId)) ?? []
+            guard request == githubReposRequest else { return }
+            githubRepos = repos
+            isLoadingGitHubRepos = false
+        }
+    }
 
     /// Only active templates are offered, as the web lists them.
     var activeTemplates: [RQRequestTemplate] { templates.filter(\.isActive) }
@@ -297,11 +348,27 @@ final class NewChangeRequestViewModel: ObservableObject {
         error = nil
         defer { isSubmitting = false }
 
+        let created: ChangeRequest
         do {
-            return try await changeRequestService.create(payload)
+            created = try await changeRequestService.create(payload)
         } catch {
             self.error = error.localizedDescription
             return nil
         }
+        // The request exists now: a failed issue never undoes or blocks it. Its detail
+        // shows why, and its GitHub tab is where to try again.
+        githubIssueNotice = nil
+        if createGitHubIssue, showsGitHubIssueOption, let githubService {
+            if let repoId = githubIssueRepoId {
+                do {
+                    _ = try await githubService.addIssue(changeRequestId: created.id, .create(projectRepoId: repoId))
+                } catch {
+                    githubIssueNotice = GitHubIntegration.issueFailureNotice(
+                        GitHubIntegration.issueErrorMessage(error, mode: .create))
+                }
+            }
+            if let githubIssueNotice { onGitHubIssueNotice?(created.id, githubIssueNotice) }
+        }
+        return created
     }
 }

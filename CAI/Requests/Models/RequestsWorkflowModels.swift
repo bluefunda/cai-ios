@@ -296,13 +296,15 @@ enum WorkflowDecisionError {
 
     static func message(for error: Error) -> String {
         switch error {
-        case RequestsAPIError.rejected(_, let code, _):
+        case RequestsAPIError.rejected(let status, let code, _):
             switch code {
             case "not_an_approver": return "You are not an approver for this step."
             case "not_current_step": return "This step is no longer the current step. The workflow has been refreshed."
             case "step_is_gate": return "This is a GitHub gate step. It completes automatically and can't be approved by hand."
             case "workflow_not_enforced": return "Workflow enforcement is turned off for your organization."
-            default: break
+            default:
+                // A coded 403 (see RequestsAPIClient.validateStatus) reads like a bare one.
+                if status == 403 { return "You are not an approver for this step." }
             }
         case RequestsAPIError.requestsUnavailable(statusCode: 403):
             return "You are not an approver for this step."
