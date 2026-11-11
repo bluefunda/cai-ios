@@ -123,8 +123,12 @@ final class GitHubIntegrationHelperTests: XCTestCase {
         XCTAssertFalse(installation.isActive)
         XCTAssertNotNil(installation.createdAt, "nine fractional digits still parse")
 
-        let link = try decoder.decode(GitHubIssueLink.self, from: Data(
-            #"{"id":"l-1","repoFullName":"acme/api","number":15,"url":"https://github.com/acme/api/issues/15","title":"Crash","state":"closed","origin":"linked","linkedBy":"u-1","linkedAt":"2026-11-01T10:20:30Z"}"#.utf8))
+        let linkJSON = #"""
+            {"id":"l-1","repoFullName":"acme/api","number":15,
+             "url":"https://github.com/acme/api/issues/15","title":"Crash","state":"closed",
+             "origin":"linked","linkedBy":"u-1","linkedAt":"2026-11-01T10:20:30Z"}
+            """#
+        let link = try decoder.decode(GitHubIssueLink.self, from: Data(linkJSON.utf8))
         XCTAssertEqual(link.stateLabel, "Closed")
         XCTAssertEqual(link.originLabel, "Linked")
         XCTAssertFalse(link.isOpen)
