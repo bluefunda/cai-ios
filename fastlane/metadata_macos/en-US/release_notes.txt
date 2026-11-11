@@ -1,1 +1,2 @@
-This release includes bug fixes and performance improvements.
+New in this release:
+• GitHub integration from the BlueRequests web
