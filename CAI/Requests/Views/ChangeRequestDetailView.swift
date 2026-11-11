@@ -3,7 +3,8 @@ import UniformTypeIdentifiers
 
 // MARK: - Change Request Detail
 // Ported from trm-ios and reshaped to P6: a header card (number, title, status pill,
-// full stage rail), then a segmented control — Details, Activity, Comments, Files.
+// full stage rail), then a segmented control — Details, Activity, Comments, Files, AI and,
+// for a tech-template request, GitHub (its linked issues, trm's changeRequestGitHubIssues).
 // Edit and Archive live in a `···` menu; archiving asks first. The stage buttons (or, when
 // the tenant enforces it, the approval workflow) follow the web's detail screen.
 
@@ -47,7 +48,7 @@ struct ChangeRequestDetailView: View {
 }
 
 enum ChangeRequestDetailTab: String, CaseIterable, Identifiable {
-    case details, activity, comments, files, ai
+    case details, activity, comments, files, ai, github
     var id: String { rawValue }
 
     var title: String {
@@ -57,6 +58,7 @@ enum ChangeRequestDetailTab: String, CaseIterable, Identifiable {
         case .comments: return "Comments"
         case .files: return "Files"
         case .ai: return "AI"
+        case .github: return "GitHub"
         }
     }
 }
@@ -77,7 +79,14 @@ private struct DetailBody: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var tabs: [ChangeRequestDetailTab] {
-        ChangeRequestDetailTab.allCases.filter { $0 != .ai || requestBridge != nil }
+        ChangeRequestDetailTab.allCases.filter { tab in
+            switch tab {
+            case .ai: return requestBridge != nil
+            // Only requests from a tech template have GitHub issues.
+            case .github: return GitHubIntegration.isTechRequest(model.changeRequest)
+            default: return true
+            }
+        }
     }
 
     var body: some View {
@@ -178,6 +187,16 @@ private struct DetailBody: View {
                     .padding(.horizontal, BFSpacing._4)
                 }
 
+                // New request hands over why its GitHub issue wasn't created (the request was).
+                if let notice = state.githubIssueNotices[model.changeRequestId] {
+                    DismissableNotice(message: notice) {
+                        state.githubIssueNotices[model.changeRequestId] = nil
+                    }
+                    .padding(.horizontal, BFSpacing._4)
+                    .padding(.bottom, BFSpacing._2)
+                    .accessibilityIdentifier("requests.detail.githubNotice")
+                }
+
                 // Five tabs don't fit a segmented control on an iPhone ("Comments" was cut
                 // off), so compact width scrolls a row of tabs instead.
                 if sizeClass == .compact {
@@ -204,6 +223,16 @@ private struct DetailBody: View {
                     case .comments: CommentThreadView(model: model)
                     case .files: FilesTab(model: model)
                     case .ai: AITab(changeRequest: cr, links: requestChatLinks, bridge: requestBridge)
+                    case .github:
+                        if let services = state.services, GitHubIntegration.isTechRequest(cr) {
+                            GitHubIssuesTab(model: GitHubIssuesViewModel(
+                                changeRequestId: cr.id,
+                                projectId: cr.projectId,
+                                defaultTitle: cr.title,
+                                service: services.githubService,
+                                users: { try await services.referenceDataService.users(forceRefresh: false) }
+                            ), state: state)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

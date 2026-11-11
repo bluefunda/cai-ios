@@ -220,6 +220,7 @@ private struct StagesSection: View {
                 model.templateRequired ? Text.required("Template") : Text("Template")
             }
             .accessibilityIdentifier("requests.new.template")
+            CreateGitHubIssueRows(model: model)
             if !model.stages.isEmpty {
                 if !model.teams.isEmpty {
                     Picker("Team", selection: $model.selectedTeamId) {
@@ -291,5 +292,29 @@ private struct StageOwnerRow: View {
             .fixedSize()
         }
         .accessibilityIdentifier("requests.new.stageOwner")
+    }
+}
+
+/// "Create GitHub issue" (trm's createCrGitHubIssueOption): a tech template whose project
+/// has bound repos. While the repos are read, a loader says so, so the option doesn't pop
+/// in unannounced.
+private struct CreateGitHubIssueRows: View {
+    @ObservedObject var model: NewChangeRequestViewModel
+
+    var body: some View {
+        if model.isLoadingGitHubRepos {
+            GitHubLoadingRow(label: "Loading GitHub repositories…")
+        } else if model.showsGitHubIssueOption {
+            Toggle("Create GitHub issue", isOn: $model.createGitHubIssue)
+                .accessibilityIdentifier("requests.new.createGitHubIssue")
+            if model.createGitHubIssue && model.githubRepos.count > 1 {
+                Picker("GitHub repository", selection: $model.githubIssueRepoId) {
+                    ForEach(model.githubRepos) { repo in
+                        Text(repo.fullName).tag(String?.some(repo.id))
+                    }
+                }
+                .accessibilityIdentifier("requests.new.githubRepository")
+            }
+        }
     }
 }

@@ -4,17 +4,19 @@ import SwiftUI
 // Ported from trm-ios: the project's header (type, team, owner, Jira, description), then
 // its change requests through the same building blocks as the Requests destination —
 // ArchiveTogglePicker and ChangeRequestListBody — so they look and behave the same.
+// Between them, the GitHub repositories bound to the project (trm's projectRepos).
 
 struct ProjectDetailView: View {
     let projectId: String
     @ObservedObject var state: RequestsState
 
     @StateObject private var box = ViewModelBox()
+    @EnvironmentObject private var workspace: WorkspaceStore
 
     var body: some View {
         Group {
             if let model = box.model {
-                ProjectDetailBody(model: model, state: state)
+                ProjectDetailBody(model: model, reposModel: box.reposModel, state: state)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -30,6 +32,8 @@ struct ProjectDetailView: View {
                 workflowService: services.workflowService,
                 currentUserId: state.currentUserId
             )
+            box.reposModel = ProjectReposViewModel(
+                projectId: projectId, service: services.githubService, roles: workspace.requestsRoles)
             box.model = model
             await model.load()
         }
@@ -37,11 +41,13 @@ struct ProjectDetailView: View {
 
     private final class ViewModelBox: ObservableObject {
         @Published var model: ProjectDetailViewModel?
+        @Published var reposModel: ProjectReposViewModel?
     }
 }
 
 private struct ProjectDetailBody: View {
     @ObservedObject var model: ProjectDetailViewModel
+    let reposModel: ProjectReposViewModel?
     @ObservedObject var state: RequestsState
 
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -57,6 +63,12 @@ private struct ProjectDetailBody: View {
         VStack(spacing: 0) {
             if let project = model.project {
                 header(project)
+                if let reposModel {
+                    ProjectReposSection(model: reposModel)
+                        .padding(.horizontal, BFSpacing._4)
+                        .padding(.bottom, BFSpacing._3)
+                        .task { if reposModel.state == .loading { await reposModel.load() } }
+                }
                 BFHairline()
             } else if let error = model.error, !model.isLoading {
                 InlineErrorBanner(message: error) {
@@ -113,7 +125,10 @@ private struct ProjectDetailBody: View {
                 } : nil)
             }
         }
-        .refreshable { await model.load(forceRefresh: true) }
+        .refreshable {
+            await model.load(forceRefresh: true)
+            await reposModel?.load()
+        }
         .sheet(isPresented: $showFilterSheet) {
             ChangeRequestFilterSheet(model: requests)
         }
