@@ -812,4 +812,13 @@ final class GitHubViewModelTests: XCTestCase {
         _ = await model.submit()
         XCTAssertTrue(service.addedIssues.isEmpty)
     }
+
+    func test_connectGoesThroughTheWebStartPage() throws {
+        let install = try XCTUnwrap(URL(string: "https://github.com/apps/x/installations/new?state=a&b"))
+        XCTAssertEqual(
+            GitHubIntegration.appInstallURL(install)?.absoluteString,
+            "https://ai.bluefunda.com/individual/requests/git/github-start?from=ios"
+                + "&to=https%3A%2F%2Fgithub.com%2Fapps%2Fx%2Finstallations%2Fnew%3Fstate%3Da%26b"
+        )
+    }
 }

@@ -301,6 +301,15 @@ enum GitHubIntegration {
     // MARK: Roles (admin-trm client roles)
 
     /// Connect / disconnect installations: admin, super-admin.
+    /// Connect GitHub opens `installURL` through the web's start page, so the browser
+    /// comes back to the app once connected.
+    static func appInstallURL(_ installURL: URL, startURL: String = AppConfig.githubStartURL) -> URL? {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        guard let to = installURL.absoluteString.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+        return URL(string: "\(startURL)?from=ios&to=\(to)")
+    }
+
     static func canManage(roles: [String]) -> Bool {
         roles.contains("admin") || roles.contains("super-admin")
     }
