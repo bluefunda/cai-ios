@@ -1,2 +1,2 @@
 New in this release:
-• GitHub integration from the BlueRequests web
+• Return to the app after connecting GitHub
