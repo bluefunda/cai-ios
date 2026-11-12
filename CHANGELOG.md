@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.19.1](https://github.com/bluefunda/cai-ios/compare/v2.19.0...v2.19.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **chat:** Take Photo no longer crashes when the keyboard is up ([8f85a87](https://github.com/bluefunda/cai-ios/commit/8f85a8750edbac99359208757da4d85ef42fdf1b))
+* **chat:** Take Photo no longer crashes when the keyboard is up ([611e4b8](https://github.com/bluefunda/cai-ios/commit/611e4b8b0a867d38c20f639a9ce8aee208bce9f7))
+
 ## [2.19.0](https://github.com/bluefunda/cai-ios/compare/v2.18.0...v2.19.0) (2026-11-12)
 
 
