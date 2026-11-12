@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.19.0](https://github.com/bluefunda/cai-ios/compare/v2.18.0...v2.19.0) (2026-11-12)
+
+
+### Features
+
+* **requests:** return to the app after connecting GitHub ([bd0fe02](https://github.com/bluefunda/cai-ios/commit/bd0fe026970c7cbcad04197925be973402972196))
+* **requests:** return to the app after connecting GitHub ([1f13341](https://github.com/bluefunda/cai-ios/commit/1f133412f2b0957e714d5eb80ae41c207dc2203b))
+
 ## [2.18.0](https://github.com/bluefunda/cai-ios/compare/v2.17.2...v2.18.0) (2026-11-11)
 
 
