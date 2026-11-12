@@ -212,9 +212,13 @@ struct ChatInputView: View {
                             pendingManageAgents = false
                             showManageAgentsSettings = true
                         }
+                        // On the next run loop turn, not inside onDismiss: Take Photo hides
+                        // the keyboard, and doing that while SwiftUI is still tearing the
+                        // sheet down re-enters its presentation update — a Swift exclusivity
+                        // crash (SheetBridge.preferencesDidChange) whenever the keyboard was up.
                         if let action = pendingAttachAction {
                             pendingAttachAction = nil
-                            action()
+                            DispatchQueue.main.async { action() }
                         }
                     }) {
                         ComposerAttachSheet(
