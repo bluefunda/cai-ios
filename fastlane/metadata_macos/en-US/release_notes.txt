@@ -1,2 +1,1 @@
-New in this release:
-• Return to the app after connecting GitHub
+This release includes bug fixes and performance improvements.
