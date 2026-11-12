@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 // MARK: - GitHub Integration Views
 // The trm web's GitHub screens in the app's Requests style: the Git destination's
@@ -152,6 +153,7 @@ struct GitSectionTitle: View {
 struct GitHubIntegrationSection: View {
     @ObservedObject var model: GitHubIntegrationViewModel
     @Environment(\.openURL) private var openURL
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @State private var disconnectTarget: GitHubInstallation?
 
     var body: some View {
@@ -192,6 +194,18 @@ struct GitHubIntegrationSection: View {
         }
     }
 
+    /// GitHub's install page, through the web's start page, in an auth session: once
+    /// connected, the web's callback page returns to cai://oauth/github-app/done, which
+    /// completes the session. A closed sheet is a cancellation; the list reloads either way.
+    private func install(_ installURL: URL) async {
+        guard let startURL = GitHubIntegration.appInstallURL(installURL) else {
+            openURL(installURL)
+            return
+        }
+        _ = try? await webAuthenticationSession.authenticate(using: startURL, callbackURLScheme: "cai")
+        await model.refresh()
+    }
+
     @ViewBuilder
     private var ready: some View {
         if model.canManage {
@@ -202,7 +216,7 @@ struct GitHubIntegrationSection: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
                     Task {
-                        if let url = await model.connect() { openURL(url) }
+                        if let url = await model.connect() { await install(url) }
                     }
                 } label: {
                     Label { Text("Connect GitHub") } icon: { GitHubMarkIcon() }

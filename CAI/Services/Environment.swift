@@ -49,6 +49,11 @@ enum AppConfig {
     /// working once it substitutes org for realm.
     static let requestsOrgAlias = "trm"
 
+    /// The cai web's start page for Connect GitHub: it notes the app, then opens
+    /// GitHub's install page; once connected, the web's callback page returns to
+    /// cai://oauth/github-app/done.
+    static let githubStartURL = "https://ai.bluefunda.com/individual/requests/git/github-start"
+
     /// Keycloak client whose client roles (`admin`, `release-manager`, …) are the
     /// BlueRequests roles in the shared `individual` realm — trm's web app reads
     /// the same ones (src/utilities/organization.js getRoles), never realm roles.
