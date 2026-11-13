@@ -145,6 +145,22 @@ final class NewChangeRequestViewModel: ObservableObject {
     /// matching how trm's own web form pre-fills (but still shows) the project field there.
     let lockedProjectId: String?
 
+    // The draft (NewRequestDraft): restored once the options load, saved as the form
+    // changes (the view calls `saveDraft()`), cleared on Create, Discard or Cancel.
+    private let draftStore: NewRequestDraftStore?
+    /// The assistant answer this form started from, if any.
+    private var prefill: NewRequestPrefill?
+    /// Shows "Draft restored" with Discard draft.
+    @Published private(set) var isDraftRestored = false
+    /// The restore has run: saving before it would overwrite the draft with a blank form.
+    private var isDraftReady = false
+    /// Created or cancelled: nothing more is saved.
+    private var isDraftFinished = false
+    private var restoredConversationId: String?
+    /// "Create GitHub issue" from a restored draft, applied once the project's repos load
+    /// (the repo id, or "" for the first one).
+    private var pendingGitHubIssueRepoId: String?
+
     private let changeRequestService: ChangeRequestServicing
     private let projectService: ProjectServicing
     private let referenceDataService: ReferenceDataServicing
@@ -161,6 +177,7 @@ final class NewChangeRequestViewModel: ObservableObject {
         sources: NewRequestFormSources = NewRequestFormSources(),
         currentUserId: String?,
         lockedProjectId: String? = nil,
+        draftStore: NewRequestDraftStore? = nil,
         githubService: GitHubServicing? = nil,
         onGitHubIssueNotice: ((_ changeRequestId: String, _ notice: String) -> Void)? = nil
     ) {
@@ -170,6 +187,7 @@ final class NewChangeRequestViewModel: ObservableObject {
         self.sources = sources
         self.currentUserId = currentUserId
         self.lockedProjectId = lockedProjectId
+        self.draftStore = draftStore
         self.githubService = githubService
         self.onGitHubIssueNotice = onGitHubIssueNotice
     }
@@ -210,6 +228,13 @@ final class NewChangeRequestViewModel: ObservableObject {
             guard request == githubReposRequest else { return }
             githubRepos = repos
             isLoadingGitHubRepos = false
+            if let pending = pendingGitHubIssueRepoId {
+                pendingGitHubIssueRepoId = nil
+                if showsGitHubIssueOption {
+                    createGitHubIssue = true
+                    if repos.contains(where: { $0.id == pending }) { githubIssueRepoId = pending }
+                }
+            }
         }
     }
 
@@ -254,10 +279,127 @@ final class NewChangeRequestViewModel: ObservableObject {
     }
 
     /// Fills the title and description from an assistant answer, keeping anything typed.
+    /// A draft kept from the same answer's chat replaces it once the options load, so
+    /// coming back to that answer resumes the edits instead of starting over.
     func applying(_ prefill: NewRequestPrefill) -> Self {
+        self.prefill = prefill
         if requestName.isEmpty { requestName = prefill.title }
         if description.isEmpty { description = prefill.description }
         return self
+    }
+
+    // MARK: - Draft
+
+    /// The chat to link to the new request: the answer's, or the restored draft's.
+    var linkedConversationId: String? { prefill?.conversationId ?? restoredConversationId }
+
+    /// The form as a draft.
+    var currentDraft: NewRequestDraft {
+        var draft = NewRequestDraft()
+        draft.requestName = requestName
+        draft.description = description
+        draft.requestNumber = requestNumber
+        draft.ticketUrl = ticketUrl
+        draft.projectId = selectedProjectId
+        draft.requestTypeId = selectedRequestTypeId
+        draft.severityId = selectedSeverityId
+        draft.ownerId = selectedOwnerId
+        draft.templateId = selectedTemplateId
+        draft.teamId = selectedTeamId
+        draft.stageOwners = Dictionary(stages.compactMap { stage in stage.ownerId.map { (stage.order, $0) } },
+                                       uniquingKeysWith: { first, _ in first })
+        draft.platformIds = selectedPlatformIds.sorted()
+        draft.systemId = selectedSystemId
+        draft.repo = selectedRepo
+        draft.qaSource = qaBranch.source
+        draft.qaTarget = qaBranch.target
+        draft.prdSource = prdBranch.source
+        draft.prdTarget = prdBranch.target
+        draft.createGitHubIssue = createGitHubIssue || pendingGitHubIssueRepoId != nil
+        draft.githubIssueRepoId = githubIssueRepoId ?? pendingGitHubIssueRepoId.flatMap { $0.isEmpty ? nil : $0 }
+        draft.conversationId = linkedConversationId
+        return draft
+    }
+
+    /// Keeps the form as the draft, or clears it once there's nothing worth keeping.
+    func saveDraft() {
+        guard isDraftReady, !isDraftFinished, let draftStore else { return }
+        let draft = currentDraft
+        if draft.hasContent { draftStore.save(draft) } else { draftStore.clear() }
+    }
+
+    /// Created, or cancelled on purpose: the draft has done its job.
+    func finishDraft() {
+        isDraftFinished = true
+        draftStore?.clear()
+    }
+
+    /// Starts the form over: the draft is gone; the project and owner refill as on open.
+    func discardDraft() {
+        draftStore?.clear()
+        requestName = ""
+        description = ""
+        requestNumber = ""
+        ticketUrl = ""
+        selectedProjectId = lockedProjectId
+        selectedRequestTypeId = nil
+        selectedSeverityId = nil
+        selectedOwnerId = users.contains(where: { $0.id == currentUserId }) ? currentUserId : nil
+        selectedTemplateId = nil
+        selectedTeamId = nil
+        selectedPlatformIds = []
+        selectedSystemId = nil
+        selectedRepo = ""
+        qaBranch = NewChangeRequestPayload.DeploymentBranch(system: "qa")
+        prdBranch = NewChangeRequestPayload.DeploymentBranch(system: "prd")
+        pendingGitHubIssueRepoId = nil
+        createGitHubIssue = false
+        restoredConversationId = nil
+        isDraftRestored = false
+    }
+
+    /// Once, after the options load (so restored choices have their lists). With an
+    /// assistant answer, only a draft from that same chat is restored; any other draft is
+    /// replaced by the answer as the form is saved.
+    func restoreDraft() {
+        guard !isDraftReady else { return }
+        isDraftReady = true
+        guard let saved = draftStore?.read() else { return }
+        if let prefill {
+            guard let conversationId = prefill.conversationId, saved.conversationId == conversationId else { return }
+        }
+        apply(saved)
+        isDraftRestored = true
+    }
+
+    /// Choices whose list no longer has them are left empty rather than shown blank.
+    private func apply(_ draft: NewRequestDraft) {
+        requestName = draft.requestName
+        description = draft.description
+        requestNumber = draft.requestNumber
+        ticketUrl = draft.ticketUrl
+        if lockedProjectId == nil, let id = draft.projectId, projects.contains(where: { $0.id == id }) {
+            selectedProjectId = id
+        }
+        selectedRequestTypeId = draft.requestTypeId.flatMap { id in requestTypes.contains { $0.id == id } ? id : nil }
+        selectedSeverityId = draft.severityId.flatMap { id in severities.contains { $0.id == id } ? id : nil }
+        if let id = draft.ownerId, users.contains(where: { $0.id == id }) { selectedOwnerId = id }
+        selectedTeamId = draft.teamId.flatMap { id in teams.contains { $0.id == id } ? id : nil }
+        if draft.createGitHubIssue { pendingGitHubIssueRepoId = draft.githubIssueRepoId ?? "" }
+        if let id = draft.templateId, templates.contains(where: { $0.id == id }) {
+            selectedTemplateId = id
+            for (order, ownerId) in draft.stageOwners { setOwner(ownerId, for: order) }
+        }
+        if selectedTemplateId == nil { pendingGitHubIssueRepoId = nil }
+        selectedPlatformIds = Set(draft.platformIds.filter { id in applications.contains { $0.id == id } })
+        // Kept if the platform's systems (loading now) still list it.
+        if hasSAPPlatform { selectedSystemId = draft.systemId }
+        if hasGitPlatform, repos.contains(draft.repo) { selectedRepo = draft.repo }
+        qaBranch.source = draft.qaSource
+        qaBranch.target = draft.qaTarget
+        prdBranch.source = draft.prdSource
+        prdBranch.target = draft.prdTarget
+        restoredConversationId = draft.conversationId
     }
 
     func loadOptions() async {
@@ -290,6 +432,7 @@ final class NewChangeRequestViewModel: ObservableObject {
         teams = loadedTeams ?? []
         applications = loadedApplications ?? []
         isLoadingOptions = false
+        restoreDraft()
     }
 
     private func loadSystems(appId: String) async {
@@ -355,6 +498,7 @@ final class NewChangeRequestViewModel: ObservableObject {
             self.error = error.localizedDescription
             return nil
         }
+        finishDraft()
         // The request exists now: a failed issue never undoes or blocks it. Its detail
         // shows why, and its GitHub tab is where to try again.
         githubIssueNotice = nil

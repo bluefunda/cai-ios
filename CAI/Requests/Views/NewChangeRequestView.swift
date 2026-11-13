@@ -17,10 +17,28 @@ struct NewChangeRequestView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmCancel = false
 
     var body: some View {
         NavigationStack {
             Form {
+                // A form left half filled comes back as it was (NewRequestDraft).
+                if model.isDraftRestored {
+                    Section {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Label("Draft restored. Continue where you left off.", systemImage: "doc.badge.clock")
+                                .font(RQFont.meta)
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 8)
+                            Button("Discard draft") { model.discardDraft() }
+                                .font(RQFont.meta.weight(.semibold))
+                                .buttonStyle(.borderless)
+                                .bfPointerHover()
+                                .accessibilityIdentifier("requests.new.discardDraft")
+                        }
+                    }
+                }
+
                 Section {
                     TextField(required: "Request name", text: $model.requestName)
                     TextField(required: "Description", text: $model.description, axis: .vertical)
@@ -90,9 +108,19 @@ struct NewChangeRequestView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .bfPointerHover()
+                    // Cancel throws the draft away, after asking when there's something to lose.
+                    Button("Cancel") {
+                        if model.currentDraft.hasContent {
+                            confirmCancel = true
+                        } else {
+                            model.finishDraft()
+                            dismiss()
+                        }
+                    }
+                    .bfPointerHover()
+                    .accessibilityIdentifier("requests.new.cancel")
                 }
+                // The form's one Create action: disabled until the required fields are set.
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task {
@@ -114,6 +142,16 @@ struct NewChangeRequestView: View {
                 }
             }
             .task { await model.loadOptions() }
+            .onChange(of: model.currentDraft) { _, _ in model.saveDraft() }
+            .confirmationDialog("Discard this draft?", isPresented: $confirmCancel, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) {
+                    model.finishDraft()
+                    dismiss()
+                }
+                Button("Keep editing", role: .cancel) {}
+            } message: {
+                Text("What you entered for this request is not saved anywhere else.")
+            }
             .overlay {
                 if model.isLoadingOptions && model.projects.isEmpty {
                     ProgressView()

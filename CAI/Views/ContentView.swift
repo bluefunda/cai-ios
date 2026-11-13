@@ -118,10 +118,8 @@ struct AppShell: View {
         .sheet(item: $requestsState.newRequestPrefill) { prefill in
             if let model = requestsState.makeNewRequestModel() {
                 NewChangeRequestView(model: model.applying(prefill)) { created in
-                    if let conversationId = prefill.conversationId {
-                        requestChatLinks.link(conversationId: conversationId, requestId: created.id,
-                                              number: created.requestNumber, title: created.title)
-                    }
+                    // The answer's chat, or the one a restored draft of it kept.
+                    requestChatLinks.linkCreated(created, conversationId: model.linkedConversationId)
                     workspace.navigate(to: .requests(.requests))
                     requestsState.openRequest(id: created.id)
                     Task { await requestsState.changeRequests?.load() }

@@ -198,6 +198,21 @@ final class BFFAPIService {
         try await client.postIgnoringResponse("/odata/disconnect", body: [:])
     }
 
+    // MARK: - One-tap connectors (Apollo.io; cai-bff connectors)
+
+    /// Server names this user connected, on any device, e.g. ["apollo-mcp"].
+    func fetchOneTapConnectors() async throws -> OneTapConnectorsDTO {
+        try await client.get("/connectors/status")
+    }
+
+    func connectOneTapConnector(_ name: String) async throws -> OneTapConnectorsDTO {
+        try await client.post("/connectors/connect", body: ["name": name])
+    }
+
+    func disconnectOneTapConnector(_ name: String) async throws -> OneTapConnectorsDTO {
+        try await client.post("/connectors/disconnect", body: ["name": name])
+    }
+
     // MARK: - Personas
 
     func fetchPersonas() async throws -> [Persona] {

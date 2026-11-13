@@ -14,6 +14,13 @@ enum ChangeRequestViewMode: String, CaseIterable {
     case list, grid
 }
 
+/// The stack a change request's detail was pushed on. Back, and closing it after a
+/// delete, return there — a request opened (or created) from a project returns to that
+/// project, not the Requests list (web #322).
+enum RequestDetailOrigin: Equatable {
+    case requests, project, release
+}
+
 @MainActor
 final class RequestsState: ObservableObject {
     @Published private(set) var changeRequests: ChangeRequestListViewModel?
@@ -24,6 +31,12 @@ final class RequestsState: ObservableObject {
 
     /// The Requests destination's NavigationStack path (change request ids).
     @Published var requestsPath: [String] = []
+    /// The Projects destination's path (a project, then its requests), kept here like
+    /// `requestsPath` so switching to the Assistant and back returns to the same screen.
+    @Published var projectsPath = NavigationPath()
+    /// Goes up when a request is saved or deleted, so lists that aren't the Requests
+    /// destination's own (a project's requests) reload too.
+    @Published var requestsChanged = 0
     @Published var viewMode: ChangeRequestViewMode = .grid
     /// Set by ⌘N (or the toolbar) while the Requests space is active.
     @Published var isCreatingRequest = false
@@ -54,6 +67,7 @@ final class RequestsState: ObservableObject {
         self.services = services
         self.currentUserId = currentUserId
         requestsPath = []
+        projectsPath = NavigationPath()
         githubIssueNotices = [:]
         if userChanged { recents.removeAll() }
 
@@ -79,6 +93,7 @@ final class RequestsState: ObservableObject {
                                          attachmentService: services.attachmentService)
     }
 
+    /// New Request's form, with its draft (per user, and per project when started from one).
     func makeNewRequestModel(lockedProjectId: String? = nil) -> NewChangeRequestViewModel? {
         guard let services else { return nil }
         return NewChangeRequestViewModel(
@@ -88,6 +103,7 @@ final class RequestsState: ObservableObject {
             sources: NewRequestFormSources(admin: services.adminService),
             currentUserId: currentUserId,
             lockedProjectId: lockedProjectId,
+            draftStore: draftStore(projectId: lockedProjectId),
             githubService: services.githubService,
             onGitHubIssueNotice: { [weak self] id, notice in self?.githubIssueNotices[id] = notice }
         )
@@ -103,9 +119,31 @@ final class RequestsState: ObservableObject {
         )
     }
 
+    /// Where New Request keeps its draft. Injectable so tests use their own defaults.
+    var draftDefaults: UserDefaults = .standard
+
+    func draftStore(projectId: String?) -> NewRequestDraftStore? {
+        guard let currentUserId else { return nil }
+        return NewRequestDraftStore(userId: currentUserId, projectId: projectId, defaults: draftDefaults)
+    }
+
     /// Opens a change request on the Requests destination's stack.
     func openRequest(id: String) {
         requestsPath = [id]
+    }
+
+    /// After a request is deleted from its detail: it leaves recently viewed, and the
+    /// lists reload. Back on the Requests list, an archived request's list opens on the
+    /// Archive tab, where it was (web #320); a project's list just drops it.
+    func didDeleteRequest(id: String, wasArchived: Bool, origin: RequestDetailOrigin) async {
+        recents.remove(id: id)
+        requestsChanged += 1
+        if origin == .requests, wasArchived, let changeRequests, changeRequests.archiveTab != .archived {
+            // Changing the tab reloads the list.
+            changeRequests.archiveTab = .archived
+        } else {
+            await changeRequests?.load()
+        }
     }
 
     /// ⌘R and pull-to-refresh: reloads whichever list `destination` shows.

@@ -428,6 +428,11 @@ struct SAPCredentialsConnectRequest: Encodable {
 
 // MARK: - OData connection (OData connector — its own system, separate from ABAPer's)
 
+/// cai-bff's one-tap connectors (Apollo.io): the server names the user connected.
+struct OneTapConnectorsDTO: Codable {
+    let connected: [String]
+}
+
 struct ODataConnectionStatusDTO: Codable {
     let connected: Bool
     let host: String?

@@ -298,6 +298,9 @@ final class ChatManager: ObservableObject {
     @Published var sapHost: String?
     /// The OData connector's own system (separate from ABAPer's), same pattern.
     @Published var odataConnection: ODataConnectionStatusDTO?
+    /// One-tap connectors (Apollo.io) this user connected, by server name — kept
+    /// per user in cai-bff, so the choice follows the user to every device.
+    @Published var connectedOneTapNames: Set<String> = []
 
     /// Server ids "connected" via a simple local flip — no OAuth, no
     /// credentials, just a Connect tap (e.g. Sales Tracker today; reusable
@@ -1001,6 +1004,7 @@ extension ChatManager {
             group.addTask { await self.refreshFigmaConnectionStatus() }
             group.addTask { await self.refreshSAPConnectionStatus() }
             group.addTask { await self.refreshODataConnectionStatus() }
+            group.addTask { await self.refreshOneTapConnectors() }
         }
     }
 
@@ -1261,6 +1265,11 @@ struct MCPServer: Identifiable, Hashable {
     /// server's id to `ChatManager.locallyConnectedServerIDs`, no backend call.
     var isSalesTracker: Bool { displayName.lowercased() == "sales tracker" }
 
+    /// Apollo.io (apollo-mcp): the server holds one shared Apollo sign-in, so there's
+    /// nothing for the user to sign in to — connected with one tap, stored per user in
+    /// cai-bff (`ChatManager.connectedOneTapNames`) like the other connectors.
+    var isApollo: Bool { name == "apollo-mcp" }
+
     var isABAPer: Bool { displayName.lowercased() == "abaper" }
     var isSAPAnalytics: Bool { displayName.lowercased() == "sap analytics" }
     /// odata-mcp (labelled "SAP Analytics"): connected with its own host/credentials form.
@@ -1277,6 +1286,7 @@ struct MCPServer: Identifiable, Hashable {
         // "Reports from your system" — a neutral symbol, not SAP's logo (trademark).
         if isOData || isSAPAnalytics { return "chart.bar.doc.horizontal" }
         if isSalesTracker { return "chart.line.uptrend.xyaxis" }
+        if isApollo { return "person.fill.viewfinder" }
         return "brain.head.profile"
     }
 }

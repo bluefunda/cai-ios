@@ -190,4 +190,33 @@ final class ChatManagerMCPTests: XCTestCase {
         chatManager.currentConversation = conversationA
         XCTAssertTrue(chatManager.enabledMCPServers.isEmpty, "per-conversation tool state must not survive disconnect/logout")
     }
+
+    // MARK: - Apollo.io (per-user one-tap connector)
+
+    func test_apollo_isRecognisedByServerName() {
+        let apollo = MCPServer(id: "9", name: "apollo-mcp", url: "http://apollo-mcp:8009/mcp", description: nil, label: "Apollo.io")
+        XCTAssertTrue(apollo.isApollo)
+        XCTAssertEqual(apollo.connectorIconName, "person.fill.viewfinder")
+
+        let lookalike = MCPServer(id: "x", name: "other-mcp", url: "http://x/mcp", description: nil, label: "Apollo.io")
+        XCTAssertFalse(lookalike.isApollo, "matched by server name, not label")
+    }
+
+    func test_apollo_connectedFollowsTheUsersServerSideConnection() {
+        let chatManager = ChatManager(service: MockChatService())
+        let apollo = MCPServer(id: "9", name: "apollo-mcp", url: "http://apollo-mcp:8009/mcp", description: nil, label: "Apollo.io")
+        chatManager.availableMCPServers = [apollo]
+        // A device-local flip no longer connects it: only the user's cai-bff connection does.
+        let saved = chatManager.locallyConnectedServerIDs
+        defer { chatManager.locallyConnectedServerIDs = saved }
+        chatManager.locallyConnectedServerIDs = ["9"]
+        chatManager.connectedOneTapNames = []
+        XCTAssertFalse(chatManager.connectedMCPServers.contains(where: { $0.id == "9" }))
+
+        chatManager.connectedOneTapNames = ["apollo-mcp"]
+        XCTAssertTrue(chatManager.connectedMCPServers.contains(where: { $0.id == "9" }))
+
+        chatManager.resetConnectorConnections()
+        XCTAssertTrue(chatManager.connectedOneTapNames.isEmpty, "sign-out clears it")
+    }
 }

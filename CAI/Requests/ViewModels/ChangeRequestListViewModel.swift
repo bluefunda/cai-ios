@@ -23,6 +23,10 @@ struct ChangeRequestAdvancedFilters: Equatable {
     var severity: String?
     var requestTypeId: String?
 
+    /// Everyone's requests: a project's list starts here, as on the web (its Filter
+    /// narrows from there), while the Requests destination starts on Me/Me.
+    static let anyone = ChangeRequestAdvancedFilters(ownerIsMe: false, assigneeIsMe: false)
+
     /// Narrowed past the Me/Anyone presets.
     var isCustom: Bool {
         severity != nil || requestTypeId != nil || (!ownerIsMe && ownerId != nil) || (!assigneeIsMe && assigneeId != nil)
@@ -43,7 +47,7 @@ final class ChangeRequestListViewModel: ObservableObject {
             scheduleLoad()
         }
     }
-    @Published var advancedFilters = ChangeRequestAdvancedFilters() {
+    @Published var advancedFilters: ChangeRequestAdvancedFilters {
         didSet {
             guard oldValue != advancedFilters else { return }
             scheduleLoad()
@@ -122,12 +126,23 @@ final class ChangeRequestListViewModel: ObservableObject {
     /// embedded list, nil for the top-level Requests screen.
     private let projectId: String?
 
+    /// What the Filter sheet's Reset returns to, and what counts as unfiltered: Me/Me
+    /// for the Requests destination, anyone for a project's list.
+    let defaultAdvancedFilters: ChangeRequestAdvancedFilters
+
     init(service: ChangeRequestServicing, workflowService: ChangeRequestWorkflowServicing? = nil,
          currentUserId: String?, projectId: String? = nil) {
         self.service = service
         self.workflowService = workflowService
         self.currentUserId = currentUserId
         self.projectId = projectId
+        defaultAdvancedFilters = projectId == nil ? ChangeRequestAdvancedFilters() : .anyone
+        advancedFilters = defaultAdvancedFilters
+    }
+
+    /// The Filter button shows as on: a status, or the people/classification changed.
+    var isFiltered: Bool {
+        statusFilter != nil || advancedFilters != defaultAdvancedFilters
     }
 
     /// True once a load has finished (success or failure) — screens call

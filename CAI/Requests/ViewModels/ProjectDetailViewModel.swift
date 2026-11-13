@@ -16,6 +16,7 @@ final class ProjectDetailViewModel: ObservableObject {
     let changeRequestListModel: ChangeRequestListViewModel
 
     private let projectService: ProjectServicing
+    private let currentUserId: String?
 
     init(
         projectId: String,
@@ -26,12 +27,21 @@ final class ProjectDetailViewModel: ObservableObject {
     ) {
         self.projectId = projectId
         self.projectService = projectService
+        self.currentUserId = currentUserId
         self.changeRequestListModel = ChangeRequestListViewModel(
             service: changeRequestService,
             workflowService: workflowService,
             currentUserId: currentUserId,
             projectId: projectId
         )
+    }
+
+    /// The Filter sheet's people after Me: the project's team, without you (Me covers you),
+    /// as the web's project Filter offers them.
+    var filterPeople: [UserOption] {
+        (project?.team ?? [])
+            .filter { !$0.id.isEmpty && $0.id != currentUserId }
+            .map { UserOption(id: $0.id, name: $0.name) }
     }
 
     /// Deletes the project; false (with `deleteError`) when the backend refuses, e.g. while

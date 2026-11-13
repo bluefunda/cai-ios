@@ -22,7 +22,7 @@ struct ReleasesListView: View {
                 }
             }
             .navigationDestination(for: String.self) { id in
-                ChangeRequestDetailView(changeRequestId: id, state: state)
+                ChangeRequestDetailView(changeRequestId: id, state: state, origin: .release)
             }
         }
     }

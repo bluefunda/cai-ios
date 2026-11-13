@@ -20,6 +20,9 @@ struct AgentsListView: View {
     @State private var isConnectingGitHub = false
     @State private var githubConnectError: String?
     @State private var figmaConnect = ConnectorConnectState()
+    /// The one-tap connector (Apollo.io) being connected, and its error.
+    @State private var oneTapConnecting: String?
+    @State private var oneTapError: String?
 
     /// Every MCP server the backend returns — unfiltered (`availableMCPServers`,
     /// not `visibleMCPServers`, which hides ABAPer/SAP specifically for the
@@ -87,12 +90,32 @@ struct AgentsListView: View {
                             .disabled(figmaConnect.isConnecting)
                             .bfPointerHover()
                         }
+                    } else if server.isApollo {
+                        if chatManager.connectedOneTapNames.contains(server.name) {
+                            NavigationLink {
+                                SalesTrackerConnectionView(server: server)
+                            } label: {
+                                connectorRow(server, connected: true)
+                            }
+                            .bfPointerHover()
+                        } else {
+                            // No sign-in: one tap records it for this user in cai-bff,
+                            // so it's connected on every device.
+                            Button {
+                                Task { await connectOneTap(server) }
+                            } label: {
+                                connectorRow(server, connected: false, isBusy: oneTapConnecting == server.id)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(oneTapConnecting != nil)
+                            .bfPointerHover()
+                        }
                     } else if server.isSalesTracker {
                         if chatManager.locallyConnectedServerIDs.contains(server.id) {
                             // Already connected — push straight to the
                             // Disconnect detail screen, mirroring GitHub.
                             NavigationLink {
-                                SalesTrackerConnectionView()
+                                SalesTrackerConnectionView(server: server)
                             } label: {
                                 connectorRow(server, connected: true)
                             }
@@ -200,6 +223,11 @@ struct AgentsListView: View {
         } message: {
             Text(figmaConnect.error ?? "")
         }
+        .alert("Connect", isPresented: .constant(oneTapError != nil)) {
+            Button("OK") { oneTapError = nil }
+        } message: {
+            Text(oneTapError ?? "")
+        }
     }
 
     @ViewBuilder
@@ -279,6 +307,18 @@ struct AgentsListView: View {
             await chatManager.refreshFigmaConnectionStatus()
         } catch {
             figmaConnect.error = "Failed to connect Figma. Please try again."
+        }
+    }
+
+    /// A one-tap connector (Apollo.io): recorded for this user in cai-bff.
+    fileprivate func connectOneTap(_ server: MCPServer) async {
+        oneTapError = nil
+        oneTapConnecting = server.id
+        defer { oneTapConnecting = nil }
+        do {
+            try await chatManager.setOneTapConnector(server, connected: true)
+        } catch {
+            oneTapError = "Failed to connect \(server.displayName). Please try again."
         }
     }
 }

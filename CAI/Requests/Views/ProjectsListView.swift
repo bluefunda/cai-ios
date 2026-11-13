@@ -9,7 +9,9 @@ struct ProjectsListView: View {
     var navigationControl: ShellNavigationControl = .none
 
     var body: some View {
-        NavigationStack {
+        // The path lives in RequestsState, so leaving for the Assistant and coming back
+        // returns to the project (or request) that was open.
+        NavigationStack(path: $state.projectsPath) {
             Group {
                 if let model = state.projects {
                     ProjectsListScreen(model: model, state: state, navigationControl: navigationControl)
@@ -25,7 +27,7 @@ struct ProjectsListView: View {
                 ProjectDetailView(projectId: project.id, state: state)
             }
             .navigationDestination(for: String.self) { id in
-                ChangeRequestDetailView(changeRequestId: id, state: state)
+                ChangeRequestDetailView(changeRequestId: id, state: state, origin: .project)
             }
         }
     }

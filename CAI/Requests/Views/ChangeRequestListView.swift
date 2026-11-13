@@ -33,11 +33,8 @@ private struct ChangeRequestListScreen: View {
     let navigationControl: ShellNavigationControl
 
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.requestChatLinks) private var requestChatLinks
     @State private var showFilterSheet = false
-
-    private var isFiltered: Bool {
-        model.statusFilter != nil || model.advancedFilters != ChangeRequestAdvancedFilters()
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,7 +52,7 @@ private struct ChangeRequestListScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                FilterToolbarButton(isActive: isFiltered) { showFilterSheet = true }
+                FilterToolbarButton(isActive: model.isFiltered) { showFilterSheet = true }
                 if sizeClass != .compact {
                     ViewModeToolbarPicker(viewMode: $state.viewMode)
                 }
@@ -71,6 +68,8 @@ private struct ChangeRequestListScreen: View {
         .sheet(isPresented: $state.isCreatingRequest) {
             if let newModel = state.makeNewRequestModel() {
                 NewChangeRequestView(model: newModel) { created in
+                    // A restored draft that started from an assistant answer keeps its chat.
+                    requestChatLinks?.linkCreated(created, conversationId: newModel.linkedConversationId)
                     Task { await model.load() }
                     state.openRequest(id: created.id)
                 }
@@ -216,6 +215,8 @@ struct RequestRowLink<Content: View>: View {
 struct InlineErrorBanner: View {
     let message: String
     let onRetry: () -> Void
+    /// Shows a close button when set, so the banner can be put away without retrying.
+    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -229,6 +230,17 @@ struct InlineErrorBanner: View {
             Button("Retry", action: onRetry)
                 .font(RQFont.meta.weight(.semibold))
                 .bfPointerHover()
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(RQFont.meta.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Dismiss")
+                .bfPointerHover()
+                .accessibilityIdentifier("requests.errorBanner.dismiss")
+            }
         }
         .padding(.vertical, 6)
     }
