@@ -265,6 +265,7 @@ final class RequestsViewModelTests: XCTestCase {
         await model.move("32", to: .completed)
 
         XCTAssertNil(model.error)
+        XCTAssertNotNil(model.notice, "says the stage didn't change")
         XCTAssertEqual(services.log, ["status:completed"])
     }
 
@@ -801,5 +802,20 @@ extension RequestsViewModelTests {
         let team = model.project?.team ?? []
         XCTAssertEqual(model.filterPeople.map(\.id), team.map(\.id).filter { $0 != "u-1" })
         XCTAssertFalse(model.filterPeople.contains { $0.id == "u-1" }, "Me covers you")
+    }
+
+    // trm-gw answered the stage refusal as a bare 500 (no workflow_enforced code):
+    // the drop still keeps its new status, with a note instead of an error.
+    func test_boardDrop_anyStageRefusalKeepsTheStatusWithANote() async {
+        let services = StageFlowServices()
+        services.moveError = RequestsAPIError.serverError(500, "")
+        let model = ChangeRequestListViewModel(service: services, workflowService: services, currentUserId: "u-1")
+        await model.load()
+
+        await model.move("32", to: .completed)
+
+        XCTAssertNil(model.error)
+        XCTAssertEqual(model.notice?.hasPrefix("Moved "), true)
+        XCTAssertEqual(services.log, ["status:completed"])
     }
 }

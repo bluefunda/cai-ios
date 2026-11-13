@@ -165,6 +165,10 @@ struct ChangeRequestListBody: View {
                     InlineErrorBanner(message: error) { Task { await model.load() } }
                         .padding(.horizontal, BFSpacing._4)
                         .padding(.top, BFSpacing._2)
+                } else if let notice = model.notice {
+                    InlineNoticeBanner(message: notice) { model.notice = nil }
+                        .padding(.horizontal, BFSpacing._4)
+                        .padding(.top, BFSpacing._2)
                 }
                 ChangeRequestGridView(requests: model.filteredChangeRequests, moving: model.moving) { id, status in
                     Task { await model.move(id, to: status) }
@@ -241,6 +245,34 @@ struct InlineErrorBanner: View {
                 .bfPointerHover()
                 .accessibilityIdentifier("requests.errorBanner.dismiss")
             }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// Something to know that isn't an error — e.g. a board drop that moved the status
+/// but not the stage.
+struct InlineNoticeBanner: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(BFColor.primary)
+            Text(message)
+                .font(RQFont.meta)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+            Spacer(minLength: 8)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(RQFont.meta.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Dismiss")
+            .bfPointerHover()
         }
         .padding(.vertical, 6)
     }
