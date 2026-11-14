@@ -4,7 +4,7 @@ import XCTest
 // MARK: - New Request Draft Tests
 // The web's newRequestDraft.js (#322): a half-filled New request is kept per user and per
 // project, restored with its choices, expires after a week, and is cleared on Create,
-// Discard and Cancel. A form started from an assistant answer keeps its chat.
+// Discard draft and Cancel > Discard, and kept by Cancel > Save as draft. A form started from an assistant answer keeps its chat.
 
 @MainActor
 final class NewRequestDraftTests: XCTestCase {
@@ -156,6 +156,23 @@ final class NewRequestDraftTests: XCTestCase {
         XCTAssertNil(store().read())
         model.saveDraft()
         XCTAssertNil(store().read())
+    }
+
+    func test_cancelSaveAsDraft_keepsTheLatestDraft() async {
+        let model = makeModel()
+        await model.loadOptions()
+        model.requestName = "Add index"
+        model.saveDraft()
+        model.description = "Latest edit"
+
+        model.keepDraft()
+        XCTAssertEqual(store().read()?.description, "Latest edit")
+
+        let reopened = makeModel()
+        await reopened.loadOptions()
+        XCTAssertTrue(reopened.isDraftRestored)
+        XCTAssertEqual(reopened.requestName, "Add index")
+        XCTAssertEqual(reopened.description, "Latest edit")
     }
 
     func test_projectDraft_keepsItsLockedProject() async {

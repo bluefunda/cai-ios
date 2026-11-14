@@ -146,7 +146,8 @@ final class NewChangeRequestViewModel: ObservableObject {
     let lockedProjectId: String?
 
     // The draft (NewRequestDraft): restored once the options load, saved as the form
-    // changes (the view calls `saveDraft()`), cleared on Create, Discard or Cancel.
+    // changes (the view calls `saveDraft()`), kept by Cancel > Save as draft, cleared on
+    // Create, Discard draft or Cancel > Discard.
     private let draftStore: NewRequestDraftStore?
     /// The assistant answer this form started from, if any.
     private var prefill: NewRequestPrefill?
@@ -326,6 +327,11 @@ final class NewChangeRequestViewModel: ObservableObject {
         guard isDraftReady, !isDraftFinished, let draftStore else { return }
         let draft = currentDraft
         if draft.hasContent { draftStore.save(draft) } else { draftStore.clear() }
+    }
+
+    /// Cancel > Save as draft: the form closes with its latest state kept, restored next open.
+    func keepDraft() {
+        saveDraft()
     }
 
     /// Created, or cancelled on purpose: the draft has done its job.

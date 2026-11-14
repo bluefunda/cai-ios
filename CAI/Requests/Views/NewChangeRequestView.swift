@@ -108,7 +108,7 @@ struct NewChangeRequestView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    // Cancel throws the draft away, after asking when there's something to lose.
+                    // Cancel asks whether to save the draft or discard it when there's something to lose.
                     Button("Cancel") {
                         if model.currentDraft.hasContent {
                             confirmCancel = true
@@ -143,14 +143,18 @@ struct NewChangeRequestView: View {
             }
             .task { await model.loadOptions() }
             .onChange(of: model.currentDraft) { _, _ in model.saveDraft() }
-            .confirmationDialog("Discard this draft?", isPresented: $confirmCancel, titleVisibility: .visible) {
+            .confirmationDialog("Save this request as a draft?", isPresented: $confirmCancel, titleVisibility: .visible) {
+                Button("Save as draft") {
+                    model.keepDraft()
+                    dismiss()
+                }
                 Button("Discard", role: .destructive) {
                     model.finishDraft()
                     dismiss()
                 }
                 Button("Keep editing", role: .cancel) {}
             } message: {
-                Text("What you entered for this request is not saved anywhere else.")
+                Text("A saved draft comes back the next time you start a new request. Discarding it can't be undone.")
             }
             .overlay {
                 if model.isLoadingOptions && model.projects.isEmpty {
