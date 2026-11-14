@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.20.0](https://github.com/bluefunda/cai-ios/compare/v2.19.1...v2.20.0) (2026-11-14)
+
+
+### Features
+
+* Requests parity with cai web 1.38-1.39 and per-user Apollo.io connect ([a97e63b](https://github.com/bluefunda/cai-ios/commit/a97e63b7a220d4b700ecfbaf9b41c41d5e25ce83))
+* Requests parity with cai web 1.38–1.39 and per-user Apollo.io connect ([2768204](https://github.com/bluefunda/cai-ios/commit/276820418d3a300277883709db7211df199eae15))
+* **requests:** Cancel on New request offers Save as draft ([a8ce543](https://github.com/bluefunda/cai-ios/commit/a8ce543fe74f75348443be82098f0b75de5fe929))
+
+
+### Bug Fixes
+
+* **requests:** a refused stage move keeps the board move, with a note ([0aea746](https://github.com/bluefunda/cai-ios/commit/0aea7464f9960e6eb8cd0ed8380b0a20d1e501a8))
+
 ## [2.19.1](https://github.com/bluefunda/cai-ios/compare/v2.19.0...v2.19.1) (2026-11-12)
 
 
