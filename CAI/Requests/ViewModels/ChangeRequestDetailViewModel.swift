@@ -17,6 +17,10 @@ final class ChangeRequestDetailViewModel: ObservableObject {
     @Published private(set) var isUploadingFile = false
     @Published private(set) var isSaving = false
     @Published var error: String?
+    /// Retry for `error` when it belongs to one action (a file upload or delete): Retry
+    /// repeats that action instead of reloading the whole request. Only used while the
+    /// banner still shows that same message.
+    private var errorRetry: (message: String, run: () async -> Void)?
     /// The approval workflow; nil until loaded, or when the endpoint isn't there — both
     /// mean the legacy stage buttons, as on the web.
     @Published private(set) var workflow: RQWorkflow?
@@ -104,14 +108,18 @@ final class ChangeRequestDetailViewModel: ObservableObject {
         }
     }
 
+    /// Uploads a file picked from the document picker. Opens its security scope here, so a
+    /// Retry after a failure can read the file again.
     func uploadFile(url: URL) async {
         guard let projectId = changeRequest?.projectId else { return }
         isUploadingFile = true
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         do {
             let file = try await crFileService.upload(projectId: projectId, changeRequestId: changeRequestId, fileURL: url)
             crFiles.append(file)
         } catch {
-            self.error = error.localizedDescription
+            fail(error.localizedDescription) { [weak self] in await self?.uploadFile(url: url) }
         }
         isUploadingFile = false
     }
@@ -123,8 +131,27 @@ final class ChangeRequestDetailViewModel: ObservableObject {
             try await crFileService.delete(projectId: projectId, changeRequestId: changeRequestId, fileName: file.name)
             crFiles.removeAll { $0.id == file.id }
         } catch {
-            self.error = error.localizedDescription
+            fail(error.localizedDescription) { [weak self] in await self?.deleteFile(file) }
         }
+    }
+
+    private func fail(_ message: String, retry: @escaping () async -> Void) {
+        error = message
+        errorRetry = (message, retry)
+    }
+
+    /// The error banner's Retry: the failed file action again, or else a full reload.
+    func retryAfterError() async {
+        let retry = errorRetry?.message == error ? errorRetry?.run : nil
+        error = nil
+        errorRetry = nil
+        if let retry { await retry() } else { await load() }
+    }
+
+    /// The error banner's dismiss: hides it and forgets its retry.
+    func dismissError() {
+        error = nil
+        errorRetry = nil
     }
 
     /// People @mentioned in `body` (typed as "@Name" from `mentionCandidates`) are linked

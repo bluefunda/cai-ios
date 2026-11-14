@@ -5,8 +5,12 @@ import SwiftUI
 /// committed to the view model on Apply so Owner/Assignee/Severity/Type batch into a single
 /// refetch instead of one per field. Priority, Type and the people come from the same lists
 /// the web's filter uses (severities, request types, users), and are sent as ids.
+///
+/// A project's list passes `people` (its team, without you): those are offered after Me,
+/// as the web's project Filter does, instead of every user.
 struct ChangeRequestFilterSheet: View {
     @ObservedObject var model: ChangeRequestListViewModel
+    var people: [UserOption]? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.requestsServices) private var services
 
@@ -56,7 +60,7 @@ struct ChangeRequestFilterSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Reset") {
                         status = nil
-                        draft = ChangeRequestAdvancedFilters()
+                        draft = model.defaultAdvancedFilters
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -77,13 +81,15 @@ struct ChangeRequestFilterSheet: View {
     }
 
     private func loadOptions() async {
+        if let people { users = people }
         guard let reference = services?.referenceDataService, severities.isEmpty else { return }
         async let sv = try? reference.severities(forceRefresh: false)
         async let rt = try? reference.requestTypes(forceRefresh: false)
-        async let us = try? reference.users(forceRefresh: false)
-        let (loadedSeverities, loadedTypes, loadedUsers) = await (sv, rt, us)
+        let (loadedSeverities, loadedTypes) = await (sv, rt)
         severities = loadedSeverities ?? []
         requestTypes = loadedTypes ?? []
+        guard people == nil else { return }
+        let loadedUsers = try? await reference.users(forceRefresh: false)
         users = (loadedUsers ?? []).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }

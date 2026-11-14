@@ -262,6 +262,13 @@ final class RequestChatLinks {
         persist()
     }
 
+    /// Links a request created from an assistant answer — or from a restored draft that
+    /// started from one — to that chat. Nothing to do without one.
+    func linkCreated(_ created: ChangeRequest, conversationId: String?) {
+        guard let conversationId else { return }
+        link(conversationId: conversationId, requestId: created.id, number: created.requestNumber, title: created.title)
+    }
+
     func link(forConversation conversationId: String) -> RequestChatLink? {
         links[conversationId]
     }
@@ -314,8 +321,10 @@ enum RequestPromptBuilder {
     }
 }
 
-/// New Request prefilled from an assistant answer ("Create change request…"): the title
-/// from the chat's title, the description from the answer as plain text.
+/// New Request prefilled from an assistant answer ("Create change request…"), after the
+/// web's requestChatLinks.js (#322): the name from the answer's first heading that says
+/// what it's about, else the chat's title, else the answer's first line; the description
+/// is the answer with its sections kept, shortened when long.
 struct NewRequestPrefill: Identifiable, Equatable {
     let id = UUID()
     let title: String
@@ -324,39 +333,134 @@ struct NewRequestPrefill: Identifiable, Equatable {
     let conversationId: String?
 
     static let titleLimit = 120
+    /// Longer answers are cut near here, at a line break; the linked chat keeps the rest.
+    static let descriptionLimit = 4000
 
     init(chatTitle: String?, answerMarkdown: String, conversationId: String?) {
-        let plain = Self.plainText(answerMarkdown)
+        let description = Self.requestDescription(answerMarkdown)
         let chat = chatTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        // A chat not yet titled is "New Chat"; the answer's first line says more.
-        let fallback = plain.split(separator: "\n").first.map(String.init) ?? ""
-        title = String((chat.isEmpty || chat == "New Chat" ? fallback : chat).prefix(Self.titleLimit))
-        description = plain
+        // A chat not yet titled is "New Chat"; the answer says more.
+        let fromChat = chat == "New Chat" ? "" : chat
+        var firstLine = description.split(separator: "\n", omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        if firstLine.hasSuffix(":") { firstLine.removeLast() }
+        let name = [Self.firstHeading(answerMarkdown), fromChat, firstLine].first { !$0.isEmpty } ?? ""
+        title = String(name.prefix(Self.titleLimit))
+        self.description = Self.shorten(description, linked: conversationId != nil)
         self.conversationId = conversationId
+    }
+
+    // MARK: Markdown to text (requestChatLinks.js plainText, line by line)
+
+    private static func regex(_ pattern: String) -> NSRegularExpression {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: pattern)
+    }
+
+    private static let fence = regex(#"^\s*(```|~~~)"#)
+    private static let rule = regex(#"^\s*([-*_])(\s*\1){2,}\s*$"#)
+    private static let quote = regex(#"^\s*>+\s?"#)
+    private static let headingMark = regex(#"^\s*#{1,6}\s+"#)
+    private static let headingLine = regex(#"^\s*#{1,6}\s+(.*)$"#)
+    private static let listItem = regex(#"^\s*([-*+]|\d+[.)])\s+"#)
+    /// Inline marks, in the web's order: images, links, bold, italics, strikethrough, code.
+    private static let inline: [(NSRegularExpression, String)] = [
+        (regex(#"!\[([^\]]*)\]\([^)]*\)"#), "$1"),
+        (regex(#"\[([^\]]+)\]\([^)]*\)"#), "$1"),
+        (regex(#"(\*\*|__)(.+?)\1"#), "$2"),
+        (regex(#"(\*|_)(\S.*?)\1"#), "$2"),
+        (regex(#"~~(.+?)~~"#), "$1"),
+        (regex(#"`([^`]*)`"#), "$1"),
+    ]
+
+    private static func matches(_ regex: NSRegularExpression, _ text: String) -> NSTextCheckingResult? {
+        regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
+    }
+
+    private static func replacing(_ regex: NSRegularExpression, in text: String, with template: String) -> String {
+        regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: template)
+    }
+
+    /// One markdown line as readable text: marks dropped, a list item as "- ", fences and
+    /// rules as nothing.
+    private static func lineText(_ line: String) -> String {
+        if matches(fence, line) != nil || matches(rule, line) != nil { return "" }
+        var text = replacing(headingMark, in: replacing(quote, in: line, with: ""), with: "")
+        let item = matches(listItem, text)
+        if let item, let range = Range(item.range, in: text) { text.removeSubrange(range) }
+        for (pattern, template) in inline { text = replacing(pattern, in: text, with: template) }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !text.isEmpty && item != nil ? "- \(text)" : text
     }
 
     /// Markdown to readable text: formatting marks dropped, paragraphs and list items
     /// kept on their own lines.
     static func plainText(_ markdown: String) -> String {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        guard let attributed = try? AttributedString(markdown: markdown, options: options) else {
-            return markdown.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        var lines: [String] = []
-        var lastIdentity: Int?
-        for run in attributed.runs {
-            let text = String(attributed[run.range].characters)
-            let identity = run.presentationIntent?.components.first?.identity
-            if identity != lastIdentity || lines.isEmpty {
-                let prefix = run.presentationIntent?.components.contains { if case .listItem = $0.kind { return true }; return false } == true ? "- " : ""
-                lines.append(prefix + text)
-                lastIdentity = identity
-            } else {
-                lines[lines.count - 1] += text
+        markdown.components(separatedBy: "\n").map(lineText).filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    /// Markdown to a change request description: like `plainText`, but the answer's shape
+    /// stays readable — paragraphs keep a blank line between them and a heading becomes a
+    /// "Heading:" line, so "## Problem" / "## Fix" read as sections.
+    static func requestDescription(_ markdown: String) -> String {
+        var blocks: [String] = []
+        var blank = false
+        var afterHeading = false
+        for line in markdown.components(separatedBy: "\n") {
+            let heading = matches(headingLine, line).flatMap { Range($0.range(at: 1), in: line) }.map { String(line[$0]) }
+            let text = lineText(heading ?? line)
+            if text.isEmpty {
+                blank = !blocks.isEmpty
+                continue
             }
+            if heading != nil {
+                if !blocks.isEmpty { blocks.append("") }
+                blocks.append(text.last.map { ":?!.".contains($0) } == true ? text : "\(text):")
+            } else {
+                // A section's text follows its heading directly.
+                if blank && !afterHeading { blocks.append("") }
+                blocks.append(text)
+            }
+            afterHeading = heading != nil
+            blank = false
         }
-        return lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            .joined(separator: "\n")
+        return blocks.joined(separator: "\n")
+    }
+
+    /// Long answers are cut at a line break near the limit; the chat keeps the rest. The
+    /// cut never leaves a section heading ("Expected outcome:") with nothing under it.
+    static func shorten(_ text: String, linked: Bool) -> String {
+        guard text.count > descriptionLimit else { return text }
+        let cut = String(text.prefix(descriptionLimit))
+        var kept = cut
+        if let at = cut.lastIndex(of: "\n"), cut.distance(from: cut.startIndex, to: at) > descriptionLimit / 2 {
+            kept = String(cut[..<at])
+        }
+        var lines = kept.components(separatedBy: "\n")
+        while lines.count > 1, let last = lines.last,
+              last.trimmingCharacters(in: .whitespaces).isEmpty || last.hasSuffix(":") {
+            lines.removeLast()
+        }
+        var result = lines.joined(separator: "\n")
+        while result.last?.isWhitespace == true { result.removeLast() }
+        let note = linked ? "(Shortened. The full answer is in the linked chat.)" : "(Shortened.)"
+        return "\(result)\n\n\(note)"
+    }
+
+    /// Headings that name a section, not the subject: not a request name.
+    private static let genericHeading = try! NSRegularExpression(
+        pattern: "^(summary|overview|answer|solution|steps|explanation|conclusion|results?|introduction|background|notes?|details|analysis|recommendations?|next steps)$",
+        options: .caseInsensitive)
+
+    /// The answer's first heading that says what it is about, if any.
+    static func firstHeading(_ markdown: String) -> String {
+        for line in markdown.components(separatedBy: "\n") {
+            guard let match = matches(headingLine, line), let range = Range(match.range(at: 1), in: line) else { continue }
+            var text = lineText(String(line[range]))
+            if let last = text.last, last == ":" || last == "." { text.removeLast() }
+            text = text.trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty && matches(genericHeading, text) == nil { return text }
+        }
+        return ""
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }

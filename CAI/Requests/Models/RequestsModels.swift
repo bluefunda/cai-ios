@@ -99,6 +99,10 @@ struct ChangeRequest: Identifiable {
     /// request with no stages (created without a template) has nothing to be past.
     var isAtFirstStage: Bool { currentStage.map { $0.order == 1 } ?? true }
 
+    /// Delete is offered at the first stage, or on an archived request at any stage — so
+    /// a project's requests can be archived, deleted, and the project emptied (web #320).
+    var canDelete: Bool { isAtFirstStage || isArchived }
+
     /// Prefers the real `createdAt` field; falls back to the earliest timeline entry only if
     /// that's ever absent (defensive — trm's frontend suggests it might not always be sent).
     var submittedAt: Date? {
@@ -477,6 +481,8 @@ struct RQComment: Identifiable {
     let id: String
     let bodyHTML: String
     let authorName: String?
+    /// The author's profile picture (`user.ProfileImage`), shown beside the comment.
+    var authorImageURL: String? = nil
     let createdAt: Date?
     let attachments: [RQAttachment]
 
@@ -501,6 +507,7 @@ extension RQComment: Decodable {
     }
     private enum UserKeys: String, CodingKey {
         case name
+        case profileImage, capitalizedProfileImage = "ProfileImage"
     }
 
     init(from decoder: Decoder) throws {
@@ -512,6 +519,9 @@ extension RQComment: Decodable {
         createdAt = (try? container.decodeIfPresent(Date.self, forKey: .createdAt)) ?? nil
         if let userContainer = try? container.nestedContainer(keyedBy: UserKeys.self, forKey: .user) {
             authorName = (try? userContainer.decodeIfPresent(String.self, forKey: .name)) ?? nil
+            // Both spellings, as the web reads it (detailModel.js).
+            authorImageURL = ((try? userContainer.decodeIfPresent(String.self, forKey: .capitalizedProfileImage)) ?? nil)
+                ?? ((try? userContainer.decodeIfPresent(String.self, forKey: .profileImage)) ?? nil)
         } else {
             authorName = nil
         }

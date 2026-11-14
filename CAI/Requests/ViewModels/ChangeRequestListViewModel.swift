@@ -23,6 +23,10 @@ struct ChangeRequestAdvancedFilters: Equatable {
     var severity: String?
     var requestTypeId: String?
 
+    /// Everyone's requests: a project's list starts here, as on the web (its Filter
+    /// narrows from there), while the Requests destination starts on Me/Me.
+    static let anyone = ChangeRequestAdvancedFilters(ownerIsMe: false, assigneeIsMe: false)
+
     /// Narrowed past the Me/Anyone presets.
     var isCustom: Bool {
         severity != nil || requestTypeId != nil || (!ownerIsMe && ownerId != nil) || (!assigneeIsMe && assigneeId != nil)
@@ -34,6 +38,8 @@ final class ChangeRequestListViewModel: ObservableObject {
     @Published private(set) var changeRequests: [ChangeRequest] = []
     @Published private(set) var isLoading = false
     @Published var error: String?
+    /// A board drop that changed the status but not the stage, said as a note.
+    @Published var notice: String?
 
     /// Server-side facets — changing either re-queries the server (matching trm's own
     /// architecture for these fields).
@@ -43,7 +49,7 @@ final class ChangeRequestListViewModel: ObservableObject {
             scheduleLoad()
         }
     }
-    @Published var advancedFilters = ChangeRequestAdvancedFilters() {
+    @Published var advancedFilters: ChangeRequestAdvancedFilters {
         didSet {
             guard oldValue != advancedFilters else { return }
             scheduleLoad()
@@ -122,12 +128,23 @@ final class ChangeRequestListViewModel: ObservableObject {
     /// embedded list, nil for the top-level Requests screen.
     private let projectId: String?
 
+    /// What the Filter sheet's Reset returns to, and what counts as unfiltered: Me/Me
+    /// for the Requests destination, anyone for a project's list.
+    let defaultAdvancedFilters: ChangeRequestAdvancedFilters
+
     init(service: ChangeRequestServicing, workflowService: ChangeRequestWorkflowServicing? = nil,
          currentUserId: String?, projectId: String? = nil) {
         self.service = service
         self.workflowService = workflowService
         self.currentUserId = currentUserId
         self.projectId = projectId
+        defaultAdvancedFilters = projectId == nil ? ChangeRequestAdvancedFilters() : .anyone
+        advancedFilters = defaultAdvancedFilters
+    }
+
+    /// The Filter button shows as on: a status, or the people/classification changed.
+    var isFiltered: Bool {
+        statusFilter != nil || advancedFilters != defaultAdvancedFilters
     }
 
     /// True once a load has finished (success or failure) — screens call
@@ -184,12 +201,15 @@ final class ChangeRequestListViewModel: ObservableObject {
     /// The board's drag and drop, as the web's Grid view does it on drop
     /// (changeRequestUpdateFunc → updatestatus): the status update, then the matching stage
     /// move (see `boardStageTarget`), then a reload so the card lands in its new column.
-    /// With workflow enforcement on, the backend refuses the stage move; the web ignores
-    /// that, and so does this.
+    /// Only the status update can fail the move: a refused stage move (workflow
+    /// enforcement answers 409 workflow_enforced, which trm-gw turned into a bare 500)
+    /// keeps the new status with the stage unchanged, as on trm and the web, and says so
+    /// in `notice`.
     func move(_ id: String, to status: ChangeRequestStatus) async {
         guard moving[id] == nil,
               let current = changeRequests.first(where: { $0.id == id }), current.status != status else { return }
         moving[id] = status
+        notice = nil
         defer { moving[id] = nil }
         do {
             try await service.update(ChangeRequestUpdatePayload(
@@ -198,14 +218,21 @@ final class ChangeRequestListViewModel: ObservableObject {
                 updatedBy: currentUserId ?? "",
                 status: status.rawValue
             ))
+            var stageMoved = true
             if let workflowService, let userId = currentUserId, let numericId = Int(id),
                let stage = current.boardStageTarget(for: status) {
                 do {
                     try await workflowService.moveStage(StageUpdatePayload(
                         stage: stage, changeRequestId: numericId, updatedBy: userId))
-                } catch RequestsAPIError.rejected(_, "workflow_enforced", _) {}
+                } catch {
+                    stageMoved = false
+                }
             }
             await load()
+            if !stageMoved {
+                notice = "Moved \(current.requestNumber) to \(status.style.label). " +
+                    "Its stage didn't change: it may need approvals first."
+            }
         } catch {
             // Reload first: load() clears the error.
             await load()

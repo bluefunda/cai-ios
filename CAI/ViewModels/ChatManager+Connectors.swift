@@ -33,6 +33,7 @@ extension ChatManager {
             if server.isFigma { return connectedFigma }
             if server.isABAPer { return connectedSAP }
             if server.isOData { return odataConnection?.connected == true }
+            if server.isApollo { return connectedOneTapNames.contains(server.name) }
             return locallyConnectedServerIDs.contains(server.id)
         }
     }
@@ -76,6 +77,7 @@ extension ChatManager {
         connectedSAP = false
         sapHost = nil
         odataConnection = nil
+        connectedOneTapNames = []
         locallyConnectedServerIDs = []
     }
 
@@ -101,6 +103,46 @@ extension ChatManager {
             odataConnection = try await api.fetchODataConnectionStatus()
         } catch {
             print("[ChatManager] refreshODataConnectionStatus error: \(error)")
+        }
+    }
+
+    /// Every connector's status again — connections are per user, so one made on
+    /// another device (or the web) since the app was last active shows up on
+    /// return, and new chats send that agent (cai web refreshes on tab focus).
+    func refreshConnectorConnections() async {
+        guard apiService != nil else { return }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.refreshGitHubConnectionStatus() }
+            group.addTask { await self.refreshFigmaConnectionStatus() }
+            group.addTask { await self.refreshSAPConnectionStatus() }
+            group.addTask { await self.refreshODataConnectionStatus() }
+            group.addTask { await self.refreshOneTapConnectors() }
+        }
+    }
+
+    /// One-tap connectors' status (Apollo.io), same pattern as OData's. A backend
+    /// without them answers 404, which leaves them not connected.
+    func refreshOneTapConnectors() async {
+        guard let api = apiService else { return }
+        do {
+            connectedOneTapNames = Set(try await api.fetchOneTapConnectors().connected)
+        } catch {
+            print("[ChatManager] refreshOneTapConnectors error: \(error)")
+        }
+    }
+
+    /// Connects or disconnects a one-tap connector for this user (cai-bff), then
+    /// turns its tools on or off for the current chat. Throws so the caller can say so.
+    func setOneTapConnector(_ server: MCPServer, connected: Bool) async throws {
+        guard let api = apiService else { return }
+        let status = connected
+            ? try await api.connectOneTapConnector(server.name)
+            : try await api.disconnectOneTapConnector(server.name)
+        connectedOneTapNames = Set(status.connected)
+        if connected {
+            enabledMCPServers.insert(server.id)
+        } else {
+            enabledMCPServers.remove(server.id)
         }
     }
 

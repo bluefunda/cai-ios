@@ -11,13 +11,15 @@ import UniformTypeIdentifiers
 struct ChangeRequestDetailView: View {
     let changeRequestId: String
     @ObservedObject var state: RequestsState
+    /// Which stack it was pushed on: back (and after a delete) returns there.
+    var origin: RequestDetailOrigin = .requests
 
     @StateObject private var box = ViewModelBox()
 
     var body: some View {
         Group {
             if let model = box.model {
-                DetailBody(model: model, state: state)
+                DetailBody(model: model, state: state, origin: origin)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -66,6 +68,7 @@ enum ChangeRequestDetailTab: String, CaseIterable, Identifiable {
 private struct DetailBody: View {
     @ObservedObject var model: ChangeRequestDetailViewModel
     @ObservedObject var state: RequestsState
+    let origin: RequestDetailOrigin
 
     @State private var selectedTab: ChangeRequestDetailTab = .details
     @State private var showEditSheet = false
@@ -138,10 +141,13 @@ private struct DetailBody: View {
             ) {
                 Button("Delete", role: .destructive) {
                     Task {
+                        let wasArchived = model.changeRequest?.isArchived == true
                         if await model.delete() {
-                            state.recents.remove(id: model.changeRequestId)
-                            await state.changeRequests?.load()
+                            // Back where it was opened from (a project pops back to it);
+                            // an archived request's list opens on Archive.
                             dismiss()
+                            await state.didDeleteRequest(
+                                id: model.changeRequestId, wasArchived: wasArchived, origin: origin)
                         }
                     }
                 }
@@ -159,6 +165,7 @@ private struct DetailBody: View {
             // Unarchive, status, edits and stage moves show in the list (and the right
             // Active/Archive tab) without a refresh.
             .onChange(of: model.savedChanges) { _, _ in
+                state.requestsChanged += 1
                 Task { await state.changeRequests?.load() }
             }
             .onChange(of: selectedTab) { _, tab in
@@ -180,10 +187,10 @@ private struct DetailBody: View {
                 }
 
                 if let error = model.error {
-                    InlineErrorBanner(message: error) {
-                        model.error = nil
-                        Task { await model.load() }
-                    }
+                    // Retry repeats a failed file upload or delete, else reloads.
+                    InlineErrorBanner(message: error, onRetry: {
+                        Task { await model.retryAfterError() }
+                    }, onDismiss: model.dismissError)
                     .padding(.horizontal, BFSpacing._4)
                 }
 
@@ -263,8 +270,8 @@ private struct DetailBody: View {
 
     private func moreMenu(_ cr: ChangeRequest) -> some View {
         Menu {
-            // As on the web: editing and deleting are only for a request still at its
-            // first stage.
+            // As on the web: editing is only for a request still at its first stage;
+            // deleting too, or once it's archived (`canDelete`).
             if cr.isAtFirstStage {
                 Button {
                     showEditSheet = true
@@ -285,7 +292,7 @@ private struct DetailBody: View {
                     Label("Archive", systemImage: "archivebox")
                 }
             }
-            if cr.isAtFirstStage {
+            if cr.canDelete {
                 Divider()
                 Button(role: .destructive) {
                     confirmDelete = true
@@ -636,11 +643,8 @@ private struct FilesTab: View {
         }
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item]) { result in
             guard case .success(let url) = result else { return }
-            Task {
-                let accessed = url.startAccessingSecurityScopedResource()
-                defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                await model.uploadFile(url: url)
-            }
+            // The model opens the file's security scope, so its Retry can read it again.
+            Task { await model.uploadFile(url: url) }
         }
     }
 }

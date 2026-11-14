@@ -165,14 +165,57 @@ final class RequestChatBridgeTests: XCTestCase {
         XCTAssertTrue(relaunched.conversations(forRequest: "1001").isEmpty)
     }
 
-    func test_prefill_titleFromTheChatAndAnswerAsPlainText() {
-        let markdown = "## Root cause\nThe **index** is missing.\n\n- Add `idx_orders`\n- Re-run the report"
-        let prefill = NewRequestPrefill(chatTitle: "Slow orders report", answerMarkdown: markdown, conversationId: "chat-1")
-        XCTAssertEqual(prefill.title, "Slow orders report")
-        XCTAssertEqual(prefill.description, "Root cause\nThe index is missing.\n- Add idx_orders\n- Re-run the report")
+    // MARK: Prefill from an answer (requestChatLinks.test.js)
 
-        let untitled = NewRequestPrefill(chatTitle: "New Chat", answerMarkdown: markdown, conversationId: nil)
-        XCTAssertEqual(untitled.title, "Root cause", "an untitled chat uses the answer's first line")
+    private let answer = "## Plan\n\nUse **bulk** updates and `BAPI_X`:\n\n1. Read [the note](https://x)\n- Fix _it_\n\n```abap\nWRITE x.\n```\n\n---"
+
+    func test_prefill_plainTextDropsMarks() {
+        XCTAssertEqual(NewRequestPrefill.plainText(answer), "Plan\nUse bulk updates and BAPI_X:\n- Read the note\n- Fix it\nWRITE x.")
+    }
+
+    func test_prefill_keepsTheAnswersSections() {
+        XCTAssertEqual(NewRequestPrefill.requestDescription(answer),
+                       "Plan:\nUse bulk updates and BAPI_X:\n\n- Read the note\n- Fix it\n\nWRITE x.")
+        XCTAssertEqual(NewRequestPrefill.requestDescription("Intro line.\n\n## Problem\nIt fails.\n\n## Fix\n- Retry\n- Log"),
+                       "Intro line.\n\nProblem:\nIt fails.\n\nFix:\n- Retry\n- Log")
+    }
+
+    func test_prefill_namedAfterTheFirstNonGenericHeading() {
+        let markdown = "## Summary\nShort.\n\n## Make replies warmer\nDetails."
+        let prefill = NewRequestPrefill(chatTitle: "Bulk update", answerMarkdown: markdown, conversationId: "c1")
+        XCTAssertEqual(prefill.title, "Make replies warmer")
+        XCTAssertEqual(prefill.description, NewRequestPrefill.requestDescription(markdown))
+        XCTAssertEqual(prefill.conversationId, "c1")
+    }
+
+    func test_prefill_fallsBackToTheChatTitleThenTheFirstLine() {
+        XCTAssertEqual(NewRequestPrefill(chatTitle: " Bulk update ", answerMarkdown: "Use bulk updates.", conversationId: nil).title,
+                       "Bulk update")
+        XCTAssertEqual(NewRequestPrefill(chatTitle: "Bulk update", answerMarkdown: answer, conversationId: nil).title, "Plan")
+        XCTAssertEqual(NewRequestPrefill(chatTitle: "New Chat", answerMarkdown: "First line here\nMore.", conversationId: nil).title,
+                       "First line here", "an untitled chat uses the answer's first line")
+        XCTAssertEqual(NewRequestPrefill(chatTitle: "", answerMarkdown: String(repeating: "x", count: 200), conversationId: nil).title.count,
+                       120)
+    }
+
+    func test_prefill_shortensALongAnswerAtALineBreak() {
+        let long = (0..<200).map { "Line \($0) \(String(repeating: "x", count: 30))" }.joined(separator: "\n")
+        let linked = NewRequestPrefill(chatTitle: "T", answerMarkdown: long, conversationId: "c1").description
+        XCTAssertLessThan(linked.count, NewRequestPrefill.descriptionLimit + 80)
+        XCTAssertNotNil(linked.range(of: #"Line \d+ x+\n\n\(Shortened\. The full answer is in the linked chat\.\)$"#,
+                                     options: .regularExpression))
+        let unlinked = NewRequestPrefill(chatTitle: "T", answerMarkdown: long, conversationId: nil).description
+        XCTAssertTrue(unlinked.hasSuffix("\n\n(Shortened.)"))
+        XCTAssertEqual(NewRequestPrefill(chatTitle: "T", answerMarkdown: "Short.", conversationId: nil).description, "Short.")
+    }
+
+    func test_prefill_neverEndsOnAnEmptyHeading() {
+        let body = (0..<110).map { "Line \($0) \(String(repeating: "x", count: 30))" }.joined(separator: "\n")
+        let markdown = "## Problem\n\(body)\n\n## Expected outcome\n\(String(repeating: "y", count: 60))\n"
+            + String(repeating: "z", count: NewRequestPrefill.descriptionLimit)
+        let description = NewRequestPrefill(chatTitle: "T", answerMarkdown: markdown, conversationId: "c1").description
+        XCTAssertFalse(description.contains("Expected outcome:\n\n(Shortened"))
+        XCTAssertTrue(description.hasSuffix("\n\n(Shortened. The full answer is in the linked chat.)"))
     }
 
     func test_newRequestPrefillKeepsWhatWasTyped() async {

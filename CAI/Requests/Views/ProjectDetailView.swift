@@ -53,9 +53,12 @@ private struct ProjectDetailBody: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var workspace: WorkspaceStore
+    @Environment(\.requestChatLinks) private var requestChatLinks
     @State private var showFilterSheet = false
     @State private var showCreateSheet = false
     @State private var showEditSheet = false
+    /// A request just created here: pushed over the project, so its back returns here.
+    @State private var createdRequestId: String?
 
     private var requests: ChangeRequestListViewModel { model.changeRequestListModel }
 
@@ -87,8 +90,7 @@ private struct ProjectDetailBody: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                FilterToolbarButton(isActive: requests.statusFilter != nil
-                    || requests.advancedFilters != ChangeRequestAdvancedFilters()) {
+                FilterToolbarButton(isActive: requests.isFiltered) {
                     showFilterSheet = true
                 }
                 if sizeClass != .compact {
@@ -102,6 +104,8 @@ private struct ProjectDetailBody: View {
                     .bfPointerHover()
                     .accessibilityIdentifier("projects.edit")
                 }
+                // The project's one New request entry: the form opens with this project
+                // chosen and locked, and the new request opens over the project.
                 NewRequestToolbarButton { showCreateSheet = true }
             }
         }
@@ -130,14 +134,24 @@ private struct ProjectDetailBody: View {
             await reposModel?.load()
         }
         .sheet(isPresented: $showFilterSheet) {
-            ChangeRequestFilterSheet(model: requests)
+            // People: Me, then the project's team (web #322).
+            ChangeRequestFilterSheet(model: requests, people: model.filterPeople)
         }
         .sheet(isPresented: $showCreateSheet) {
             if let newModel = state.makeNewRequestModel(lockedProjectId: model.projectId) {
-                NewChangeRequestView(model: newModel) { _ in
+                NewChangeRequestView(model: newModel) { created in
+                    requestChatLinks?.linkCreated(created, conversationId: newModel.linkedConversationId)
                     Task { await requests.load() }
+                    createdRequestId = created.id
                 }
             }
+        }
+        .navigationDestination(item: $createdRequestId) { id in
+            ChangeRequestDetailView(changeRequestId: id, state: state, origin: .project)
+        }
+        // A request saved or deleted elsewhere (its detail, pushed over this screen).
+        .onChange(of: state.requestsChanged) { _, _ in
+            Task { await requests.load() }
         }
         .overlay {
             if model.isLoading && model.project == nil {

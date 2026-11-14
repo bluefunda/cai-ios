@@ -33,11 +33,8 @@ private struct ChangeRequestListScreen: View {
     let navigationControl: ShellNavigationControl
 
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.requestChatLinks) private var requestChatLinks
     @State private var showFilterSheet = false
-
-    private var isFiltered: Bool {
-        model.statusFilter != nil || model.advancedFilters != ChangeRequestAdvancedFilters()
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,7 +52,7 @@ private struct ChangeRequestListScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                FilterToolbarButton(isActive: isFiltered) { showFilterSheet = true }
+                FilterToolbarButton(isActive: model.isFiltered) { showFilterSheet = true }
                 if sizeClass != .compact {
                     ViewModeToolbarPicker(viewMode: $state.viewMode)
                 }
@@ -71,6 +68,8 @@ private struct ChangeRequestListScreen: View {
         .sheet(isPresented: $state.isCreatingRequest) {
             if let newModel = state.makeNewRequestModel() {
                 NewChangeRequestView(model: newModel) { created in
+                    // A restored draft that started from an assistant answer keeps its chat.
+                    requestChatLinks?.linkCreated(created, conversationId: newModel.linkedConversationId)
                     Task { await model.load() }
                     state.openRequest(id: created.id)
                 }
@@ -166,6 +165,10 @@ struct ChangeRequestListBody: View {
                     InlineErrorBanner(message: error) { Task { await model.load() } }
                         .padding(.horizontal, BFSpacing._4)
                         .padding(.top, BFSpacing._2)
+                } else if let notice = model.notice {
+                    InlineNoticeBanner(message: notice) { model.notice = nil }
+                        .padding(.horizontal, BFSpacing._4)
+                        .padding(.top, BFSpacing._2)
                 }
                 ChangeRequestGridView(requests: model.filteredChangeRequests, moving: model.moving) { id, status in
                     Task { await model.move(id, to: status) }
@@ -216,6 +219,8 @@ struct RequestRowLink<Content: View>: View {
 struct InlineErrorBanner: View {
     let message: String
     let onRetry: () -> Void
+    /// Shows a close button when set, so the banner can be put away without retrying.
+    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -229,6 +234,45 @@ struct InlineErrorBanner: View {
             Button("Retry", action: onRetry)
                 .font(RQFont.meta.weight(.semibold))
                 .bfPointerHover()
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(RQFont.meta.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Dismiss")
+                .bfPointerHover()
+                .accessibilityIdentifier("requests.errorBanner.dismiss")
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// Something to know that isn't an error — e.g. a board drop that moved the status
+/// but not the stage.
+struct InlineNoticeBanner: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(BFColor.primary)
+            Text(message)
+                .font(RQFont.meta)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+            Spacer(minLength: 8)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(RQFont.meta.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Dismiss")
+            .bfPointerHover()
         }
         .padding(.vertical, 6)
     }

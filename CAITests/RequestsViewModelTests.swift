@@ -265,6 +265,7 @@ final class RequestsViewModelTests: XCTestCase {
         await model.move("32", to: .completed)
 
         XCTAssertNil(model.error)
+        XCTAssertNotNil(model.notice, "says the stage didn't change")
         XCTAssertEqual(services.log, ["status:completed"])
     }
 
@@ -710,5 +711,111 @@ final class RequestsViewModelTests: XCTestCase {
 
         await model.setNotificationsEnabled(false)
         XCTAssertFalse(model.notificationsEnabled)
+    }
+}
+
+// The parity tests (upload retry, delete eligibility, project filters) live in an
+// extension so the class body stays within SwiftLint's type_body_length.
+extension RequestsViewModelTests {
+    func test_failedDelete_retryRepeatsThatDeleteNotAReload() async {
+        let files = FilesService()
+        files.deleteError = RequestsAPIError.serverError(500, "nope")
+        let model = detailWithFiles(files)
+        await model.load()
+        await model.deleteFile(model.crFiles[0])
+        XCTAssertNotNil(model.error)
+
+        files.deleteError = nil
+        files.files = []  // a reload would empty the list
+        await model.retryAfterError()
+
+        XCTAssertNil(model.error)
+        XCTAssertEqual(model.crFiles.map(\.name), ["b.txt"], "only the file's delete ran again")
+        XCTAssertEqual(files.deleted.count, 1)
+    }
+
+    func test_errorBanner_canBeDismissed() async {
+        let files = FilesService()
+        files.deleteError = RequestsAPIError.serverError(500, "nope")
+        let model = detailWithFiles(files)
+        await model.load()
+        await model.deleteFile(model.crFiles[0])
+
+        model.dismissError()
+        XCTAssertNil(model.error)
+        files.deleteError = nil
+        model.error = "Something else"
+        await model.retryAfterError()
+        XCTAssertTrue(files.deleted.isEmpty, "a different error reloads instead of repeating the delete")
+    }
+
+    // MARK: Delete eligibility (web #320)
+
+    func test_canDelete_atTheFirstStageOrOnceArchived() {
+        var cr = RequestsFixtures.changeRequests[0]
+        let stages = (1...3).map { RQStage(order: $0, description: "S\($0)", current: $0 == 2) }
+        cr.stages = stages
+        cr.currentStage = stages[0]
+        cr.isArchived = false
+        XCTAssertTrue(cr.canDelete, "first stage")
+        cr.currentStage = stages[1]
+        XCTAssertFalse(cr.canDelete, "past the first stage")
+        cr.isArchived = true
+        XCTAssertTrue(cr.canDelete, "archived, any stage")
+        XCTAssertFalse(cr.isAtFirstStage, "Edit still isn't offered")
+    }
+
+    // MARK: Project filters (web #322)
+
+    func test_projectList_startsWithEveryonesRequestsAndFiltersOnTheServer() {
+        let model = ChangeRequestListViewModel(service: FixtureChangeRequestService(), currentUserId: "u-me", projectId: "28")
+        var sent = model.filter(offset: 0).queryItems
+        XCTAssertNil(sent.first { $0.name == "reqOwner" })
+        XCTAssertNil(sent.first { $0.name == "user" })
+        XCTAssertFalse(model.isFiltered)
+
+        var filters = model.advancedFilters
+        filters.assigneeIsMe = true
+        filters.ownerId = "u-ann"
+        filters.severity = "sv-high"
+        filters.requestTypeId = "rt-bug"
+        model.advancedFilters = filters
+        sent = model.filter(offset: 0).queryItems
+        let query = Dictionary(sent.map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { a, _ in a })
+        XCTAssertEqual(query["projectId"], "28")
+        XCTAssertEqual(query["reqOwner"], "u-ann")
+        XCTAssertEqual(query["user"], "u-me")
+        XCTAssertEqual(query["severity"], "sv-high")
+        XCTAssertEqual(query["requestType"], "rt-bug")
+        XCTAssertTrue(model.isFiltered)
+
+        let requests = ChangeRequestListViewModel(service: FixtureChangeRequestService(), currentUserId: "u-me")
+        XCTAssertFalse(requests.isFiltered, "the Requests list still starts on Me/Me")
+        XCTAssertTrue(requests.advancedFilters.ownerIsMe)
+    }
+
+    func test_projectFilterPeople_areTheTeamWithoutMe() async {
+        let model = ProjectDetailViewModel(
+            projectId: "28", projectService: FixtureProjectService(),
+            changeRequestService: FixtureChangeRequestService(), currentUserId: "u-1")
+        await model.load()
+        let team = model.project?.team ?? []
+        XCTAssertEqual(model.filterPeople.map(\.id), team.map(\.id).filter { $0 != "u-1" })
+        XCTAssertFalse(model.filterPeople.contains { $0.id == "u-1" }, "Me covers you")
+    }
+
+    // trm-gw answered the stage refusal as a bare 500 (no workflow_enforced code):
+    // the drop still keeps its new status, with a note instead of an error.
+    func test_boardDrop_anyStageRefusalKeepsTheStatusWithANote() async {
+        let services = StageFlowServices()
+        services.moveError = RequestsAPIError.serverError(500, "")
+        let model = ChangeRequestListViewModel(service: services, workflowService: services, currentUserId: "u-1")
+        await model.load()
+
+        await model.move("32", to: .completed)
+
+        XCTAssertNil(model.error)
+        XCTAssertEqual(model.notice?.hasPrefix("Moved "), true)
+        XCTAssertEqual(services.log, ["status:completed"])
     }
 }

@@ -59,6 +59,61 @@ final class RequestsStateTests: XCTestCase {
         XCTAssertTrue(state.requestsPath.isEmpty)
     }
 
+    func test_userChange_clearsTheProjectsPath() {
+        let state = makeState()
+        state.configure(services: fixtureServices, currentUserId: "u-1")
+        state.projectsPath.append("32")
+        state.configure(services: fixtureServices, currentUserId: "u-2")
+        XCTAssertTrue(state.projectsPath.isEmpty)
+    }
+
+    // MARK: After a delete (web #320, #322)
+
+    func test_deletingAnArchivedRequest_opensTheListOnArchive() async throws {
+        let state = makeState()
+        state.configure(services: fixtureServices, currentUserId: "u-1")
+        let list = try XCTUnwrap(state.changeRequests)
+        state.recents.record(RecentRequest(id: "32", number: "CR-1042", title: "Index"))
+
+        await state.didDeleteRequest(id: "32", wasArchived: true, origin: .requests)
+
+        XCTAssertEqual(list.archiveTab, .archived)
+        XCTAssertTrue(state.recents.items.isEmpty)
+        XCTAssertEqual(state.requestsChanged, 1, "a project's list reloads too")
+    }
+
+    func test_deletingAnActiveRequest_staysOnActive() async throws {
+        let state = makeState()
+        state.configure(services: fixtureServices, currentUserId: "u-1")
+        let list = try XCTUnwrap(state.changeRequests)
+
+        await state.didDeleteRequest(id: "32", wasArchived: false, origin: .requests)
+
+        XCTAssertEqual(list.archiveTab, .active)
+    }
+
+    func test_deletingFromAProject_returnsToTheProjectNotTheArchive() async throws {
+        let state = makeState()
+        state.configure(services: fixtureServices, currentUserId: "u-1")
+        let list = try XCTUnwrap(state.changeRequests)
+
+        await state.didDeleteRequest(id: "32", wasArchived: true, origin: .project)
+
+        XCTAssertEqual(list.archiveTab, .active, "the Requests list isn't where it returns")
+        XCTAssertEqual(state.requestsChanged, 1, "the project's list reloads")
+    }
+
+    func test_newRequestModel_keepsADraftPerUserAndProject() {
+        let state = makeState()
+        state.draftDefaults = UserDefaults(suiteName: Self.suiteName)!
+        state.configure(services: fixtureServices, currentUserId: "u-1")
+
+        XCTAssertEqual(state.draftStore(projectId: nil)?.key, "requests.newRequestDraft.u-1.any")
+        XCTAssertEqual(state.draftStore(projectId: "28")?.key, "requests.newRequestDraft.u-1.28")
+        state.configure(services: nil, currentUserId: nil)
+        XCTAssertNil(state.draftStore(projectId: nil), "no draft without a user")
+    }
+
     func test_losingEntitlement_dropsViewModels() {
         let state = makeState()
         state.configure(services: fixtureServices, currentUserId: "u-1")
