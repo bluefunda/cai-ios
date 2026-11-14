@@ -26,6 +26,7 @@
 		21EAA429895EFEB8E7D89252 /* TurnTopicSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE169AA4C0BD27ADF6F87A83 /* TurnTopicSource.swift */; };
 		222D96471984E77C2E1963CF /* AntiAnnoyance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101611A0C609A0F4E0447A0C /* AntiAnnoyance.swift */; };
 		24ADB9C2EE8F8438FA451EE0 /* ChatManager+Cache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3927AA6446C9F4D589ED626C /* ChatManager+Cache.swift */; };
+		25E6BE9713B000031E883F54 /* NewRequestDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FBCC4554451F7DAC263099C /* NewRequestDraftTests.swift */; };
 		2D28FA7A2BB278AE50F03321 /* ReleaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C66F3A43D9B75AA1B0B8775 /* ReleaseService.swift */; };
 		2D41423338D3E576A7794671 /* ProjectsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E7796035E2425B0009A209 /* ProjectsListView.swift */; };
 		2F19191EB65555F883059BEF /* CRFileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A03763EC452F62B797C14DC9 /* CRFileService.swift */; };
@@ -40,7 +41,6 @@
 		3C2736770810F3DD16C0A794 /* GitHubViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5437D5AA184891A6C31857D /* GitHubViews.swift */; };
 		3DB1DAADFC69DF9BD254233F /* TipCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7EB4B575BA11F1A710457F8 /* TipCatalog.swift */; };
 		419D17B4C74435859DAC8776 /* RequestsAPIModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1002553509FABACD57EEB5 /* RequestsAPIModelsTests.swift */; };
-		70E52E220D582F2370F6096F /* NewRequestDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEFEC313905D882441A7469 /* NewRequestDraft.swift */; };
 		438CC57C0F2044EBE7D9A5AB /* ProjectDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B9092FA7FF0AE8F3809DD71 /* ProjectDetailViewModel.swift */; };
 		43E8C28E4FED989C1A878508 /* ChangeRequestDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F9F9B5D072D9D3B608FCAE /* ChangeRequestDetailView.swift */; };
 		44FFEB165E77EC274909DFA8 /* ShareCardFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0D831A19B80F7350C37D7B /* ShareCardFormatterTests.swift */; };
@@ -73,6 +73,7 @@
 		69F0B45B00A5035BE0701E0D /* ST22DumpDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C79FC597109D8650CD53C7A /* ST22DumpDetectorTests.swift */; };
 		6C69061F871E577CC0E5D531 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B04EAE44E32DAE993B7D9993 /* ThinkingStepsView.swift */; };
 		6C9B3CBF72F368439987B875 /* RequestsAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE482D87F2CAA36631B2021 /* RequestsAPIClientTests.swift */; };
+		70E52E220D582F2370F6096F /* NewRequestDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEFEC313905D882441A7469 /* NewRequestDraft.swift */; };
 		77CB6CEAE46FC2D11C30F19B /* MessagesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D0B51FA3F5A40DCE0CDB667 /* MessagesService.swift */; };
 		78322BF75D0CB3B73FD0029E /* MessageFileLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C31531AA209DBE7101D28F4 /* MessageFileLinks.swift */; };
 		79595DC32FB46E83BF90A39E /* MessagesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53AD910F97215B6D76D78278 /* MessagesViewModel.swift */; };
@@ -196,7 +197,6 @@
 		EE2A9CDE00AA8DB357799E52 /* ChatView+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137726 /* ChatView+Scroll.swift */; };
 		EE2A9CDE00AA8DB357799E53 /* SidebarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137727 /* SidebarComponents.swift */; };
 		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
-		25E6BE9713B000031E883F54 /* NewRequestDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FBCC4554451F7DAC263099C /* NewRequestDraftTests.swift */; };
 		F1780FC696F483769E65E7DD /* RequestsStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B22B2E7A67D655FE3CE4E6 /* RequestsStateTests.swift */; };
 		F1E7DB0EF04EB9C7193515DD /* GitHubIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B95C3B39AC1997D6C09508 /* GitHubIntegrationTests.swift */; };
 		F2976FB859344743F0EEFB0C /* WorkspaceStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A4A87B32A195176885891F9 /* WorkspaceStoreTests.swift */; };
@@ -272,7 +272,6 @@
 		2DE482D87F2CAA36631B2021 /* RequestsAPIClientTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequestsAPIClientTests.swift; sourceTree = "<group>"; };
 		2DF9A31DC88177F33124695B /* ShellDestinations.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShellDestinations.swift; sourceTree = "<group>"; };
 		303A292E3DC99791D748886B /* ChangeRequestDetailViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChangeRequestDetailViewModel.swift; sourceTree = "<group>"; };
-		8FBCC4554451F7DAC263099C /* NewRequestDraftTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewRequestDraftTests.swift; sourceTree = "<group>"; };
 		30B22B2E7A67D655FE3CE4E6 /* RequestsStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequestsStateTests.swift; sourceTree = "<group>"; };
 		30FC9348ADC335B10C952734 /* UserManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Admin/UserManagementView.swift; sourceTree = "<group>"; };
 		310BD0A02BF71818E7427D52 /* ChatManagerTitleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatManagerTitleTests.swift; sourceTree = "<group>"; };
@@ -303,7 +302,6 @@
 		57D295E5F2434585A7ECC070 /* CameraCaptureView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		593268497F92368C97B1390F /* ProjectFilterSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectFilterSheet.swift; sourceTree = "<group>"; };
 		5B27AD5F04553CCD0D2AD8B8 /* CAIUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CAIUITests.swift; sourceTree = "<group>"; };
-		FEEFEC313905D882441A7469 /* NewRequestDraft.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewRequestDraft.swift; sourceTree = "<group>"; };
 		5B9092FA7FF0AE8F3809DD71 /* ProjectDetailViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDetailViewModel.swift; sourceTree = "<group>"; };
 		5B9EF2E23636A5365B19F7EC /* ChatToolbarButtons.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatToolbarButtons.swift; sourceTree = "<group>"; };
 		5EDF4767ADE4841F4BB8A87B /* RequestsSettingsSection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequestsSettingsSection.swift; sourceTree = "<group>"; };
@@ -338,6 +336,7 @@
 		8D55F190BC846CFD0BF8EEB0 /* NewChangeRequestViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewChangeRequestViewModel.swift; sourceTree = "<group>"; };
 		8D6EE1CF58794098BE5FEA13 /* ODataConnectionView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ODataConnectionView.swift; sourceTree = "<group>"; };
 		8D9C7F9D317BA908793AD2DE /* AdminComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Admin/AdminComponents.swift; sourceTree = "<group>"; };
+		8FBCC4554451F7DAC263099C /* NewRequestDraftTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewRequestDraftTests.swift; sourceTree = "<group>"; };
 		90A9A767808271F509EF46E2 /* TipRewardLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipRewardLogTests.swift; sourceTree = "<group>"; };
 		90B76A26668497303A912B85 /* AdminService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AdminService.swift; sourceTree = "<group>"; };
 		933A53904E6D4ED767BE8750 /* ToolbarComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ToolbarComponents.swift; sourceTree = "<group>"; };
@@ -449,6 +448,7 @@
 		F8CC8C2B2FDCBC989964DC80 /* TipEngineDebugView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipEngineDebugView.swift; sourceTree = "<group>"; };
 		FCCE7652358337A022B84F10 /* NotificationsService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationsService.swift; sourceTree = "<group>"; };
 		FE169AA4C0BD27ADF6F87A83 /* TurnTopicSource.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TurnTopicSource.swift; sourceTree = "<group>"; };
+		FEEFEC313905D882441A7469 /* NewRequestDraft.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewRequestDraft.swift; sourceTree = "<group>"; };
 		FF000001201BCDEF /* BFFeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BFFeatureFlags.swift; sourceTree = "<group>"; };
 		FF000002100BCDEF /* PersistedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedModels.swift; sourceTree = "<group>"; };
 		FF212460265BF42360D8A67A /* TipBannerPreviews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipBannerPreviews.swift; sourceTree = "<group>"; };
@@ -1402,7 +1402,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 245;
+				CURRENT_PROJECT_VERSION = 249;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1434,7 +1434,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.19.1;
+				MARKETING_VERSION = 2.20.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1454,7 +1454,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 245;
+				CURRENT_PROJECT_VERSION = 249;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1486,7 +1486,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.19.1;
+				MARKETING_VERSION = 2.20.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1504,10 +1504,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 245;
+				CURRENT_PROJECT_VERSION = 249;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.19.1;
+				MARKETING_VERSION = 2.20.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1522,10 +1522,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 245;
+				CURRENT_PROJECT_VERSION = 249;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.19.1;
+				MARKETING_VERSION = 2.20.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
