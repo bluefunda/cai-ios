@@ -33,7 +33,8 @@ struct ProjectDetailView: View {
                 currentUserId: state.currentUserId
             )
             box.reposModel = ProjectReposViewModel(
-                projectId: projectId, service: services.githubService, roles: workspace.requestsRoles)
+                projectId: projectId, service: services.githubService,
+                userId: state.currentUserId, roles: workspace.requestsRoles)
             box.model = model
             await model.load()
         }

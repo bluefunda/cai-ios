@@ -158,7 +158,7 @@ struct GitHubIntegrationSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BFSpacing._3) {
-            GitSectionTitle("GitHub integration")
+            GitSectionTitle("Your GitHub")
             content
         }
         .confirmationDialog(
@@ -208,29 +208,25 @@ struct GitHubIntegrationSection: View {
 
     @ViewBuilder
     private var ready: some View {
-        if model.canManage {
-            VStack(alignment: .leading, spacing: BFSpacing._2) {
-                Text("Install the BlueRequests GitHub App on a GitHub organization or account, then bind its repositories to projects.")
-                    .font(RQFont.body)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    Task {
-                        if let url = await model.connect() { await install(url) }
-                    }
-                } label: {
-                    Label { Text("Connect GitHub") } icon: { GitHubMarkIcon() }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(BFColor.primary)
-                .disabled(model.isConnecting || model.appError != nil)
-                .bfPointerHover()
-                .accessibilityIdentifier("requests.git.connectGitHub")
-            }
-        } else {
-            Text("Only admins can connect or disconnect GitHub accounts.")
-                .font(RQFont.meta)
+        VStack(alignment: .leading, spacing: BFSpacing._2) {
+            Text("Install the BlueRequests GitHub App on your GitHub account or organization, then bind its " +
+                 "repositories to projects. Only you see your connections; repositories you bind are shared " +
+                 "with the project’s team.")
+                .font(RQFont.body)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task {
+                    if let url = await model.connect() { await install(url) }
+                }
+            } label: {
+                Label { Text("Connect GitHub") } icon: { GitHubMarkIcon() }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(BFColor.primary)
+            .disabled(model.isConnecting || model.appError != nil)
+            .bfPointerHover()
+            .accessibilityIdentifier("requests.git.connectGitHub")
         }
         if let appError = model.appError {
             Text(appError)
@@ -256,12 +252,12 @@ struct GitHubIntegrationSection: View {
             DismissableNotice(message: error) { model.error = nil }
         }
 
-        RQFieldLabel("Connected accounts")
+        RQFieldLabel("Your connected accounts")
             .padding(.top, BFSpacing._1)
         if model.installations.isEmpty {
             HStack(spacing: BFSpacing._2) {
                 GitHubMarkIcon().foregroundStyle(.secondary)
-                Text("No GitHub accounts are connected yet.")
+                Text("You haven’t connected GitHub yet.")
                     .font(RQFont.body)
                     .foregroundStyle(.secondary)
             }
@@ -307,14 +303,12 @@ private struct InstallationCard: View {
                 }
                 Spacer(minLength: BFSpacing._2)
                 GitHubPill(text: installation.statusLabel, tone: installation.isActive ? .green : .red)
-                if model.canManage {
-                    Button("Disconnect", role: .destructive, action: onDisconnect)
-                        .buttonStyle(.borderless)
-                        .font(RQFont.meta.weight(.semibold))
-                        .disabled(model.isDisconnecting)
-                        .bfPointerHover()
-                        .accessibilityIdentifier("requests.git.disconnect")
-                }
+                Button("Disconnect", role: .destructive, action: onDisconnect)
+                    .buttonStyle(.borderless)
+                    .font(RQFont.meta.weight(.semibold))
+                    .disabled(model.isDisconnecting)
+                    .bfPointerHover()
+                    .accessibilityIdentifier("requests.git.disconnect")
             }
             repos
         }
@@ -424,7 +418,7 @@ struct ProjectReposSection: View {
                 HStack {
                     RQFieldLabel("Repositories")
                     Spacer(minLength: BFSpacing._2)
-                    if model.canBind && model.state == .ready {
+                    if model.state == .ready {
                         Button { showAdd = true } label: {
                             Label("Add repository", systemImage: "plus")
                                 .font(RQFont.meta.weight(.semibold))
@@ -501,7 +495,7 @@ struct ProjectReposSection: View {
                                 .lineLimit(1)
                         }
                         Spacer(minLength: 0)
-                        if model.canBind {
+                        if model.canRemove(binding) {
                             Button { removeTarget = binding } label: {
                                 Image(systemName: "xmark.circle")
                                     .foregroundStyle(.secondary)
@@ -573,7 +567,7 @@ private struct AddProjectRepoSheet: View {
             }
             if let installations = model.addInstallations, installations.isEmpty, model.addError == nil {
                 Section {
-                    Text("No GitHub account is connected. An admin can connect one in GitHub integration settings.")
+                    Text("You haven’t connected GitHub yet. Connect your account on the Git page, then add its repositories here.")
                         .font(RQFont.meta)
                         .foregroundStyle(.secondary)
                 }
@@ -786,7 +780,8 @@ struct GitHubIssuesTab: View {
         VStack(alignment: .leading, spacing: BFSpacing._2) {
             Text(model.reposError ?? "No GitHub repositories are bound to this change request's project.")
                 .font(RQFont.body)
-            Text("Bind a repository in the project's Repositories section. If no GitHub account is connected yet, an admin can connect one in GitHub integration settings.")
+            Text("Bind a repository in the project's Repositories section. If you haven’t connected GitHub yet, " +
+                 "connect your account on the Git page.")
                 .font(RQFont.meta)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
