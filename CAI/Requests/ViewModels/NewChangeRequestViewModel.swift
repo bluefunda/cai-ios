@@ -194,7 +194,7 @@ final class NewChangeRequestViewModel: ObservableObject {
     }
 
     /// Matches the real web form's own required-field set exactly (see the trm-ios plan's
-    /// field-scope table) — Ticket Link is the only optional field.
+    /// field-scope table). The ticket link is no longer on the form; it's sent empty.
     var isValid: Bool {
         !requestName.trimmingCharacters(in: .whitespaces).isEmpty
             && !description.trimmingCharacters(in: .whitespaces).isEmpty

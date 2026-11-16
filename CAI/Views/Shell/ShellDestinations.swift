@@ -44,8 +44,10 @@ enum AssistantDestination: String, CaseIterable, Identifiable {
 /// port; until then each shows a placeholder.
 enum RequestsDestination: String, CaseIterable, Identifiable {
     case messages, requests, projects, releases, teams, git
+    // Every Requests user can create and edit templates (the backend checks sign-in only).
+    case requestTemplates
     // Admin only (trm's web nav shows these under its admin section).
-    case userManagement, requestTemplates, manageTeams, configurations
+    case userManagement, manageTeams, configurations
 
     var id: String { rawValue }
 
@@ -84,8 +86,8 @@ enum RequestsDestination: String, CaseIterable, Identifiable {
     var requiredRole: String? {
         switch self {
         case .releases: return "release-manager"
-        case .userManagement, .requestTemplates, .manageTeams, .configurations: return "admin"
-        case .messages, .requests, .projects, .teams, .git: return nil
+        case .userManagement, .manageTeams, .configurations: return "admin"
+        case .messages, .requests, .projects, .teams, .git, .requestTemplates: return nil
         }
     }
 
