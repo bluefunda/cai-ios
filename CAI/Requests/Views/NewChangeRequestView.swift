@@ -94,15 +94,6 @@ struct NewChangeRequestView: View {
                 }
 
                 StagesSection(model: model)
-
-                Section("Optional") {
-                    TextField("Ticket link", text: $model.ticketUrl)
-                        #if !os(macOS)
-                        .keyboardType(.URL)
-                        #endif
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
             }
             .navigationTitle("New request")
             .navigationBarTitleDisplayMode(.inline)
@@ -313,11 +304,6 @@ private struct StageOwnerRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(stage.order). \(stage.description)")
                     .foregroundStyle(.primary)
-                if stage.qaDeploy {
-                    Text("Deploy to QA")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             Spacer(minLength: 8)
             Picker("Owner of \(stage.description)", selection: Binding(

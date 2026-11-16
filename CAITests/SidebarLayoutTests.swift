@@ -63,9 +63,10 @@ final class SidebarLayoutTests: XCTestCase {
         store.navigate(to: .requests(.projects))
         let layout = SidebarLayout(workspace: store)
         XCTAssertEqual(layout.activeSpace, .requests)
-        // No `release-manager` role: everything but Releases.
+        // No `release-manager` or `admin` role: everything but Releases and the admin pages;
+        // Request Templates is for everyone.
         XCTAssertEqual(layout.destinations, [.requests(.messages), .requests(.requests), .requests(.projects),
-                                             .requests(.teams), .requests(.git)])
+                                             .requests(.teams), .requests(.git), .requests(.requestTemplates)])
         XCTAssertEqual(store.currentDestination, .requests(.projects))
     }
 

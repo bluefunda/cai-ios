@@ -1,8 +1,9 @@
 import SwiftUI
 
-// MARK: - Request Templates (admin)
+// MARK: - Request Templates
 // trm's web Request Templates (adminConfig/requestTemplates): each template's workflow
-// stages — name, department, role, and the one stage that deploys to QA.
+// stages — name, department, role. Open to every Requests user. There is no QA deploy
+// setting; an edit keeps any stage's earlier QA deploy flag.
 
 struct RequestTemplatesView: View {
     @ObservedObject var state: RequestsState
@@ -153,7 +154,6 @@ private struct TemplateFormSheet: View {
                             Text("Select").tag("")
                             ForEach(roles) { Text($0.name).tag($0.name) }
                         }
-                        Toggle("QA deploy", isOn: qaBinding(for: stage.id))
                         if kind == .tech {
                             Picker("Step type", selection: $stage.type) {
                                 ForEach(RQStepType.allCases) { Text($0.title).tag($0) }
@@ -189,16 +189,6 @@ private struct TemplateFormSheet: View {
     }
 
     private var isNew: Bool { if case .new = target { return true } else { return false } }
-
-    /// Only one stage can deploy to QA, as on the web.
-    private func qaBinding(for id: UUID) -> Binding<Bool> {
-        Binding(
-            get: { stages.first { $0.id == id }?.qaDeploy ?? false },
-            set: { isOn in
-                for index in stages.indices { stages[index].qaDeploy = isOn && stages[index].id == id }
-            }
-        )
-    }
 
     private func load() async {
         do {
