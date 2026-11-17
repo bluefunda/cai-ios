@@ -86,3 +86,64 @@ struct StreamingIndicator: View {
         .accessibilityLabel("Generating response")
     }
 }
+
+/// Three dots pulsing in turn under an answer that is still streaming (see
+/// AnswerWithInlineStepsView): the reply isn't finished while the model reads tool results or
+/// thinks between parts of its answer. Holds still with Reduce Motion.
+struct StillWorkingDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private static let periodSeconds: Double = 1.2
+
+    var body: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(BFColor.primary)
+                        .frame(width: 6, height: 6)
+                        .opacity(reduceMotion ? 0.7 : Self.opacity(at: time, index: index))
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Still working")
+    }
+
+    /// 0.35 → 1 → 0.35 once per period, each dot a fifth of a period behind the one before.
+    static func opacity(at time: Double, index: Int) -> Double {
+        let phase = (time / periodSeconds - Double(index) * 0.2).truncatingRemainder(dividingBy: 1)
+        let wave = (1 - cos(2 * .pi * (phase < 0 ? phase + 1 : phase))) / 2
+        return 0.35 + 0.65 * wave
+    }
+}
+
+/// Layout shared by the live rows (the thinking card's header, a mid-answer step group).
+enum LiveRow {
+    /// Between the dots, the text and the timer.
+    static let spacing: CGFloat = 8
+    /// The dots (3 × 6pt + 2 × 4pt) plus `spacing`: a box under a live row starts under its text.
+    static let indent: CGFloat = 26 + spacing
+    /// A step box stops here on a wide window (iPad, Mac) — about 90 characters of its text, so
+    /// it reads as a note rather than a banner. Narrower columns use their full width.
+    static let boxMaxWidth: CGFloat = 680
+
+    /// "12s", "1m 5s".
+    static func elapsedLabel(seconds: Int) -> String {
+        let seconds = max(0, seconds)
+        return seconds < 60 ? "\(seconds)s" : "\(seconds / 60)m \(seconds % 60)s"
+    }
+}
+
+/// Seconds since `since`, ticking once a second: how long a live row has been working.
+struct LiveTimer: View {
+    let since: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: since, by: 1)) { context in
+            Text(LiveRow.elapsedLabel(seconds: Int(context.date.timeIntervalSince(since))))
+                .font(BFFont.bodySmall.monospacedDigit())
+                .foregroundStyle(.tertiary)
+        }
+    }
+}

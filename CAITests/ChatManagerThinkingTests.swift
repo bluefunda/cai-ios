@@ -423,3 +423,24 @@ final class TypingTextSharedStartTests: XCTestCase {
     }
 }
 
+
+final class StillWorkingDotsTests: XCTestCase {
+    func testDotsPulseWithinRangeAndOutOfStep() {
+        for step in 0..<24 {
+            let time = Double(step) * 0.05
+            for index in 0..<3 {
+                let opacity = StillWorkingDots.opacity(at: time, index: index)
+                XCTAssertGreaterThanOrEqual(opacity, 0.35 - 1e-9)
+                XCTAssertLessThanOrEqual(opacity, 1 + 1e-9)
+            }
+        }
+        // Each dot trails the one before, so they never all match.
+        XCTAssertNotEqual(StillWorkingDots.opacity(at: 0.3, index: 0), StillWorkingDots.opacity(at: 0.3, index: 1))
+    }
+
+    func testElapsedLabel() {
+        XCTAssertEqual(LiveRow.elapsedLabel(seconds: 12), "12s")
+        XCTAssertEqual(LiveRow.elapsedLabel(seconds: 65), "1m 5s")
+        XCTAssertEqual(LiveRow.elapsedLabel(seconds: -3), "0s")
+    }
+}

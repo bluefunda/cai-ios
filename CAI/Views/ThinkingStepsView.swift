@@ -35,24 +35,29 @@ struct ThinkingStepsView: View {
         elapsedSeconds.map { "Thought for \($0)s" } ?? "Thought"
     }
 
+    /// While live, claude.ai's row: dots, the latest thought on one line (the full thoughts are in
+    /// the box) and a timer. Once done, the last thought.
     private func headerRow() -> some View {
         Button {
             // Instant, not animated: this view lives in a List row, and an animated height change
             // overlapped the rows below while UIKit grew the cell. Only the chevron animates.
             isExpanded.toggle()
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .center, spacing: LiveRow.spacing) {
+                if isActive { StillWorkingDots() }
                 Group {
                     if isActive {
                         TypingText(text: latestSentence ?? "Thinking…")
+                            .lineLimit(1)
                     } else {
                         Text(latestSentence ?? durationText)
+                            .lineLimit(3)
                     }
                 }
                 .font(BFFont.bodySmall)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.leading)
-                .lineLimit(3)
+                if isActive, let startedAt { LiveTimer(since: startedAt) }
                 ThinkingChevron(isExpanded: isExpanded)
             }
             .contentShape(Rectangle())
@@ -75,11 +80,13 @@ struct ThinkingStepsView: View {
                     }
                 }
                 .padding(BFSpacing._4)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: LiveRow.boxMaxWidth, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous)
                         .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
                 )
+                // While live, the box starts under the thought, not the dots.
+                .padding(.leading, isActive ? LiveRow.indent : 0)
             }
         }
         // Full width, leading: while no answer text exists yet, nothing else in the reply spans
@@ -128,24 +135,31 @@ struct ThinkingStepsView: View {
 /// Steps that happened in the middle of an answer (text → tool → text), shown in place —
 /// claude.ai's "Searched the web ⌄" group: a header summarising the group and, expanded, a
 /// bordered box with one row per step ("Searched the web  <query>  ›", a reasoning line…).
-/// Expanded while the group is still running, collapsed once its steps are done.
+/// Collapsed, like claude.ai: while running it is one live row (dots, what is happening, a
+/// timer); tapping it opens the steps.
 struct InlineStepsGroupView: View {
     let steps: [MessageStep]
     let isLive: Bool
 
-    @State private var isExpanded: Bool
+    @State private var isExpanded = false
     @State private var expandedStepIds: Set<String> = []
+    /// When the group (the pause) began: one timer across the tool and the review after it.
+    @State private var startedAt = Date()
 
     init(steps: [MessageStep], isLive: Bool) {
         self.steps = steps
         self.isLive = isLive
-        _isExpanded = State(initialValue: isLive)
     }
 
     private var isRunning: Bool { isLive && steps.contains(where: \.isActive) }
 
-    /// "Searched the web" / "Read fao.org" / "Read 3 pages", else the latest step.
+    /// "Searched the web" / "Read fao.org" / "Read 3 pages", else the latest step. While a
+    /// non-tool step runs after the tool ("Reviewing the results"), that step: like claude.ai,
+    /// the row says what is happening now.
     private var groupTitle: String {
+        if isRunning, let active = steps.last(where: \.isActive), active.toolLabelAndValue == nil {
+            return active.title
+        }
         let parts = steps.compactMap(\.toolLabelAndValue)
         if parts.contains(where: { $0.label.hasPrefix("Search") }) {
             return isRunning ? "Searching the web" : "Searched the web"
@@ -159,12 +173,13 @@ struct InlineStepsGroupView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: BFSpacing._2) {
             Button { isExpanded.toggle() } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if isRunning { ProgressView().controlSize(.mini) }
+                HStack(alignment: .center, spacing: LiveRow.spacing) {
+                    if isRunning { StillWorkingDots() }
                     Text(groupTitle)
                         .font(BFFont.bodySmall)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    if isRunning { LiveTimer(since: startedAt) }
                     ThinkingChevron(isExpanded: isExpanded)
                 }
                 .contentShape(Rectangle())
@@ -179,10 +194,12 @@ struct InlineStepsGroupView: View {
                         stepRow(step)
                     }
                 }
+                .frame(maxWidth: LiveRow.boxMaxWidth, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: BFRadius.xl, style: .continuous)
                         .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
                 )
+                .padding(.leading, isRunning ? LiveRow.indent : 0)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -264,7 +281,25 @@ struct AnswerWithInlineStepsView: View {
         return result
     }
 
+    /// Pulsing dots under the answer while the reply is still streaming and no mid-answer step
+    /// is running: a pause (the model reading tool results, or thinking) otherwise looked like
+    /// the reply had finished. claude.ai and ChatGPT keep a live indicator until the stream ends.
+    private var showsStillWorking: Bool {
+        isStreaming && !wasStopped && !(message.steps ?? []).inlineSteps.contains(where: \.isActive)
+    }
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            answer
+            if showsStillWorking {
+                StillWorkingDots()
+                    .padding(.top, BFSpacing._2)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var answer: some View {
         let groups = groups
         let content = content
         if groups.isEmpty {
