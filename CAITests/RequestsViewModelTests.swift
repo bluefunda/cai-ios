@@ -790,8 +790,10 @@ extension RequestsViewModelTests {
         XCTAssertTrue(model.isFiltered)
 
         let requests = ChangeRequestListViewModel(service: FixtureChangeRequestService(), currentUserId: "u-me")
-        XCTAssertFalse(requests.isFiltered, "the Requests list still starts on Me/Me")
+        XCTAssertTrue(requests.isFiltered, "the Requests list starts on Me/Me, which shows as filtered")
         XCTAssertTrue(requests.advancedFilters.ownerIsMe)
+        requests.advancedFilters = .anyone
+        XCTAssertFalse(requests.isFiltered, "Reset clears every filter")
     }
 
     func test_projectFilterPeople_areTheTeamWithoutMe() async {

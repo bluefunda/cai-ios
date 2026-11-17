@@ -58,9 +58,10 @@ struct ChangeRequestFilterSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // Clears every filter: any status, priority and type, anyone's requests.
                     Button("Reset") {
                         status = nil
-                        draft = model.defaultAdvancedFilters
+                        draft = .anyone
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {

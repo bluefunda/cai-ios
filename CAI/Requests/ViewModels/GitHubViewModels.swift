@@ -27,27 +27,22 @@ final class GitHubIntegrationViewModel: ObservableObject {
     /// A failed Connect or Disconnect.
     @Published var error: String?
 
-    /// Admins and super-admins connect and disconnect accounts.
-    let canManage: Bool
     private let service: GitHubServicing
     private var loadGeneration = 0
 
-    init(service: GitHubServicing, roles: [String]) {
+    /// Every member connects and disconnects their own GitHub; the list is only theirs.
+    init(service: GitHubServicing) {
         self.service = service
-        self.canManage = GitHubIntegration.canManage(roles: roles)
     }
 
-    /// Only admins can connect, so only they need the App (its install URL). A refresh
-    /// keeps the connected accounts on screen until the new list arrives.
+    /// A refresh keeps the connected accounts on screen until the new list arrives.
     func load() async {
         loadGeneration += 1
         let generation = loadGeneration
         if state != .ready { state = .loading }
 
         var appFailure: Error?
-        if canManage {
-            do { _ = try await service.app() } catch { appFailure = error }
-        }
+        do { _ = try await service.app() } catch { appFailure = error }
         do {
             let list = try await service.installations()
             guard generation == loadGeneration else { return }
@@ -140,15 +135,22 @@ final class ProjectReposViewModel: ObservableObject {
     @Published private(set) var isSaving = false
 
     let projectId: String
-    let canBind: Bool
+    private let userId: String?
+    private let roles: [String]
     private let service: GitHubServicing
     /// Ignores a repo list that arrives after another account was picked.
     private var repoRequest = 0
 
-    init(projectId: String, service: GitHubServicing, roles: [String]) {
+    /// Any member adds repos from their own GitHub; see `canRemove(_:)` for removing.
+    init(projectId: String, service: GitHubServicing, userId: String?, roles: [String]) {
         self.projectId = projectId
         self.service = service
-        self.canBind = GitHubIntegration.canBindProjectRepos(roles: roles)
+        self.userId = userId
+        self.roles = roles
+    }
+
+    func canRemove(_ binding: ProjectRepo) -> Bool {
+        GitHubIntegration.canRemoveProjectRepo(binding, userId: userId, roles: roles)
     }
 
     func load() async {

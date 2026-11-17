@@ -93,13 +93,20 @@ final class GitHubIntegrationHelperTests: XCTestCase {
                        "Could not link the issue. Please try again.")
     }
 
-    func test_roles() {
-        XCTAssertTrue(GitHubIntegration.canManage(roles: ["admin"]))
-        XCTAssertTrue(GitHubIntegration.canManage(roles: ["super-admin"]))
-        XCTAssertFalse(GitHubIntegration.canManage(roles: ["release-manager"]))
-        XCTAssertTrue(GitHubIntegration.canBindProjectRepos(roles: ["release-manager"]))
-        XCTAssertTrue(GitHubIntegration.canBindProjectRepos(roles: ["admin"]))
-        XCTAssertFalse(GitHubIntegration.canBindProjectRepos(roles: ["user"]))
+    func test_removingAProjectRepo_isForWhoeverBoundIt_orAdminsAndReleaseManagers() {
+        let mine = ProjectRepo(id: "b1", fullName: "acme/api", createdBy: "me-1")
+        let theirs = ProjectRepo(id: "b2", fullName: "acme/web", createdBy: "u2")
+        XCTAssertTrue(GitHubIntegration.canRemoveProjectRepo(mine, userId: "me-1", roles: ["developer"]))
+        XCTAssertFalse(GitHubIntegration.canRemoveProjectRepo(theirs, userId: "me-1", roles: ["developer"]))
+        XCTAssertFalse(GitHubIntegration.canRemoveProjectRepo(mine, userId: nil, roles: []))
+        for role in ["admin", "super-admin", "release-manager"] {
+            XCTAssertTrue(GitHubIntegration.canRemoveProjectRepo(theirs, userId: "me-1", roles: [role]))
+        }
+    }
+
+    func test_installationNotYours_hasItsOwnMessage() {
+        let error = RequestsAPIError.serverError(409, #"{"error":{"code":"installation_not_yours","message":"x"}}"#)
+        XCTAssertTrue(GitHubIntegration.errorMessage(error, fallback: "fb").contains("connected by someone else"))
     }
 
     func test_isTechRequest_readsTemplateDataKind() throws {
@@ -420,7 +427,7 @@ final class GitHubViewModelTests: XCTestCase {
     func test_integration_adminLoadsAppAndInstallations() async {
         let service = MockGitHubService()
         service.installationsResult = .success([acme])
-        let model = GitHubIntegrationViewModel(service: service, roles: ["admin"])
+        let model = GitHubIntegrationViewModel(service: service)
         await model.load()
         XCTAssertEqual(model.state, .ready)
         XCTAssertEqual(model.installations, [acme])
@@ -428,12 +435,12 @@ final class GitHubViewModelTests: XCTestCase {
         XCTAssertNil(model.appError)
     }
 
-    func test_integration_nonAdminSkipsTheApp() async {
+    func test_integration_everyMemberCanConnect() async {
         let service = MockGitHubService()
-        let model = GitHubIntegrationViewModel(service: service, roles: ["release-manager"])
+        let model = GitHubIntegrationViewModel(service: service)
         await model.load()
-        XCTAssertFalse(model.canManage)
-        XCTAssertEqual(service.appCalls, 0)
+        XCTAssertEqual(service.appCalls, 1)
+        XCTAssertNil(model.appError)
         XCTAssertEqual(model.state, .ready)
     }
 
@@ -441,7 +448,7 @@ final class GitHubViewModelTests: XCTestCase {
         let service = MockGitHubService()
         service.appResult = .failure(RequestsAPIError.serverError(500, "HTTP 500"))
         service.installationsResult = .success([acme])
-        let model = GitHubIntegrationViewModel(service: service, roles: ["admin"])
+        let model = GitHubIntegrationViewModel(service: service)
         await model.load()
         XCTAssertEqual(model.state, .ready)
         XCTAssertEqual(model.appError, "Connecting a GitHub account is not available right now.")
@@ -452,7 +459,7 @@ final class GitHubViewModelTests: XCTestCase {
         let publicTenant = RequestsAPIError.rejected(status: 403, code: "not_available_in_public_tenant", message: "x")
         service.appResult = .failure(publicTenant)
         service.installationsResult = .failure(RequestsAPIError.serverError(500, "HTTP 500"))
-        let model = GitHubIntegrationViewModel(service: service, roles: ["admin"])
+        let model = GitHubIntegrationViewModel(service: service)
         await model.load()
         XCTAssertEqual(model.state, .failed(.publicTenant), "the App's public-tenant answer explains the list failing")
 
@@ -468,7 +475,7 @@ final class GitHubViewModelTests: XCTestCase {
 
     func test_integration_connectReturnsInstallURLThenRefreshClearsTheNote() async {
         let service = MockGitHubService()
-        let model = GitHubIntegrationViewModel(service: service, roles: ["super-admin"])
+        let model = GitHubIntegrationViewModel(service: service)
         await model.load()
         let url = await model.connect()
         XCTAssertEqual(url?.host, "github.com")
@@ -487,7 +494,7 @@ final class GitHubViewModelTests: XCTestCase {
         let service = MockGitHubService()
         service.installationsResult = .success([acme, suspended])
         service.reposResult = [1: .success([repoA]), 2: .failure(RequestsAPIError.serverError(500, "HTTP 500"))]
-        let model = GitHubIntegrationViewModel(service: service, roles: ["admin"])
+        let model = GitHubIntegrationViewModel(service: service)
         await model.load()
         await model.loadRepos(for: 1)
         await model.loadRepos(for: 2)
@@ -509,16 +516,16 @@ final class GitHubViewModelTests: XCTestCase {
     func test_projectRepos_hiddenWhileTheAPIIsMissing() async {
         let service = MockGitHubService()
         service.projectReposResult = .failure(RequestsAPIError.serverError(404, "HTTP 404"))
-        let model = ProjectReposViewModel(projectId: "28", service: service, roles: ["admin"])
+        let model = ProjectReposViewModel(projectId: "28", service: service, userId: "me-1", roles: ["admin"])
         XCTAssertEqual(model.state, .loading)
         await model.load()
         XCTAssertTrue(model.isHidden)
     }
 
-    func test_projectRepos_rolesDecideChanges() {
-        let service = MockGitHubService()
-        XCTAssertTrue(ProjectReposViewModel(projectId: "1", service: service, roles: ["release-manager"]).canBind)
-        XCTAssertFalse(ProjectReposViewModel(projectId: "1", service: service, roles: []).canBind)
+    func test_projectRepos_removeIsForWhoeverBoundIt() {
+        let model = ProjectReposViewModel(projectId: "1", service: MockGitHubService(), userId: "me-1", roles: [])
+        XCTAssertTrue(model.canRemove(ProjectRepo(id: "b1", fullName: "acme/api", createdBy: "me-1")))
+        XCTAssertFalse(model.canRemove(ProjectRepo(id: "b2", fullName: "acme/web", createdBy: "u2")))
     }
 
     func test_projectRepos_addPicksTheOnlyActiveAccountAndHidesBoundRepos() async {
@@ -526,7 +533,7 @@ final class GitHubViewModelTests: XCTestCase {
         service.projectReposResult = .success([ProjectRepo(id: "pr-1", repoNodeId: "R_A", fullName: "acme/api")])
         service.installationsResult = .success([acme, suspended])
         service.reposResult = [1: .success([repoA, repoB])]
-        let model = ProjectReposViewModel(projectId: "28", service: service, roles: ["admin"])
+        let model = ProjectReposViewModel(projectId: "28", service: service, userId: "me-1", roles: ["admin"])
         await model.load()
 
         await model.prepareAdd()
@@ -548,7 +555,7 @@ final class GitHubViewModelTests: XCTestCase {
         service.projectReposResult = .success([ProjectRepo(id: "pr-1", repoNodeId: "R_A", fullName: "acme/api")])
         service.installationsResult = .success([acme])
         service.reposResult = [1: .success([repoB])]
-        let model = ProjectReposViewModel(projectId: "28", service: service, roles: ["admin"])
+        let model = ProjectReposViewModel(projectId: "28", service: service, userId: "me-1", roles: ["admin"])
         await model.load()
         await model.prepareAdd()
 
@@ -565,7 +572,7 @@ final class GitHubViewModelTests: XCTestCase {
 
     func test_projectRepos_noAccounts() async {
         let service = MockGitHubService()
-        let model = ProjectReposViewModel(projectId: "28", service: service, roles: ["admin"])
+        let model = ProjectReposViewModel(projectId: "28", service: service, userId: "me-1", roles: ["admin"])
         await model.prepareAdd()
         XCTAssertEqual(model.addInstallations, [])
         XCTAssertNil(model.selectedInstallationId)

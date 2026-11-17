@@ -91,17 +91,22 @@ struct ProjectRepo: Identifiable, Decodable, Hashable {
     let repoNodeId: String
     let fullName: String
     let defaultBranch: String
+    /// The user who bound it; they (or an admin or release manager) can remove it.
+    let createdBy: String?
 
     init(id: String, installationId: Int64? = nil, repoNodeId: String = "", fullName: String,
-         defaultBranch: String = "") {
+         defaultBranch: String = "", createdBy: String? = nil) {
         self.id = id
         self.installationId = installationId
         self.repoNodeId = repoNodeId
         self.fullName = fullName
         self.defaultBranch = defaultBranch
+        self.createdBy = createdBy
     }
 
-    private enum CodingKeys: String, CodingKey { case id, installationId, repoNodeId, fullName, defaultBranch }
+    private enum CodingKeys: String, CodingKey {
+        case id, installationId, repoNodeId, fullName, defaultBranch, createdBy
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -110,6 +115,7 @@ struct ProjectRepo: Identifiable, Decodable, Hashable {
         repoNodeId = c.lenient(.repoNodeId) ?? ""
         fullName = c.lenient(.fullName) ?? ""
         defaultBranch = c.lenient(.defaultBranch) ?? ""
+        createdBy = c.lenientString(.createdBy)
     }
 
     var githubURL: URL? { URL(string: "https://github.com/\(fullName)") }
@@ -264,6 +270,8 @@ enum GitHubIntegration {
         "installation_not_accessible": "Your GitHub account cannot access this installation. Sign in to GitHub as an owner of the account the app was installed on, then try again.",
         "already_bound": "This GitHub installation is already connected to another organization.",
         "installation_not_bound": "This GitHub installation is not connected to your organization. Connect it again on the Git page.",
+        "installation_not_yours": "This GitHub installation was connected by someone else. " +
+            "Install the app on your own GitHub account or organization instead.",
         "binding_in_use": "This repository is linked to change requests and cannot be removed yet.",
         "repo_not_in_installation": "The GitHub App does not have access to this repository.",
         "not_available_in_public_tenant": "GitHub integration is only available to organizations. Your account is not part of one.",
@@ -300,7 +308,6 @@ enum GitHubIntegration {
 
     // MARK: Roles (admin-trm client roles)
 
-    /// Connect / disconnect installations: admin, super-admin.
     /// Connect GitHub opens `installURL` through the web's start page, so the browser
     /// comes back to the app once connected.
     static func appInstallURL(_ installURL: URL, startURL: String = AppConfig.githubStartURL) -> URL? {
@@ -310,13 +317,13 @@ enum GitHubIntegration {
         return URL(string: "\(startURL)?from=ios&to=\(to)")
     }
 
-    static func canManage(roles: [String]) -> Bool {
-        roles.contains("admin") || roles.contains("super-admin")
-    }
-
-    /// Bind / unbind project repos: admin, super-admin, release-manager.
-    static func canBindProjectRepos(roles: [String]) -> Bool {
-        canManage(roles: roles) || roles.contains("release-manager")
+    /// GitHub connections are per user (trm-backend-go#270): every member connects, sees
+    /// and disconnects only their own, and binds repos to projects from them. A bound repo
+    /// is shared with the project's team; whoever bound it can remove it, and so can
+    /// admins, super-admins and release managers.
+    static func canRemoveProjectRepo(_ binding: ProjectRepo, userId: String?, roles: [String]) -> Bool {
+        if let userId, binding.createdBy == userId { return true }
+        return ["admin", "super-admin", "release-manager"].contains(where: roles.contains)
     }
 
     // MARK: Errors

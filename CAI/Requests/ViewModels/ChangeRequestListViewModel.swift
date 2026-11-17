@@ -128,8 +128,7 @@ final class ChangeRequestListViewModel: ObservableObject {
     /// embedded list, nil for the top-level Requests screen.
     private let projectId: String?
 
-    /// What the Filter sheet's Reset returns to, and what counts as unfiltered: Me/Me
-    /// for the Requests destination, anyone for a project's list.
+    /// Where the list starts: Me/Me for the Requests destination, anyone for a project's list.
     let defaultAdvancedFilters: ChangeRequestAdvancedFilters
 
     init(service: ChangeRequestServicing, workflowService: ChangeRequestWorkflowServicing? = nil,
@@ -142,9 +141,10 @@ final class ChangeRequestListViewModel: ObservableObject {
         advancedFilters = defaultAdvancedFilters
     }
 
-    /// The Filter button shows as on: a status, or the people/classification changed.
+    /// The Filter button shows as on whenever anything narrows the list, including the
+    /// Requests list's starting Me/Me; the sheet's Reset clears it all (as the web's Clear filter).
     var isFiltered: Bool {
-        statusFilter != nil || advancedFilters != defaultAdvancedFilters
+        statusFilter != nil || advancedFilters != .anyone
     }
 
     /// True once a load has finished (success or failure) — screens call

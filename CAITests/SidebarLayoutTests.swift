@@ -30,8 +30,9 @@ final class SidebarLayoutTests: XCTestCase {
         return store
     }
 
+    // Code is hidden for now.
     private let assistantRows: [SidebarDestination] = [
-        .assistant(.chats), .assistant(.code), .assistant(.files), .assistant(.agents)
+        .assistant(.chats), .assistant(.files), .assistant(.agents)
     ]
 
     func test_personalOnlyUser_noSwitcherNoRequests() {
@@ -111,11 +112,18 @@ final class SidebarLayoutTests: XCTestCase {
 
     // MARK: - app_mode migration
 
-    func test_legacyCodeMode_migratesToCodeDestination() {
+    // Code is hidden for now, so a user who left the app in Code comes back to Chats.
+    func test_legacyCodeMode_landsOnChatsWhileCodeIsHidden() {
         defaults.set("code", forKey: AssistantDestination.legacyAppModeKey)
         let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false }, isRequestsFixturesEnabled: { false })
-        XCTAssertEqual(store.assistantDestination, .code)
+        XCTAssertEqual(store.assistantDestination, .chats)
         XCTAssertNil(defaults.string(forKey: AssistantDestination.legacyAppModeKey))
+    }
+
+    func test_storedCodeDestination_fallsBackToChats() {
+        defaults.set("code", forKey: WorkspaceStore.lastDestinationKey(for: .assistant))
+        let store = WorkspaceStore(defaults: defaults, isRequestsFeatureEnabled: { false }, isRequestsFixturesEnabled: { false })
+        XCTAssertEqual(store.currentDestination, .assistant(.chats))
     }
 
     func test_legacyChatMode_migratesToChats() {
@@ -135,7 +143,7 @@ final class SidebarLayoutTests: XCTestCase {
     // MARK: - Shortcuts
 
     func test_commandDigitShortcuts_followDestinationOrder() {
-        XCTAssertEqual(AssistantDestination.allCases, [.chats, .code, .files, .agents])
+        XCTAssertEqual(AssistantDestination.visible, [.chats, .files, .agents])
         XCTAssertEqual(ShellKeyboardShortcuts.key(forIndex: 0), "1")
         XCTAssertEqual(ShellKeyboardShortcuts.key(forIndex: 3), "4")
         XCTAssertEqual(ShellKeyboardShortcuts.key(forIndex: 8), "9")

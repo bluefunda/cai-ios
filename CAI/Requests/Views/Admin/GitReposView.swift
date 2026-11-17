@@ -63,7 +63,7 @@ private struct GitReposScreen: View {
         }
         .task {
             if github.model == nil {
-                github.model = GitHubIntegrationViewModel(service: githubService, roles: workspace.requestsRoles)
+                github.model = GitHubIntegrationViewModel(service: githubService)
                 await github.model?.load()
             }
             if !loader.hasLoaded { await reload() }

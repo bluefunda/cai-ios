@@ -37,6 +37,13 @@ enum AssistantDestination: String, CaseIterable, Identifiable {
     }
 
     static let legacyAppModeKey = "app_mode"
+
+    /// Code is hidden for now (as the web dropped its ABAPer link); its screen stays so it
+    /// can come back by removing it from here.
+    static let hidden: Set<AssistantDestination> = [.code]
+
+    /// What the sidebar and its shortcuts offer.
+    static var visible: [AssistantDestination] { allCases.filter { !hidden.contains($0) } }
 }
 
 /// Only reachable for `trm` org members with the feature flag on — see
@@ -147,7 +154,7 @@ struct SidebarLayout: Equatable {
         // Never render a space the user can't use, whatever was persisted.
         self.activeSpace = availableSpaces.contains(activeSpace) ? activeSpace : .assistant
         switch self.activeSpace {
-        case .assistant: destinations = AssistantDestination.allCases.map { .assistant($0) }
+        case .assistant: destinations = AssistantDestination.visible.map { .assistant($0) }
         case .requests: destinations = RequestsDestination.available(roles: requestsRoles).map { .requests($0) }
         }
     }
@@ -162,9 +169,11 @@ struct SidebarLayout: Equatable {
 // MARK: - Typed Destination State
 
 extension WorkspaceStore {
+    /// A hidden destination (Code) that was last open falls back to Chats.
     var assistantDestination: AssistantDestination {
         get {
-            lastDestination(for: .assistant).flatMap(AssistantDestination.init(rawValue:)) ?? .chats
+            let stored = lastDestination(for: .assistant).flatMap(AssistantDestination.init(rawValue:))
+            return stored.flatMap { AssistantDestination.hidden.contains($0) ? nil : $0 } ?? .chats
         }
         set { setLastDestination(newValue.rawValue, for: .assistant) }
     }
