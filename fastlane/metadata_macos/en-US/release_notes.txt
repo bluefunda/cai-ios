@@ -1,5 +1,2 @@
 New in this release:
-• Connect your own GitHub on the Git page; Reset clears every filter
-• Templates for everyone; drop QA deploy and the ticket link
-• Your own GitHub, Reset clears every filter; hide Code
-• Hide Code from the sidebar for now
+• Live row while the assistant works, claude.ai-style
