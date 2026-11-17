@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.21.0](https://github.com/bluefunda/cai-ios/compare/v2.20.0...v2.21.0) (2026-11-17)
+
+
+### Features
+
+* **requests:** connect your own GitHub on the Git page; Reset clears every filter ([b51b452](https://github.com/bluefunda/cai-ios/commit/b51b4523cb2b826f93584db05bce60df3c42fbca))
+* **requests:** templates for everyone; drop QA deploy and the ticket link ([37de8b1](https://github.com/bluefunda/cai-ios/commit/37de8b1dfa6973644653ff3e7002a48f710642c0))
+* **requests:** templates for everyone; drop QA deploy and the ticket link ([1d62bab](https://github.com/bluefunda/cai-ios/commit/1d62bab2a8b1dc86f7eef73260910d6491d7f1b8))
+* **requests:** your own GitHub, Reset clears every filter; hide Code ([c6ed044](https://github.com/bluefunda/cai-ios/commit/c6ed044ba9328aceb55e5eb04a45a89c14d119b5))
+* **shell:** hide Code from the sidebar for now ([93a325a](https://github.com/bluefunda/cai-ios/commit/93a325abf75971081a11e3ffef94528f5c923084))
+
 ## [2.20.0](https://github.com/bluefunda/cai-ios/compare/v2.19.1...v2.20.0) (2026-11-14)
 
 
