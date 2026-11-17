@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.22.0](https://github.com/bluefunda/cai-ios/compare/v2.21.0...v2.22.0) (2026-11-17)
+
+
+### Features
+
+* **chat:** live row while the assistant works, claude.ai-style ([9e07c3c](https://github.com/bluefunda/cai-ios/commit/9e07c3c76a9003a621920e6368ffbc21e48bccb9))
+* **chat:** live row while the assistant works, claude.ai-style ([b2b5e87](https://github.com/bluefunda/cai-ios/commit/b2b5e879f46a968c915dfcf0fdc9952d7017d505))
+
 ## [2.21.0](https://github.com/bluefunda/cai-ios/compare/v2.20.0...v2.21.0) (2026-11-17)
 
 
