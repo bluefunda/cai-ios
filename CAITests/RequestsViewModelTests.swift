@@ -332,31 +332,6 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertFalse(model.isSaving)
     }
 
-    /// Editing a stage owner sends every stage back, as the web's edit form does; a plain
-    /// edit sends no stages at all.
-    func test_detail_applyEdit_sendsStageOwnersOnlyWhenGiven() async {
-        let service = CountingChangeRequestService()
-        service.stages = [
-            RQStage(order: 1, description: "Build", statusCode: "Build", current: true, ownerId: "u-1"),
-            RQStage(order: 2, description: "Review", statusCode: "Review", ownerId: "u-2"),
-        ]
-        let model = makeDetail(service: service)
-        await model.load()
-
-        await model.applyEdit(shortDescription: "Renamed", description: nil, requestType: nil, severity: nil,
-                              requestedBy: nil, ticketUrl: nil)
-        await model.applyEdit(shortDescription: nil, description: nil, requestType: nil, severity: nil,
-                              requestedBy: nil, ticketUrl: nil, stageOwners: [1: "u-3"])
-
-        XCTAssertNil(service.updates.first?.stage)
-        let stages = service.updates.last?.stage
-        XCTAssertEqual(stages?.map(\.order), [1, 2])
-        XCTAssertEqual(stages?.map(\.owner), ["u-3", nil], "a stage left out is unassigned")
-        XCTAssertEqual(stages?.map(\.current), [true, false])
-        XCTAssertEqual(stages?.map(\.description), ["Build", "Review"])
-        XCTAssertEqual(stages?.first?.updatedBy, "u-1")
-    }
-
     func test_detail_delete_sendsIdAndActor() async {
         let service = CountingChangeRequestService()
         let model = makeDetail(service: service)
@@ -838,5 +813,34 @@ extension RequestsViewModelTests {
         XCTAssertNil(model.error)
         XCTAssertEqual(model.notice?.hasPrefix("Moved "), true)
         XCTAssertEqual(services.log, ["status:completed"])
+    }
+}
+
+// MARK: - Edit stage owners
+
+extension RequestsViewModelTests {
+    /// Editing a stage owner sends every stage back, as the web's edit form does; a plain
+    /// edit sends no stages at all.
+    func test_detail_applyEdit_sendsStageOwnersOnlyWhenGiven() async {
+        let service = CountingChangeRequestService()
+        service.stages = [
+            RQStage(order: 1, description: "Build", statusCode: "Build", current: true, ownerId: "u-1"),
+            RQStage(order: 2, description: "Review", statusCode: "Review", ownerId: "u-2"),
+        ]
+        let model = makeDetail(service: service)
+        await model.load()
+
+        await model.applyEdit(shortDescription: "Renamed", description: nil, requestType: nil, severity: nil,
+                              requestedBy: nil, ticketUrl: nil)
+        await model.applyEdit(shortDescription: nil, description: nil, requestType: nil, severity: nil,
+                              requestedBy: nil, ticketUrl: nil, stageOwners: [1: "u-3"])
+
+        XCTAssertNil(service.updates.first?.stage)
+        let stages = service.updates.last?.stage
+        XCTAssertEqual(stages?.map(\.order), [1, 2])
+        XCTAssertEqual(stages?.map(\.owner), ["u-3", nil], "a stage left out is unassigned")
+        XCTAssertEqual(stages?.map(\.current), [true, false])
+        XCTAssertEqual(stages?.map(\.description), ["Build", "Review"])
+        XCTAssertEqual(stages?.first?.updatedBy, "u-1")
     }
 }
