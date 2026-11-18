@@ -36,7 +36,7 @@ final class SidebarLayoutTests: XCTestCase {
     ]
 
     func test_personalOnlyUser_noSwitcherNoRequests() {
-        for (flag, orgs) in [(false, [String]()), (true, []), (true, ["acme"]), (false, ["trm"])] {
+        for (flag, orgs) in [(false, [String]()), (true, []), (false, ["acme"]), (false, ["trm"])] {
             let store = makeStore(flag: flag, organizations: orgs)
             // Even a persisted Requests choice must not leak through.
             store.activeSpace = .requests

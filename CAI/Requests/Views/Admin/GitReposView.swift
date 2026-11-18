@@ -164,14 +164,16 @@ private struct NewGitRepoSheet: View {
         NavigationStack {
             Form {
                 if let error { Text(error).foregroundStyle(.red).font(RQFont.meta) }
-                TextField("Repository URL", text: $url)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                TextField("Package", text: $package)
-                    .textInputAutocapitalization(.characters)
-                TextField("Branch", text: $branch)
-                    .textInputAutocapitalization(.never)
+                Section {
+                    TextField(required: "Repository URL", text: $url)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField(required: "Package", text: $package)
+                        .textInputAutocapitalization(.characters)
+                    TextField(required: "Branch", text: $branch)
+                        .textInputAutocapitalization(.never)
+                }
             }
             .navigationTitle("New Repo")
             .navigationBarTitleDisplayMode(.inline)

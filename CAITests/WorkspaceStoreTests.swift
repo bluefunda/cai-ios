@@ -35,14 +35,14 @@ final class WorkspaceStoreTests: XCTestCase {
             WorkspaceStore.availableSpaces(organizations: ["trm"], requestsFeatureEnabled: true),
             [.assistant, .requests]
         )
-        // Membership anywhere in the claim counts, not just the effective (first) org.
         XCTAssertEqual(
             WorkspaceStore.availableSpaces(organizations: ["acme", "trm"], requestsFeatureEnabled: true),
             [.assistant, .requests]
         )
+        // Any organization, not only trm.
         XCTAssertEqual(
             WorkspaceStore.availableSpaces(organizations: ["acme"], requestsFeatureEnabled: true),
-            [.assistant]
+            [.assistant, .requests]
         )
     }
 
@@ -59,7 +59,7 @@ final class WorkspaceStoreTests: XCTestCase {
 
     func test_personalOnlyUser_seesOnlyAssistant() {
         let store = makeStore(flag: true)
-        store.update(organizations: ["acme"])
+        store.update(organizations: [])
         XCTAssertEqual(store.availableSpaces, [.assistant])
         XCTAssertFalse(store.isRequestsAvailable)
         XCTAssertEqual(store.activeSpace, .assistant)

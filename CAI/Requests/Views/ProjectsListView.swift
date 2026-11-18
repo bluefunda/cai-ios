@@ -229,8 +229,6 @@ struct ProjectFormView: View {
                         .formMultilineField()
                 } header: {
                     Text("Project")
-                } footer: {
-                    RequiredFieldsNote()
                 }
 
                 Section {
@@ -246,13 +244,6 @@ struct ProjectFormView: View {
                             Text(user.name).tag(String?.some(user.id))
                         }
                     }
-                }
-
-                Section("Optional") {
-                    TextField("Ticket link", text: $model.ticketUrl)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
                 }
 
                 if model.editing != nil, onDelete != nil {

@@ -11,7 +11,7 @@ struct CAIApp: App {
     @StateObject private var unreadPoller: UnreadCountPoller
     /// BlueRequests services share cai's AuthManager for tokens (one identity, P1).
     /// Built eagerly but inert: nothing calls trm-gw unless the Requests space is
-    /// available (feature flag + `trm` org) — see `updateRequestsPolling`.
+    /// available (feature flag + an organization) — see `updateRequestsPolling`.
     private let requestsServices: RequestsServices
     @Environment(\.scenePhase) private var scenePhase
 

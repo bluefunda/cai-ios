@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// Ported from trm-ios, with the web create form's fields (createUpdateChangeRequestForm):
-/// the required set, then the optional request number, platforms (with an SAP platform's
-/// source system, or a Git platform's repository and branches) and a template whose stages
-/// each get an owner.
+/// the required set, then the optional request number and a template whose stages each
+/// get an owner.
 ///
 /// Owns its view model (`@StateObject`): the presenting sheet's content closure can run
 /// again while the sheet is up, and a re-created model would wipe what was typed.
@@ -50,8 +49,6 @@ struct NewChangeRequestView: View {
                         .accessibilityIdentifier("requests.new.requestNumber")
                 } header: {
                     Text("Request")
-                } footer: {
-                    RequiredFieldsNote()
                 }
 
                 Section("Project") {
@@ -87,10 +84,6 @@ struct NewChangeRequestView: View {
                             Text(user.name).tag(String?.some(user.id))
                         }
                     }
-                }
-
-                if !model.applications.isEmpty {
-                    PlatformSection(model: model)
                 }
 
                 StagesSection(model: model)
@@ -168,73 +161,6 @@ struct NewChangeRequestView: View {
                 Text(model.error ?? "")
             }
         }
-    }
-}
-
-/// Platforms, then what an SAP or Git platform adds.
-private struct PlatformSection: View {
-    @ObservedObject var model: NewChangeRequestViewModel
-
-    var body: some View {
-        Section {
-            ForEach(model.applications, id: \.self) { platform in
-                Button {
-                    model.togglePlatform(platform)
-                } label: {
-                    HStack {
-                        Text(platform.description ?? "Untitled")
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if let id = platform.id, model.selectedPlatformIds.contains(id) {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.tint)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("requests.new.platform")
-            }
-            if model.hasSAPPlatform {
-                Picker("SAP source system", selection: $model.selectedSystemId) {
-                    Text("Select…").tag(String?.none)
-                    ForEach(model.systems) { system in
-                        Text(system.name.isEmpty ? system.sid : system.name).tag(String?.some(system.id))
-                    }
-                }
-            }
-            if model.hasGitPlatform {
-                Picker("Repository", selection: $model.selectedRepo) {
-                    Text("Select…").tag("")
-                    ForEach(model.repos, id: \.self) { repo in
-                        Text(repo).tag(repo)
-                    }
-                }
-                .disabled(model.repos.isEmpty)
-                BranchFields(title: "QA", branch: $model.qaBranch)
-                BranchFields(title: "PRD", branch: $model.prdBranch)
-            }
-        } header: {
-            Text("Platform")
-        } footer: {
-            if model.hasGitPlatform && model.repos.isEmpty {
-                Text("The selected project has no repositories.")
-            }
-        }
-    }
-}
-
-private struct BranchFields: View {
-    let title: String
-    @Binding var branch: NewChangeRequestPayload.DeploymentBranch
-
-    var body: some View {
-        TextField("\(title) source branch", text: $branch.source)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-        TextField("\(title) target branch", text: $branch.target)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
     }
 }
 

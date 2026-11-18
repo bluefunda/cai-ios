@@ -36,7 +36,7 @@ final class WorkspaceStore: ObservableObject {
     @Published private(set) var requestsRoles: [String] = []
 
     /// The chosen space for this session — may name a space that isn't currently
-    /// available (e.g. after leaving the `trm` org). Kept as-is so the choice
+    /// available (e.g. after leaving the organization). Kept as-is so the choice
     /// survives a transient loss of entitlement; read `activeSpace`. Each launch
     /// starts in Assistant (see init).
     @Published private var storedSpace: AppSpace {
@@ -88,7 +88,9 @@ final class WorkspaceStore: ObservableObject {
         requestsFixturesEnabled: Bool = false
     ) -> [AppSpace] {
         var spaces: [AppSpace] = [.assistant]
-        let isMember = organizations.contains(AppConfig.requestsOrgAlias)
+        // Any organization: trm-backend-go takes the tenant from the token's organization
+        // (a database per org alias), so no org is named here.
+        let isMember = !organizations.isEmpty
         if requestsFeatureEnabled, isMember || requestsFixturesEnabled {
             spaces.append(.requests)
         }

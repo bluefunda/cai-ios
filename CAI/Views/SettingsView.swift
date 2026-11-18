@@ -76,7 +76,7 @@ struct SettingsView: View {
     }
 
     // Subscription is individual-realm only — trm accounts don't buy IAP. BlueRequests
-    // only for users who have the Requests space (feature flag + `trm` org).
+    // only for users who have the Requests space (feature flag + an organization).
     private var categories: [SettingsCategory] {
         SettingsCategory.allCases.filter { category in
             switch category {

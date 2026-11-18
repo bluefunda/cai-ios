@@ -44,11 +44,6 @@ enum AppConfig {
         return "https://api.bluefunda.com/requests"
     }
 
-    /// Keycloak Organization alias whose members get the BlueRequests space.
-    /// Matches the old `trm` realm name, so trm-backend-go's tenant DB map keeps
-    /// working once it substitutes org for realm.
-    static let requestsOrgAlias = "trm"
-
     /// The cai web's start page for Connect GitHub: it notes the app, then opens
     /// GitHub's install page; once connected, the web's callback page returns to
     /// cai://oauth/github-app/done.

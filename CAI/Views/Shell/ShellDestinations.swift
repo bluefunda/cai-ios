@@ -46,7 +46,7 @@ enum AssistantDestination: String, CaseIterable, Identifiable {
     static var visible: [AssistantDestination] { allCases.filter { !hidden.contains($0) } }
 }
 
-/// Only reachable for `trm` org members with the feature flag on — see
+/// Only reachable for organization members with the feature flag on — see
 /// WorkspaceStore.availableSpaces. The screens behind these land with the Requests
 /// port; until then each shows a placeholder.
 enum RequestsDestination: String, CaseIterable, Identifiable {
