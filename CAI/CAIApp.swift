@@ -8,6 +8,7 @@ struct CAIApp: App {
     @StateObject private var chatManager = ChatManager(service: BFFChatService())
     @StateObject private var iapManager = IAPManager()
     @StateObject private var workspaceStore = WorkspaceStore()
+    @StateObject private var appUpdateChecker = AppUpdateChecker()
     @StateObject private var unreadPoller: UnreadCountPoller
     /// BlueRequests services share cai's AuthManager for tokens (one identity, P1).
     /// Built eagerly but inert: nothing calls trm-gw unless the Requests space is
@@ -41,6 +42,9 @@ struct CAIApp: App {
                 .environmentObject(workspaceStore)
                 .environmentObject(unreadPoller)
                 .environment(\.requestsServices, requestsServices)
+                // "Update available" / "Update required" from GET /app-version.
+                .appUpdateNotice(appUpdateChecker)
+                .task { await appUpdateChecker.check() }
                 // Allow the window to shrink only so far on Mac.
                 // Never set an explicit frame here — it fights the window manager
                 // and breaks fullscreen.
@@ -111,6 +115,7 @@ struct CAIApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
+                        Task { await appUpdateChecker.check() }
                         // Returning to the foreground can happen after the background
                         // refresh timer was suspended — top up the token so the first
                         // action after resuming never hits an expired session. Also
