@@ -1,2 +1,2 @@
 New in this release:
-• Web parity: any-org Requests, stage owners on edit, simpler forms
+• "Update available" banner and "Update required" screen
