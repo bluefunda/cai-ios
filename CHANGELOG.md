@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.24.0](https://github.com/bluefunda/cai-ios/compare/v2.23.0...v2.24.0) (2026-11-19)
+
+
+### Features
+
+* **app-update:** "Update available" banner and "Update required" screen ([acc9e44](https://github.com/bluefunda/cai-ios/commit/acc9e4410b5989d4c1b8782994643cde37666738))
+* **app-update:** "Update available" banner and "Update required" screen ([924b49e](https://github.com/bluefunda/cai-ios/commit/924b49e7b397ad6d6aca2f9d72cd2b4eefa71305))
+
 ## [2.23.0](https://github.com/bluefunda/cai-ios/compare/v2.22.0...v2.23.0) (2026-11-19)
 
 
