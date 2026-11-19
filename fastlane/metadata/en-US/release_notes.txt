@@ -1,2 +1,2 @@
 New in this release:
-• Live row while the assistant works, claude.ai-style
+• Web parity: any-org Requests, stage owners on edit, simpler forms
