@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.23.0](https://github.com/bluefunda/cai-ios/compare/v2.22.0...v2.23.0) (2026-11-19)
+
+
+### Features
+
+* **requests:** web parity: any-org Requests, stage owners on edit, simpler forms ([965effb](https://github.com/bluefunda/cai-ios/commit/965effb0af188dfd46105b9718e9ea613421d9e7))
+* **requests:** web parity: any-org Requests, stage owners on edit, simpler forms ([8c71d2b](https://github.com/bluefunda/cai-ios/commit/8c71d2bf9ac69d8fd70cfb3ab40891a53d11ca89))
+
 ## [2.22.0](https://github.com/bluefunda/cai-ios/compare/v2.21.0...v2.22.0) (2026-11-17)
 
 
