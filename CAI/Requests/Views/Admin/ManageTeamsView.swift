@@ -78,7 +78,9 @@ private struct NewTeamSheet: View {
         NavigationStack {
             Form {
                 if let error { Text(error).foregroundStyle(.red).font(RQFont.meta) }
-                TextField("Team name", text: $name)
+                Section {
+                    TextField(required: "Team name", text: $name)
+                }
             }
             .navigationTitle("New Team")
             .navigationBarTitleDisplayMode(.inline)

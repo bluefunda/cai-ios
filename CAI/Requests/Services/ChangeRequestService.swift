@@ -90,7 +90,7 @@ struct ChangeRequestService: ChangeRequestServicing {
     let client: RequestsAPIClient
     let projectService: ProjectServicing
 
-    /// trm's web app's GO_URL for the `trm` organization (the same prefix create/update use).
+    /// trm's web app's GO_URL (the same prefix create/update use); the tenant comes from the token.
     private static let path = "/rest/trm/v1/change-request"
 
     func listChangeRequests(filter: ChangeRequestFilter) async throws -> [ChangeRequest] {

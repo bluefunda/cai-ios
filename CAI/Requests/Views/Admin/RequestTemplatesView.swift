@@ -122,7 +122,7 @@ private struct TemplateFormSheet: View {
                     Text(error).foregroundStyle(.red).font(RQFont.meta)
                 }
                 Section {
-                    TextField("Template name", text: $name)
+                    TextField(required: "Template name", text: $name)
                     Picker("Kind", selection: $kind) {
                         ForEach(RQTemplateKind.allCases) { Text($0.title).tag($0) }
                     }
@@ -145,12 +145,12 @@ private struct TemplateFormSheet: View {
                 }
                 ForEach($stages) { $stage in
                     Section("Stage \((stages.firstIndex(of: stage) ?? 0) + 1)") {
-                        TextField("Stage name", text: $stage.description)
-                        Picker("Department", selection: $stage.department) {
+                        TextField(required: "Stage name", text: $stage.description)
+                        Picker(required: "Department", selection: $stage.department) {
                             Text("Select").tag("")
                             ForEach(departments) { Text($0.name).tag($0.name) }
                         }
-                        Picker("Role", selection: $stage.role) {
+                        Picker(required: "Role", selection: $stage.role) {
                             Text("Select").tag("")
                             ForEach(roles) { Text($0.name).tag($0.name) }
                         }

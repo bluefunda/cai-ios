@@ -1015,6 +1015,36 @@ struct ChangeRequestDeletePayload: Encodable {
 }
 
 struct ChangeRequestUpdatePayload: Encodable {
+    /// A stage as the web's edit form sends it back. trm-backend-go's update applies only
+    /// the owner, to the request's stage at `order` (updateStageData, OwnerOnly).
+    struct Stage: Encodable, Equatable {
+        let order: Int
+        let description: String
+        let statusCode: String
+        let qaDeploy: Bool
+        /// Encoded as null when unassigned, which clears the owner (a uuid.NullUUID).
+        let owner: String?
+        let current: Bool
+        let completed: Bool
+        let updatedBy: String
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(order, forKey: .order)
+            try c.encode(description, forKey: .description)
+            try c.encode(statusCode, forKey: .statusCode)
+            try c.encode(qaDeploy, forKey: .qaDeploy)
+            try c.encode(owner, forKey: .owner)
+            try c.encode(current, forKey: .current)
+            try c.encode(completed, forKey: .completed)
+            try c.encode(updatedBy, forKey: .updatedBy)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case order, description, statusCode, qaDeploy, owner, current, completed, updatedBy
+        }
+    }
+
     var shortDescription: String?
     var description: String?
     var requestType: String?
@@ -1023,11 +1053,13 @@ struct ChangeRequestUpdatePayload: Encodable {
     var ticketUrl: String?
     var status: String?
     var archive: Bool?
+    /// Every stage, sent only when an owner changed.
+    var stage: [Stage]?
     let createdBy: String
     let updatedBy: String
 
     private enum CodingKeys: String, CodingKey {
-        case id, shortDescription, description, requestType, severity, requestedBy, ticketUrl, status, archive
+        case id, shortDescription, description, requestType, severity, requestedBy, ticketUrl, status, archive, stage
         case createdBy = "CreatedBy"
         case updatedBy = "UpdatedBy"
     }
@@ -1045,7 +1077,8 @@ struct ChangeRequestUpdatePayload: Encodable {
         requestedBy: String? = nil,
         ticketUrl: String? = nil,
         status: String? = nil,
-        archive: Bool? = nil
+        archive: Bool? = nil,
+        stage: [Stage]? = nil
     ) {
         self.id = id
         self.createdBy = createdBy
@@ -1058,6 +1091,7 @@ struct ChangeRequestUpdatePayload: Encodable {
         self.ticketUrl = ticketUrl
         self.status = status
         self.archive = archive
+        self.stage = stage
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1079,6 +1113,7 @@ struct ChangeRequestUpdatePayload: Encodable {
         try container.encodeIfPresent(ticketUrl, forKey: .ticketUrl)
         try container.encodeIfPresent(status, forKey: .status)
         try container.encodeIfPresent(archive, forKey: .archive)
+        try container.encodeIfPresent(stage, forKey: .stage)
     }
 }
 

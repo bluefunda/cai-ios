@@ -1,7 +1,7 @@
 import SwiftUI
 
 // MARK: - Project Detail
-// Ported from trm-ios: the project's header (type, team, owner, Jira, description), then
+// Ported from trm-ios: the project's header (type, team, owner, description), then
 // its change requests through the same building blocks as the Requests destination —
 // ArchiveTogglePicker and ChangeRequestListBody — so they look and behave the same.
 // Between them, the GitHub repositories bound to the project (trm's projectRepos).
@@ -178,13 +178,6 @@ private struct ProjectDetailBody: View {
                     TeamStack(members: project.team)
                 }
                 Spacer(minLength: 0)
-                if let jira = project.jira, !jira.isBlank, let url = URL(string: jira) {
-                    Link(destination: url) {
-                        Label("Open in Jira", systemImage: "arrow.up.right.square")
-                            .font(RQFont.meta)
-                    }
-                    .bfPointerHover()
-                }
             }
             if let owner = project.ownerName, !owner.isBlank {
                 Label("Owned by \(owner)", systemImage: "person")

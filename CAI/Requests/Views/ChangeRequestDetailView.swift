@@ -440,18 +440,8 @@ private struct DetailsTab: View {
                     if let project = changeRequest.projectName, !project.isBlank {
                         field("Project") { valueText(project) }
                     }
-                    field("Platform") { valueText(platformSummary ?? "None") }
                     if let owner = changeRequest.currentStageOwnerName {
                         field("Stage owner") { valueText(owner) }
-                    }
-                    if let ticket = changeRequest.ticketUrl, !ticket.isBlank {
-                        field("Ticket") {
-                            if let url = URL(string: ticket), url.scheme != nil {
-                                Link(ticket, destination: url).font(RQFont.body).lineLimit(1)
-                            } else {
-                                valueText(ticket)
-                            }
-                        }
                     }
                     field("Requested by") {
                         OwnerBadge(name: changeRequest.createdByName, avatarURLString: changeRequest.createdByAvatarURL)
@@ -467,11 +457,6 @@ private struct DetailsTab: View {
             .padding(BFSpacing._4)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private var platformSummary: String? {
-        let systems = changeRequest.platforms.compactMap(\.description).filter { !$0.isBlank }
-        return systems.isEmpty ? nil : systems.joined(separator: ", ")
     }
 
     private func valueText(_ text: String) -> Text {

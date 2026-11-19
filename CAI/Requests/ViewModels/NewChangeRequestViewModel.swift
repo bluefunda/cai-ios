@@ -429,14 +429,14 @@ final class NewChangeRequestViewModel: ObservableObject {
         // than blocking the required fields.
         async let t = try? sources.templates()
         async let tm = try? sources.teams()
-        async let a = try? sources.applications()
         async let w = try? sources.workflowSettings()
-        let (loadedTemplates, loadedTeams, loadedApplications, settings) = await (t, tm, a, w)
+        let (loadedTemplates, loadedTeams, settings) = await (t, tm, w)
         // Unknown (the read failed) counts as off: the backend still has the final say.
         templateRequired = settings?.enforceWorkflow ?? false
         templates = loadedTemplates ?? []
         teams = loadedTeams ?? []
-        applications = loadedApplications ?? []
+        // Platforms aren't offered any more (as on the web), so none load and a request
+        // goes in with none; a restored draft's platforms find nothing to match.
         isLoadingOptions = false
         restoreDraft()
     }

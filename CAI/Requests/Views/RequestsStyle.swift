@@ -289,10 +289,3 @@ extension Picker where Label == Text {
         self.init(selection: selection, content: content) { Text.required(title) }
     }
 }
-
-/// The "* Required" note under a form's first section.
-struct RequiredFieldsNote: View {
-    var body: some View {
-        Text("\(Text("*").foregroundStyle(.red)) Required")
-    }
-}

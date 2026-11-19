@@ -91,7 +91,7 @@ enum RQConfigKind: String, CaseIterable, Identifiable {
 struct AdminService: AdminServicing {
     let client: RequestsAPIClient
 
-    /// GO_URL for the `trm` organization, as ChangeRequestService uses.
+    /// GO_URL, as ChangeRequestService uses.
     private static let base = "/rest/trm/v1"
     private static let gitBase = "/rest/git/sap/v1"
 

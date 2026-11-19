@@ -253,7 +253,8 @@ private struct UserFormSheet: View {
     private var isNew: Bool { if case .new = target { return true } else { return false } }
 
     private var canSave: Bool {
-        !email.trimmedValue.isEmpty && !firstName.trimmedValue.isEmpty && departmentId != nil && roleId != nil
+        // The web's user form requires all five.
+        ![email, firstName, lastName].contains { $0.trimmedValue.isEmpty } && departmentId != nil && roleId != nil
     }
 
     var body: some View {
@@ -262,24 +263,24 @@ private struct UserFormSheet: View {
                 if let error {
                     Text(error).foregroundStyle(.red).font(RQFont.meta)
                 }
-                Section("User") {
-                    TextField("Email", text: $email)
+                Section {
+                    TextField(required: "Email", text: $email)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .disabled(!isNew)
-                    TextField("First name", text: $firstName)
-                    TextField("Last name", text: $lastName)
-                }
-                Section("Access") {
-                    Picker("Department", selection: $departmentId) {
+                    TextField(required: "First name", text: $firstName)
+                    TextField(required: "Last name", text: $lastName)
+                    Picker(required: "Department", selection: $departmentId) {
                         Text("Select").tag(String?.none)
                         ForEach(departments) { Text($0.name).tag(String?.some($0.id)) }
                     }
-                    Picker("Role", selection: $roleId) {
+                    Picker(required: "Role", selection: $roleId) {
                         Text("Select").tag(String?.none)
                         ForEach(roles) { Text($0.name).tag(String?.some($0.id)) }
                     }
+                } header: {
+                    Text("User")
                 }
                 Section("Teams") {
                     ForEach(teams) { team in

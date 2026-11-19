@@ -190,7 +190,8 @@ final class ChangeRequestDetailViewModel: ObservableObject {
         requestType: String?,
         severity: String?,
         requestedBy: String?,
-        ticketUrl: String?
+        ticketUrl: String?,
+        stageOwners: [Int: String]? = nil
     ) async {
         await performUpdate(ChangeRequestUpdatePayload(
             id: changeRequestId,
@@ -201,8 +202,21 @@ final class ChangeRequestDetailViewModel: ObservableObject {
             requestType: requestType,
             severity: severity,
             requestedBy: requestedBy,
-            ticketUrl: ticketUrl
+            ticketUrl: ticketUrl,
+            stage: stageOwners.map(stagesWithOwners)
         ))
+    }
+
+    /// The request's stages with the edited owners (by stage order); a stage missing from
+    /// `owners` is unassigned.
+    private func stagesWithOwners(_ owners: [Int: String]) -> [ChangeRequestUpdatePayload.Stage] {
+        (changeRequest?.stages ?? []).map { stage in
+            ChangeRequestUpdatePayload.Stage(
+                order: stage.order, description: stage.description, statusCode: stage.statusCode,
+                qaDeploy: stage.qaDeploy, owner: owners[stage.order], current: stage.current,
+                completed: stage.completed, updatedBy: currentUserId ?? ""
+            )
+        }
     }
 
     func setStatus(_ status: ChangeRequestStatus) async {

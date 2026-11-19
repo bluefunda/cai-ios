@@ -8,6 +8,8 @@ import XCTest
 private final class CountingChangeRequestService: ChangeRequestServicing {
     var listCalls = 0
     var updates: [ChangeRequestUpdatePayload] = []
+    /// Stages given to the fixture request the detail screen loads.
+    var stages: [RQStage]?
 
     func listChangeRequests(filter: ChangeRequestFilter) async throws -> [ChangeRequest] {
         listCalls += 1
@@ -15,7 +17,9 @@ private final class CountingChangeRequestService: ChangeRequestServicing {
     }
 
     func changeRequest(id: String) async throws -> ChangeRequest {
-        try await FixtureChangeRequestService().changeRequest(id: id)
+        var request = try await FixtureChangeRequestService().changeRequest(id: id)
+        if let stages { request.stages = stages }
+        return request
     }
 
     func create(_ payload: NewChangeRequestPayload) async throws -> ChangeRequest {
@@ -585,29 +589,19 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(model.makePayload()).stage.isEmpty)
     }
 
-    func test_newRequest_platformsAddSAPSystemAndGitFields() async throws {
+    /// Platforms aren't offered any more (as on the web): none load, and a request goes in
+    /// with none.
+    func test_newRequest_offersNoPlatforms() async throws {
         var asked: [String] = []
         let model = makeFullNewRequest { asked.append($0) }
         await model.loadOptions()
         fillRequired(model)
 
-        model.togglePlatform(model.applications[0])
-        XCTAssertTrue(model.hasSAPPlatform)
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        XCTAssertEqual(asked, ["sap"], "an SAP platform loads its systems")
-        model.selectedSystemId = "sys-1"
-        model.qaBranch.source = "feature/x"
-
-        var payload = try XCTUnwrap(model.makePayload())
-        XCTAssertEqual(payload.platform.map(\.id), ["sap"])
-        XCTAssertEqual(payload.sapSourceSystemId, "sys-1")
-        XCTAssertEqual(payload.deploymentBranches[0].source, "", "branches are only sent for a Git platform")
-
-        model.togglePlatform(model.applications[0])
-        model.togglePlatform(model.applications[1])
-        payload = try XCTUnwrap(model.makePayload())
+        XCTAssertTrue(model.applications.isEmpty)
+        let payload = try XCTUnwrap(model.makePayload())
+        XCTAssertTrue(payload.platform.isEmpty)
         XCTAssertNil(payload.sapSourceSystemId)
-        XCTAssertEqual(payload.deploymentBranches[0].source, "feature/x")
+        XCTAssertTrue(asked.isEmpty)
     }
 
     func test_newRequest_templateRequiredWhenApprovalsForEveryRequest() async throws {
@@ -819,5 +813,34 @@ extension RequestsViewModelTests {
         XCTAssertNil(model.error)
         XCTAssertEqual(model.notice?.hasPrefix("Moved "), true)
         XCTAssertEqual(services.log, ["status:completed"])
+    }
+}
+
+// MARK: - Edit stage owners
+
+extension RequestsViewModelTests {
+    /// Editing a stage owner sends every stage back, as the web's edit form does; a plain
+    /// edit sends no stages at all.
+    func test_detail_applyEdit_sendsStageOwnersOnlyWhenGiven() async {
+        let service = CountingChangeRequestService()
+        service.stages = [
+            RQStage(order: 1, description: "Build", statusCode: "Build", current: true, ownerId: "u-1"),
+            RQStage(order: 2, description: "Review", statusCode: "Review", ownerId: "u-2"),
+        ]
+        let model = makeDetail(service: service)
+        await model.load()
+
+        await model.applyEdit(shortDescription: "Renamed", description: nil, requestType: nil, severity: nil,
+                              requestedBy: nil, ticketUrl: nil)
+        await model.applyEdit(shortDescription: nil, description: nil, requestType: nil, severity: nil,
+                              requestedBy: nil, ticketUrl: nil, stageOwners: [1: "u-3"])
+
+        XCTAssertNil(service.updates.first?.stage)
+        let stages = service.updates.last?.stage
+        XCTAssertEqual(stages?.map(\.order), [1, 2])
+        XCTAssertEqual(stages?.map(\.owner), ["u-3", nil], "a stage left out is unassigned")
+        XCTAssertEqual(stages?.map(\.current), [true, false])
+        XCTAssertEqual(stages?.map(\.description), ["Build", "Review"])
+        XCTAssertEqual(stages?.first?.updatedBy, "u-1")
     }
 }

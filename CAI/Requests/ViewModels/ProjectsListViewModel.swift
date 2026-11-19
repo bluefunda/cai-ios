@@ -72,9 +72,10 @@ final class ProjectsListViewModel: ObservableObject {
 }
 
 // MARK: - New / Edit Project
-// The web's CreateUpdateProjectForm: name, description, project type and owner are
-// required; the ticket link is optional. A new project's owner starts as the signed-in
-// user; editing starts from the project's own values.
+// The web's CreateUpdateProjectForm: name, description, project type and owner, all
+// required. The ticket link isn't on the form any more; an existing one is sent back
+// unchanged. A new project's owner starts as the signed-in user; editing starts from the
+// project's own values.
 
 @MainActor
 final class ProjectFormViewModel: ObservableObject {

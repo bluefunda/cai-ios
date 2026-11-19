@@ -486,6 +486,28 @@ extension RequestsAPIClientTests {
         XCTAssertNil(body["shortDescription"], "unchanged fields stay out")
     }
 
+    func test_update_stagesEncodeAnUnassignedOwnerAsNull() throws {
+        let stage = { (order: Int, owner: String?) in
+            ChangeRequestUpdatePayload.Stage(order: order, description: "S\(order)", statusCode: "S\(order)",
+                                             qaDeploy: false, owner: owner, current: order == 1,
+                                             completed: false, updatedBy: "u-1")
+        }
+        let payload = ChangeRequestUpdatePayload(id: "32", createdBy: "u-1", updatedBy: "u-1",
+                                                 stage: [stage(1, "u-2"), stage(2, nil)])
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as? [String: Any])
+        let stages = try XCTUnwrap(body["stage"] as? [[String: Any]])
+        XCTAssertEqual(stages.map { $0["order"] as? Int }, [1, 2])
+        XCTAssertEqual(stages[0]["owner"] as? String, "u-2")
+        XCTAssertTrue(stages[1]["owner"] is NSNull, "null clears the owner; a missing key would too, but say it")
+        XCTAssertEqual(stages[0]["current"] as? Bool, true)
+    }
+
+    func test_update_withoutStagesLeavesTheKeyOut() throws {
+        let payload = ChangeRequestUpdatePayload(id: "32", createdBy: "u-1", updatedBy: "u-1", status: "planned")
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as? [String: Any])
+        XCTAssertNil(body["stage"], "a stage-less update must not touch the stages")
+    }
+
     /// A failed write answers 200 with an error body; it used to be reported as saved.
     func test_update_errorBodyThrows() async {
         respond(status: 200, body: #"[{"time":"2026-11-03T09:06:47Z","status":"error","message":"decode failed for change request id 0x1"}]"#)

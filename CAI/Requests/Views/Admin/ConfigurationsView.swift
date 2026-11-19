@@ -188,10 +188,12 @@ private struct NewConfigItemSheet: View {
         NavigationStack {
             Form {
                 if let error { Text(error).foregroundStyle(.red).font(RQFont.meta) }
-                TextField("Name", text: $name)
-                TextField("Description", text: $description, axis: .vertical)
-                    .lineLimit(1...4)
-                    .formMultilineField()
+                Section {
+                    TextField(required: "Name", text: $name)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(1...4)
+                        .formMultilineField()
+                }
             }
             .navigationTitle("Add \(kind.title)")
             .navigationBarTitleDisplayMode(.inline)
@@ -238,7 +240,9 @@ private struct NewApplicationSheet: View {
         NavigationStack {
             Form {
                 if let error { Text(error).foregroundStyle(.red).font(RQFont.meta) }
-                TextField("Description", text: $description)
+                Section {
+                    TextField(required: "Description", text: $description)
+                }
                 Section {
                     Toggle("SAP", isOn: $sap)
                     Toggle("Git", isOn: $git)

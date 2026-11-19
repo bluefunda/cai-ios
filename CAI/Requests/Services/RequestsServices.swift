@@ -84,7 +84,7 @@ extension EnvironmentValues {
     }
 }
 
-/// Whether the signed-in user has the Requests space (flag + `trm` org), for views that
+/// Whether the signed-in user has the Requests space (flag + an organization), for views that
 /// can't take WorkspaceStore as an environment object — Settings is presented from more
 /// than one place, and a missing environment object crashes (cai-ios#254). Defaults to
 /// false, so anything that doesn't set it simply hides Requests UI.

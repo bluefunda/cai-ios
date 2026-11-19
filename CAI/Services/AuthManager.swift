@@ -870,7 +870,7 @@ struct User: Codable, Identifiable {
     let name: String
     let roles: [String]
     /// Every Keycloak Organization alias in the token's `organization` claim
-    /// (see `AuthManager.organizations(from:)`). Membership in `trm` unlocks
+    /// (see `AuthManager.organizations(from:)`). Membership in any organization unlocks
     /// the BlueRequests space (`WorkspaceStore`).
     var organizations: [String] = []
 
