@@ -50,15 +50,12 @@ jobs:
 
       - name: Prepare simulator
         run: |
-          # Find the UDID of any available iPhone 16 (or fall back to any iPhone)
+          # Any available iPhone simulator — the models differ per Xcode image (Xcode 27's has
+          # iPhone 17/18, no iPhone 16). `|| true`: the step runs with `bash -e`, so a grep
+          # with no match must not end it before the check below can report what's there.
           SIM_UDID=$(xcrun simctl list devices available | \
-            grep -E "iPhone 16[^P]" | head -1 | \
-            grep -oE '[A-F0-9]{8}-([A-F0-9]{4}-){3}[A-F0-9]{12}')
-          if [ -z "$SIM_UDID" ]; then
-            SIM_UDID=$(xcrun simctl list devices available | \
-              grep -E "iPhone" | head -1 | \
-              grep -oE '[A-F0-9]{8}-([A-F0-9]{4}-){3}[A-F0-9]{12}')
-          fi
+            grep -E "iPhone" | head -1 | \
+            grep -oE '[A-F0-9]{8}-([A-F0-9]{4}-){3}[A-F0-9]{12}' || true)
           if [ -z "$SIM_UDID" ]; then
             echo "No available simulator found. Available devices:"
             xcrun simctl list devices available
