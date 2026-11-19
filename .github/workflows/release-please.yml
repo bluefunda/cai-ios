@@ -35,7 +35,7 @@ jobs:
         (github.event_name == 'push' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && inputs.deploy_ios == true)
       )
-    runs-on: macos-15
+    runs-on: xcode-27
 
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +47,14 @@ jobs:
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer
+          # App Store Connect requires the iOS 27 SDK (Xcode 27+) from April 2027 (ITMS-90725).
+          # Fail rather than quietly fall back to an older Xcode.
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "No Xcode 27 on this runner:"; ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
 
       - name: Set version
@@ -106,7 +113,7 @@ jobs:
         (github.event_name == 'push' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && inputs.deploy_macos == true)
       )
-    runs-on: macos-15
+    runs-on: xcode-27
 
     steps:
       - uses: actions/checkout@v4
@@ -118,7 +125,14 @@ jobs:
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer
+          # App Store Connect requires the iOS 27 SDK (Xcode 27+) from April 2027 (ITMS-90725).
+          # Fail rather than quietly fall back to an older Xcode.
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            echo "No Xcode 27 on this runner:"; ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
 
       - name: Set version

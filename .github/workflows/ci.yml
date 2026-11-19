@@ -31,17 +31,19 @@ jobs:
 
   build-test:
     name: Build & Test (iOS)
-    runs-on: macos-15
+    runs-on: xcode-27
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
         run: |
-          # Prefer the latest stable Xcode 16.x; fall back to whatever is newest
-          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          # App Store Connect requires the iOS 27 SDK (Xcode 27+) from April 2027 (ITMS-90725).
+          # Fail rather than quietly fall back to an older Xcode.
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
           if [ -z "$XCODE" ]; then
-            XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+            echo "No Xcode 27 on this runner:"; ls -d /Applications/Xcode*.app
+            exit 1
           fi
           sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
@@ -75,7 +77,7 @@ jobs:
         run: |
           # Pipe through tee so xcodebuild output is visible in the CI log in real-time.
           # PIPESTATUS[0] gives xcodebuild's exit code (not tee's).
-          # -parallel-testing-enabled NO: the default GitHub-hosted macos-15 runner doesn't have
+          # -parallel-testing-enabled NO: the GitHub-hosted runner doesn't have
           # the CPU/RAM headroom for Xcode's default multi-clone parallel test execution — that
           # was causing random simulator clones to fail to launch mid-suite, failing whichever
           # test happened to be scheduled on them (a different, unrelated test each run).
@@ -124,16 +126,19 @@ jobs:
 
   build-macos:
     name: Build (macOS / Mac Catalyst)
-    runs-on: macos-15
+    runs-on: xcode-27
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
         run: |
-          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          # App Store Connect requires the iOS 27 SDK (Xcode 27+) from April 2027 (ITMS-90725).
+          # Fail rather than quietly fall back to an older Xcode.
+          XCODE=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
           if [ -z "$XCODE" ]; then
-            XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+            echo "No Xcode 27 on this runner:"; ls -d /Applications/Xcode*.app
+            exit 1
           fi
           sudo xcode-select -s "$XCODE/Contents/Developer"
           xcodebuild -version
