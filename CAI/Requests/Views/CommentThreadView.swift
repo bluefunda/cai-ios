@@ -62,12 +62,29 @@ struct CommentThreadView: View {
         return Array(matches.prefix(8))
     }
 
+    /// Completes the @-mention being typed and keeps the cursor in the box, so typing
+    /// goes on after the name.
+    private func pickMention(_ person: ProjectTeamMember) {
+        draft = CommentComposition.complete(draft, with: person)
+        isComposerFocused = true
+    }
+
+    private func post(keepFocus: Bool) {
+        guard !(draft.isBlank && pendingAttachments.isEmpty), !model.isPostingComment else { return }
+        let text = draft
+        let attachments = pendingAttachments
+        draft = ""
+        pendingAttachments = []
+        isComposerFocused = keepFocus
+        Task { await model.postComment(text, attachments: attachments) }
+    }
+
     private var mentionStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: BFSpacing._2) {
                 ForEach(mentionSuggestions) { person in
                     Button {
-                        draft = CommentComposition.complete(draft, with: person)
+                        pickMention(person)
                     } label: {
                         Label(person.name, systemImage: "at")
                             .font(RQFont.meta)
@@ -144,15 +161,21 @@ struct CommentThreadView: View {
                 .padding(.vertical, 6)
                 .frame(minHeight: 32)
                 .focused($isComposerFocused)
+                // A hardware keyboard's Return picks the top @-suggestion while mentioning,
+                // otherwise posts; Shift+Return starts a new line (as on the web).
+                .onKeyPress(.return, phases: .down) { press in
+                    guard !press.modifiers.contains(.shift) else { return .ignored }
+                    if let first = mentionSuggestions.first {
+                        pickMention(first)
+                    } else {
+                        post(keepFocus: true)
+                    }
+                    return .handled
+                }
                 .accessibilityIdentifier("requests.comment.field")
 
             Button {
-                let text = draft
-                let attachments = pendingAttachments
-                draft = ""
-                pendingAttachments = []
-                isComposerFocused = false
-                Task { await model.postComment(text, attachments: attachments) }
+                post(keepFocus: false)
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28))

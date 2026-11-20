@@ -49,6 +49,10 @@ struct RQMessage: Identifiable, Decodable, Hashable {
         case sender = "SenderInfo"
     }
 
+    /// Shown the moment it's sent, before the server has saved it (a negative id): trm-bff
+    /// publishes it on NATS and answers before trm-backend stores it.
+    var isLocal: Bool { id < 0 }
+
     init(id: Int, senderId: String, text: String, createdAtRaw: String?, sender: RQParticipant?,
          attachments: [RQAttachment] = []) {
         self.id = id

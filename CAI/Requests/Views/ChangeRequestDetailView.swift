@@ -41,6 +41,12 @@ struct ChangeRequestDetailView: View {
             }
             // Loads again if an earlier load was cut short, so the tabs never stay empty.
             if let model = box.model, !model.hasLoaded { await model.load() }
+            // Then kept current while open, as on the web.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: ChangeRequestDetailViewModel.refreshInterval)
+                guard !Task.isCancelled else { break }
+                await box.model?.refreshQuietly()
+            }
         }
     }
 
@@ -70,6 +76,7 @@ private struct DetailBody: View {
     @ObservedObject var state: RequestsState
     let origin: RequestDetailOrigin
 
+    @EnvironmentObject private var workspace: WorkspaceStore
     @State private var selectedTab: ChangeRequestDetailTab = .details
     @State private var showEditSheet = false
     @State private var confirmArchive = false
@@ -270,9 +277,10 @@ private struct DetailBody: View {
 
     private func moreMenu(_ cr: ChangeRequest) -> some View {
         Menu {
-            // As on the web: editing is only for a request still at its first stage;
-            // deleting too, or once it's archived (`canDelete`).
-            if cr.isAtFirstStage {
+            // As on the web: editing is only for a request still at its first stage, and
+            // only by its requester or an admin; deleting at the first stage too, or once
+            // it's archived (`canDelete`).
+            if cr.isAtFirstStage && cr.canEdit(userId: state.currentUserId, roles: workspace.requestsRoles) {
                 Button {
                     showEditSheet = true
                 } label: {
@@ -747,6 +755,12 @@ private struct StageMoveSheet: View {
                         .lineLimit(3...8)
                         .accessibilityIdentifier("requests.stageMove.comment")
                         .formMultilineField()
+                        // A hardware keyboard's Return confirms; Shift+Return adds a line.
+                        .onKeyPress(.return, phases: .down) { press in
+                            guard !press.modifiers.contains(.shift) else { return .ignored }
+                            confirmMove()
+                            return .handled
+                        }
                 }
 
                 if let error = model.error {
@@ -766,11 +780,7 @@ private struct StageMoveSheet: View {
                     if model.isMovingStage {
                         ProgressView()
                     } else {
-                        Button(move.kind.title) {
-                            Task {
-                                if await model.moveStage(move, comment: comment) { dismiss() }
-                            }
-                        }
+                        Button(move.kind.title, action: confirmMove)
                         .accessibilityIdentifier("requests.stageMove.confirm")
                     }
                 }
@@ -779,6 +789,13 @@ private struct StageMoveSheet: View {
         }
         .presentationDetents([.medium, .large])
         .onAppear { model.error = nil }
+    }
+
+    private func confirmMove() {
+        guard !model.isMovingStage else { return }
+        Task {
+            if await model.moveStage(move, comment: comment) { dismiss() }
+        }
     }
 
     private func stageRow(label: String, stage: RQStage, owner: String?) -> some View {
@@ -894,20 +911,17 @@ private struct WorkflowSection: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Who can decide a step, for someone who can't: its owner, or its department · role.
+    /// Who can decide a step, for someone who can't: its stage owner alone when it has
+    /// one (trm-backend-go#279), otherwise anyone with its department · role.
     private func approverDescription(_ step: RQWorkflowStep) -> String {
+        if let ownerId = step.owner, !ownerId.isBlank {
+            // The waiting step is the current one, whose owner's name the request carries.
+            guard let cr = model.changeRequest, cr.currentStage?.ownerId == ownerId,
+                  let name = cr.currentStageOwnerName, !name.isBlank else { return "the stage owner" }
+            return name
+        }
         let group = [step.department, step.role].filter { !$0.isBlank }.joined(separator: " · ")
-        // The waiting step is the current one, whose owner's name the request carries.
-        let owner = step.owner.flatMap { id -> String? in
-            guard let cr = model.changeRequest, cr.currentStage?.ownerId == id else { return nil }
-            return cr.currentStageOwnerName
-        }
-        switch (owner, group.isEmpty) {
-        case let (owner?, false): return "\(owner) or \(group)"
-        case let (owner?, true): return owner
-        case (nil, false): return group
-        case (nil, true): return "an approver"
-        }
+        return group.isEmpty ? "an approver" : group
     }
 
     private func badge(_ text: String, color: Color) -> some View {
@@ -950,6 +964,12 @@ private struct WorkflowDecisionSheet: View {
                         .lineLimit(3...8)
                         .accessibilityIdentifier("requests.workflow.comment")
                         .formMultilineField()
+                        // A hardware keyboard's Return approves or rejects; Shift+Return adds a line.
+                        .onKeyPress(.return, phases: .down) { press in
+                            guard !press.modifiers.contains(.shift) else { return .ignored }
+                            confirmDecision()
+                            return .handled
+                        }
                 }
             }
             .navigationTitle("\(verb) \(step.title)")
@@ -962,16 +982,7 @@ private struct WorkflowDecisionSheet: View {
                     if model.isDeciding {
                         ProgressView()
                     } else {
-                        Button(verb) {
-                            Task {
-                                // As on the web, the sheet closes either way; a refusal
-                                // shows under the workflow.
-                                if let error = await model.decide(decision, on: step, comment: comment) {
-                                    onFailure(error)
-                                }
-                                dismiss()
-                            }
-                        }
+                        Button(verb, action: confirmDecision)
                         .accessibilityIdentifier("requests.workflow.confirm")
                     }
                 }
@@ -979,6 +990,17 @@ private struct WorkflowDecisionSheet: View {
             .interactiveDismissDisabled(model.isDeciding)
         }
         .presentationDetents([.medium])
+    }
+
+    private func confirmDecision() {
+        guard !model.isDeciding else { return }
+        Task {
+            // As on the web, the sheet closes either way; a refusal shows under the workflow.
+            if let error = await model.decide(decision, on: step, comment: comment) {
+                onFailure(error)
+            }
+            dismiss()
+        }
     }
 }
 

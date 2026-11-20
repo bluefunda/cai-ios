@@ -132,6 +132,34 @@ final class RequestsState: ObservableObject {
         requestsPath = [id]
     }
 
+    // MARK: Messages badge and opening a conversation
+
+    /// Conversations with unread messages, for the sidebar's Messages badge (as on the
+    /// web: three unread messages from one person count as 1).
+    @Published private(set) var unreadConversations = 0
+    /// A conversation to open on the Messages destination (from the notifications bell);
+    /// MessagesView opens it and clears this.
+    @Published var pendingConversationId: String?
+
+    /// Re-reads the conversation list for the badge. CAI's sidebar calls it on a timer
+    /// while BlueRequests is available and the app is in the foreground.
+    func refreshMessagesBadge() async {
+        guard let messages else {
+            unreadConversations = 0
+            return
+        }
+        if messages.hasLoaded {
+            await messages.refreshQuietly()
+        } else {
+            await messages.loadIfNeeded()
+        }
+        unreadConversations = messages.unreadConversationCount
+    }
+
+    func openConversation(id: String) {
+        pendingConversationId = id
+    }
+
     /// After a request is deleted from its detail: it leaves recently viewed, and the
     /// lists reload. Back on the Requests list, an archived request's list opens on the
     /// Archive tab, where it was (web #320); a project's list just drops it.

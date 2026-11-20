@@ -10,6 +10,8 @@ struct CAIApp: App {
     @StateObject private var workspaceStore = WorkspaceStore()
     @StateObject private var appUpdateChecker = AppUpdateChecker()
     @StateObject private var unreadPoller: UnreadCountPoller
+    /// The notifications bell (Requests work activity); polled like `unreadPoller`.
+    @StateObject private var inboxStore: InboxStore
     /// BlueRequests services share cai's AuthManager for tokens (one identity, P1).
     /// Built eagerly but inert: nothing calls trm-gw unless the Requests space is
     /// available (feature flag + an organization) — see `updateRequestsPolling`.
@@ -23,6 +25,7 @@ struct CAIApp: App {
         let services = RequestsServices(authManager: auth)
         requestsServices = services
         _unreadPoller = StateObject(wrappedValue: UnreadCountPoller(service: services.notificationsService))
+        _inboxStore = StateObject(wrappedValue: InboxStore(service: services.inboxService))
     }
 
     private let container: ModelContainer = {
@@ -41,6 +44,7 @@ struct CAIApp: App {
                 .environmentObject(iapManager)
                 .environmentObject(workspaceStore)
                 .environmentObject(unreadPoller)
+                .environmentObject(inboxStore)
                 .environment(\.requestsServices, requestsServices)
                 // "Update available" / "Update required" from GET /app-version.
                 .appUpdateNotice(appUpdateChecker)
@@ -192,9 +196,9 @@ struct CAIApp: App {
     /// Unread polling only runs while BlueRequests is an available space and the app
     /// is in the foreground — personal-only users never hit trm-gw.
     private func updateRequestsPolling(phase: ScenePhase? = nil) {
-        unreadPoller.update(
-            isRequestsAvailable: authManager.isAuthenticated && workspaceStore.isRequestsAvailable,
-            isAppActive: (phase ?? scenePhase) == .active
-        )
+        let isRequestsAvailable = authManager.isAuthenticated && workspaceStore.isRequestsAvailable
+        let isAppActive = (phase ?? scenePhase) == .active
+        unreadPoller.update(isRequestsAvailable: isRequestsAvailable, isAppActive: isAppActive)
+        inboxStore.update(isRequestsAvailable: isRequestsAvailable, isAppActive: isAppActive)
     }
 }

@@ -11,6 +11,7 @@ struct RequestsServices {
     let workflowService: ChangeRequestWorkflowServicing
     let commentService: CommentServicing
     let notificationsService: NotificationsServicing
+    let inboxService: InboxServicing
     let profileService: ProfileServicing
     let projectService: ProjectServicing
     let releaseService: ReleaseServicing
@@ -29,6 +30,7 @@ struct RequestsServices {
             workflowService = FixtureChangeRequestWorkflowService()
             commentService = FixtureCommentService()
             notificationsService = FixtureNotificationsService()
+            inboxService = FixtureInboxService()
             profileService = FixtureProfileService()
             releaseService = FixtureReleaseService()
             referenceDataService = FixtureReferenceDataService()
@@ -56,6 +58,7 @@ struct RequestsServices {
         workflowService = ChangeRequestWorkflowService(client: client)
         commentService = CommentService(client: client, currentUserProvider: currentUserProvider)
         notificationsService = NotificationsService(client: client, currentUserProvider: currentUserProvider)
+        inboxService = InboxService(client: client)
         profileService = ProfileService(client: client)
         releaseService = ReleaseService(client: client)
         referenceDataService = ReferenceDataService(client: client)

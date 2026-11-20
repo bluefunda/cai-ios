@@ -529,3 +529,29 @@ final class RequestsAPIModelsTests: XCTestCase {
         XCTAssertEqual(payload.time, "20:00:00+00")
     }
 }
+
+// Who may edit, and the edit payload (an extension keeps the class body short).
+extension RequestsAPIModelsTests {
+    func testOnlyTheRequesterOrAnAdminMayEdit() {
+        let cr = ChangeRequest(
+            id: "7", requestNumber: "CR-7", title: "x", description: nil, status: .planned,
+            severity: nil, requestTypeLabel: nil, requestedByUserId: "req-1", createdByName: nil,
+            projectId: "3", projectName: nil, platforms: [], timeline: [], createdAt: nil,
+            stage: 1, totalStages: 2, stageStatus: nil)
+        XCTAssertTrue(cr.canEdit(userId: "req-1", roles: []))
+        XCTAssertTrue(cr.canEdit(userId: "REQ-1", roles: []), "ids compare case-insensitively")
+        XCTAssertTrue(cr.canEdit(userId: "u2", roles: ["admin"]))
+        XCTAssertTrue(cr.canEdit(userId: "u2", roles: ["super-admin"]))
+        XCTAssertFalse(cr.canEdit(userId: "u2", roles: ["developer", "release-manager"]))
+        XCTAssertFalse(cr.canEdit(userId: nil, roles: []))
+    }
+
+    func testUpdatePayloadSendsAChangedProjectAsANumber() throws {
+        let payload = ChangeRequestUpdatePayload(id: "7", createdBy: "u", updatedBy: "u", projectId: "12")
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as? [String: Any]
+        XCTAssertEqual(json?["projectId"] as? Int, 12)
+        let unchanged = ChangeRequestUpdatePayload(id: "7", createdBy: "u", updatedBy: "u")
+        let json2 = try JSONSerialization.jsonObject(with: JSONEncoder().encode(unchanged)) as? [String: Any]
+        XCTAssertNil(json2?["projectId"], "an unchanged project isn't sent")
+    }
+}
