@@ -411,8 +411,8 @@ struct SidebarView: View {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: BFMotion.normal)) {
             workspace.activeSpace = space
         }
-        // Switching space goes straight to it: the iPhone drawer closes, as picking a destination does.
-        closeDrawer()
+        // The iPhone drawer stays open on a space switch, showing the new space's menu to pick
+        // from (as Slack and Teams do); picking a destination closes it.
     }
 
     /// Closes the iPhone drawer; a no-op for the persistent split-view column.
