@@ -58,7 +58,16 @@ final class MessagesListViewModel: ObservableObject {
 
     /// Conversations with unread messages, for the Messages badge (as Slack and Teams
     /// badge it): three unread messages from one person count as 1.
-    var unreadConversationCount: Int { conversations.filter { $0.unreadCount > 0 }.count }
+    var unreadConversationCount: Int { unreadConversationIds.count }
+    var unreadConversationIds: Set<String> { Set(conversations.filter { $0.unreadCount > 0 }.map(\.id)) }
+
+    /// A conversation just opened: its row's unread count clears at once (the server records
+    /// the read a moment later).
+    func clearUnread(conversationId: String) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationId }),
+              conversations[index].unreadCount > 0 else { return }
+        conversations[index].unreadCount = 0
+    }
 
     /// Re-reads the list without a loading state, so new conversations and unread counts
     /// show up while it stays open; a failure keeps what's shown.

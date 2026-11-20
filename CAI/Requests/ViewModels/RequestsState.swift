@@ -136,7 +136,14 @@ final class RequestsState: ObservableObject {
 
     /// Conversations with unread messages, for the sidebar's Messages badge (as on the
     /// web: three unread messages from one person count as 1).
-    @Published private(set) var unreadConversations = 0
+    /// Conversations with unread messages, as last read from the server.
+    @Published private(set) var unreadConversationIds: Set<String> = []
+    /// The conversation open on screen, which never counts: it's being read, so the badge
+    /// drops the moment it opens rather than once the server has recorded the read.
+    @Published var openConversationId: String?
+    var unreadConversations: Int {
+        unreadConversationIds.subtracting(openConversationId.map { [$0] } ?? []).count
+    }
     /// A conversation to open on the Messages destination (from the notifications bell);
     /// MessagesView opens it and clears this.
     @Published var pendingConversationId: String?
@@ -145,7 +152,7 @@ final class RequestsState: ObservableObject {
     /// while BlueRequests is available and the app is in the foreground.
     func refreshMessagesBadge() async {
         guard let messages else {
-            unreadConversations = 0
+            unreadConversationIds = []
             return
         }
         if messages.hasLoaded {
@@ -153,7 +160,7 @@ final class RequestsState: ObservableObject {
         } else {
             await messages.loadIfNeeded()
         }
-        unreadConversations = messages.unreadConversationCount
+        unreadConversationIds = messages.unreadConversationIds
     }
 
     func openConversation(id: String) {

@@ -26,6 +26,11 @@ struct MessagesView: View {
                         }
                         state.pendingConversationId = nil
                     }
+                    // The open conversation stops counting at once, in the badge and its row.
+                    .onChange(of: path) { _, newPath in
+                        state.openConversationId = newPath.last?.id
+                        if let id = newPath.last?.id { model.clearUnread(conversationId: id) }
+                    }
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

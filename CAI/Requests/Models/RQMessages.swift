@@ -83,7 +83,7 @@ struct RQConversation: Identifiable, Decodable, Hashable {
     let isGroup: Bool
     let lastMessage: RQMessage?
     let participants: [RQParticipant]
-    let unreadCount: Int
+    var unreadCount: Int
 
     private enum CodingKeys: String, CodingKey {
         case conversationId, legacyConversationId = "ConversationId"
