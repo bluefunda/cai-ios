@@ -1287,6 +1287,7 @@ struct MCPServer: Identifiable, Hashable {
         if isOData || isSAPAnalytics { return "chart.bar.doc.horizontal" }
         if isSalesTracker { return "chart.line.uptrend.xyaxis" }
         if isApollo { return "person.fill.viewfinder" }
+        if isKB { return "books.vertical" }
         return "brain.head.profile"
     }
 }
