@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.25.1](https://github.com/bluefunda/cai-ios/compare/v2.25.0...v2.25.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **ci:** don't fail the App Store upload on altool's harmless resume-file error ([d7f9ade](https://github.com/bluefunda/cai-ios/commit/d7f9ade3f7195bfdef98eb66c03886e0da1dd46a))
+* **ci:** don't fail the App Store upload on altool's harmless resume-file error ([46655a1](https://github.com/bluefunda/cai-ios/commit/46655a16f8a13f18e0a95dcd2fcdda2abe736eb1))
+
 ## [2.25.0](https://github.com/bluefunda/cai-ios/compare/v2.24.0...v2.25.0) (2026-11-21)
 
 
