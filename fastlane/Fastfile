@@ -123,7 +123,7 @@ platform :ios do
   lane :ios_upload do
     set_version
     build_ios
-    upload_to_app_store(
+    upload_build(
       platform:             "ios",
       submit_for_review:    false,
       automatic_release:    false,
@@ -167,7 +167,7 @@ platform :ios do
   lane :mac_upload do
     set_version
     build_mac
-    upload_to_app_store(
+    upload_build(
       platform:             "osx",
       submit_for_review:    false,
       automatic_release:    false,
@@ -200,7 +200,7 @@ platform :ios do
   lane :release_all do
     set_version
     build_ios
-    upload_to_app_store(
+    upload_build(
       platform:             "ios",
       submit_for_review:    false,
       automatic_release:    false,
@@ -210,7 +210,7 @@ platform :ios do
       force:                true
     )
     build_mac
-    upload_to_app_store(
+    upload_build(
       platform:             "osx",
       submit_for_review:    false,
       automatic_release:    false,
@@ -324,6 +324,21 @@ platform :ios do
       increment_build_number(xcodeproj: "CAI.xcodeproj", build_number: BUILD_NUMBER)
     else
       increment_build_number(xcodeproj: "CAI.xcodeproj")
+    end
+  end
+
+  # upload_to_app_store for lanes that upload a binary. Xcode 27's altool logs
+  # a harmless "CDUploaderStateInfoResumeFilePath" ERROR line even when the
+  # upload succeeds, and fastlane fails the step on any altool error line.
+  # Only that error is let through; any other one (e.g. a duplicate build
+  # number) still fails the lane.
+  private_lane :upload_build do |options|
+    begin
+      upload_to_app_store(options)
+    rescue => e
+      errors = e.message.lines.grep(/Application Loader Error Output/)
+      raise unless errors.any? && errors.all? { |l| l.include?("CDUploaderStateInfoResumeFilePath") }
+      UI.important("Ignoring altool's resume-file error; the upload succeeded.")
     end
   end
 
