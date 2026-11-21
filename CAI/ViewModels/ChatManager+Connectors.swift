@@ -29,6 +29,7 @@ extension ChatManager {
     /// rather than ids — what the composer's per-chat Connectors toggle lists.
     var connectedMCPServers: [MCPServer] {
         visibleMCPServers.filter { server in
+            if server.isBuiltIn { return true }
             if server.isGitHub { return connectedGitHub }
             if server.isFigma { return connectedFigma }
             if server.isABAPer { return connectedSAP }
@@ -146,6 +147,13 @@ extension ChatManager {
         }
     }
 
+    /// The catalog this user may see: BlueFunda KB only for `trm` members with an
+    /// @bluefunda.com email (`MCPServer.isKBAllowed`); every other server as listed.
+    static func listableMCPServers(_ servers: [MCPServer], organizations: [String], email: String) -> [MCPServer] {
+        let kbAllowed = MCPServer.isKBAllowed(organizations: organizations, email: email)
+        return servers.filter { !$0.isKB || kbAllowed }
+    }
+
     func loadMCPServers() async {
         guard let api = apiService else { return }
 
@@ -162,11 +170,14 @@ extension ChatManager {
             // from availableMCPServers, so filtering it out here is the single point that
             // covers both. nil (the field genuinely absent) still means available — only an
             // explicit false excludes.
-            availableMCPServers = all
-                .filter { $0.enabled != false }
-                .map { dto in
+            let user = authManager?.currentUser
+            availableMCPServers = Self.listableMCPServers(
+                all.filter { $0.enabled != false }.map { dto in
                     MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description, label: dto.label)
-                }
+                },
+                organizations: user?.organizations ?? [],
+                email: user?.email ?? ""
+            )
             // Seed the active selection from what's connected, but only when
             // nothing has explicitly tracked one yet for this conversation
             // (cold start, or a conversation never visited before) — a user's
@@ -182,5 +193,28 @@ extension ChatManager {
         } catch {
             print("[ChatManager] loadMCPServers error: \(error)")
         }
+    }
+}
+
+// MARK: - Built-in agents
+// In an extension: ChatManager.swift (where MCPServer lives) is at
+// SwiftLint's file_length limit.
+extension MCPServer {
+    /// BlueFunda KB (kb-mcp): searches the BlueFunda knowledge base. Nothing of the
+    /// user's own to connect, so it's built in — "Included" in Settings → Agents and on
+    /// in every new chat (bluefunda/cai#363). Recognised by server name, not label.
+    var isKB: Bool { name == "kb-mcp" }
+
+    /// Built-in agents: always connected for the users they're offered to, and still
+    /// switchable off per chat from the composer.
+    var isBuiltIn: Bool { isKB }
+
+    /// Who may see BlueFunda KB: members of organization `trm` with an @bluefunda.com
+    /// email — the same check kb-mcp makes on every caller's token. cai-mcp-go already
+    /// lists it only for `trm`; this keeps it hidden from anyone kb-mcp would refuse.
+    static func isKBAllowed(organizations: [String], email: String) -> Bool {
+        let inTRM = organizations.contains { $0.lowercased() == "trm" }
+        let isBlueFunda = email.trimmingCharacters(in: .whitespaces).lowercased().hasSuffix("@bluefunda.com")
+        return inTRM && isBlueFunda
     }
 }

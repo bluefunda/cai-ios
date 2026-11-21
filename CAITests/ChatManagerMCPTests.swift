@@ -219,4 +219,57 @@ final class ChatManagerMCPTests: XCTestCase {
         chatManager.resetConnectorConnections()
         XCTAssertTrue(chatManager.connectedOneTapNames.isEmpty, "sign-out clears it")
     }
+
+    // MARK: - BlueFunda KB (built-in agent)
+
+    private let kb = MCPServer(
+        id: "10", name: "kb-mcp", url: "http://mcp-gateway:3000/kb-mcp", description: nil, label: "BlueFunda KB"
+    )
+
+    func test_kb_isRecognisedByServerName() {
+        XCTAssertTrue(kb.isKB)
+        XCTAssertTrue(kb.isBuiltIn)
+        XCTAssertEqual(kb.connectorIconName, "books.vertical")
+
+        let lookalike = MCPServer(
+            id: "x", name: "other-mcp", url: "http://x/mcp", description: nil, label: "BlueFunda KB"
+        )
+        XCTAssertFalse(lookalike.isKB, "matched by server name, not label")
+        XCTAssertFalse(lookalike.isBuiltIn)
+    }
+
+    func test_kb_allowedOnlyForTRMMembersWithABlueFundaEmail() {
+        XCTAssertTrue(MCPServer.isKBAllowed(organizations: ["trm"], email: "dev@bluefunda.com"))
+        XCTAssertTrue(MCPServer.isKBAllowed(organizations: ["acme", "trm"], email: "Dev@BlueFunda.com"))
+        XCTAssertFalse(MCPServer.isKBAllowed(organizations: ["trm"], email: "dev@gmail.com"), "trm alone isn't enough")
+        XCTAssertFalse(MCPServer.isKBAllowed(organizations: ["acme"], email: "dev@bluefunda.com"), "the email alone isn't enough")
+        XCTAssertFalse(MCPServer.isKBAllowed(organizations: [], email: "dev@bluefunda.com"))
+        XCTAssertFalse(MCPServer.isKBAllowed(organizations: ["trm"], email: "dev@notbluefunda.com"))
+        XCTAssertFalse(MCPServer.isKBAllowed(organizations: ["trm"], email: ""))
+    }
+
+    func test_kb_listedOnlyForAllowedUsers_otherServersUntouched() {
+        let apollo = makeServer("9", name: "apollo-mcp")
+        let allowed = ChatManager.listableMCPServers(
+            [apollo, kb], organizations: ["trm"], email: "dev@bluefunda.com"
+        )
+        XCTAssertEqual(allowed.map(\.name), ["apollo-mcp", "kb-mcp"])
+
+        let refused = ChatManager.listableMCPServers([apollo, kb], organizations: ["trm"], email: "dev@gmail.com")
+        XCTAssertEqual(refused.map(\.name), ["apollo-mcp"])
+    }
+
+    func test_kb_countsAsConnectedWithoutAnyConnection_whenListed() {
+        let chatManager = ChatManager(service: MockChatService())
+        let saved = chatManager.locallyConnectedServerIDs
+        defer { chatManager.locallyConnectedServerIDs = saved }
+        chatManager.locallyConnectedServerIDs = []
+        chatManager.connectedOneTapNames = []
+        chatManager.availableMCPServers = [kb, makeServer("9", name: "apollo-mcp")]
+        XCTAssertEqual(chatManager.connectedMCPServers.map(\.name), ["kb-mcp"])
+        XCTAssertTrue(chatManager.defaultConnectedMCPServerIDs.contains("10"), "on in every new chat")
+
+        chatManager.availableMCPServers = [makeServer("9", name: "apollo-mcp")]
+        XCTAssertTrue(chatManager.connectedMCPServers.isEmpty, "not listed → not connected")
+    }
 }
