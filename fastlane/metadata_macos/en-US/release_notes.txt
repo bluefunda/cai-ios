@@ -1,2 +1,5 @@
 New in this release:
-• "Update available" banner and "Update required" screen
+• Notifications bell, messages, Return to send, edit permission (web parity)
+• Keep the iPhone drawer open when switching space
+
+Plus bug fixes and performance improvements.
