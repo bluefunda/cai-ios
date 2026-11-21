@@ -218,11 +218,23 @@ struct ProjectFormView: View {
     @State private var isDeleting = false
     @State private var deleteError: String?
 
+    private func submit() {
+        guard model.isValid, !model.isSaving else { return }
+        Task {
+            if await model.save() {
+                await onCreated()
+                dismiss()
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     TextField(required: "Project name", text: $model.name)
+                        // Return creates or saves, as Enter does on the web.
+                        .onSubmit(submit)
                         .accessibilityIdentifier("projects.new.name")
                     TextField(required: "Description", text: $model.description, axis: .vertical)
                         .lineLimit(3...8)
@@ -302,14 +314,7 @@ struct ProjectFormView: View {
                     if model.isSaving {
                         ProgressView()
                     } else {
-                        Button(model.editing == nil ? "Create project" : "Save") {
-                            Task {
-                                if await model.save() {
-                                    await onCreated()
-                                    dismiss()
-                                }
-                            }
-                        }
+                        Button(model.editing == nil ? "Create project" : "Save", action: submit)
                         .disabled(!model.isValid)
                         .accessibilityIdentifier("projects.new.create")
                     }

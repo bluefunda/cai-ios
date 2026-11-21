@@ -53,6 +53,33 @@ final class MessagesListViewModel: ObservableObject {
         hasLoaded = true
     }
 
+    /// How often the list re-reads itself while it's on screen (as on the web).
+    static let refreshInterval: Duration = .seconds(5)
+
+    /// Conversations with unread messages, for the Messages badge (as Slack and Teams
+    /// badge it): three unread messages from one person count as 1.
+    var unreadConversationCount: Int { unreadConversationIds.count }
+    var unreadConversationIds: Set<String> { Set(conversations.filter { $0.unreadCount > 0 }.map(\.id)) }
+
+    /// A conversation just opened: its row's unread count clears at once (the server records
+    /// the read a moment later).
+    func clearUnread(conversationId: String) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationId }),
+              conversations[index].unreadCount > 0 else { return }
+        conversations[index].unreadCount = 0
+    }
+
+    /// Re-reads the list without a loading state, so new conversations and unread counts
+    /// show up while it stays open; a failure keeps what's shown.
+    func refreshQuietly() async {
+        guard hasLoaded, !isLoading, let loaded = try? await service.listConversations() else { return }
+        conversations = loaded.sorted { lhs, rhs in
+            let left: Date = lhs.lastMessage?.createdAt ?? .distantPast
+            let right: Date = rhs.lastMessage?.createdAt ?? .distantPast
+            return left > right
+        }
+    }
+
     func makeConversationModel(for conversation: RQConversation) -> ConversationViewModel {
         ConversationViewModel(conversation: conversation, service: service, currentUserId: currentUserId,
                               attachmentService: attachmentService)
@@ -276,27 +303,58 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// After sending, the latest page is re-read after these waits until the saved copy of
+    /// the message replaces the local one.
+    var confirmDelays: [Duration] = [.zero, .milliseconds(400), .milliseconds(1200), .seconds(3)]
+    private var nextLocalId = -1
+
+    /// Shown at once and the box cleared, then sent (as on the web). A failed send takes it
+    /// back out and restores the draft.
     func send() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
+        let attachments = pendingAttachments
+        let local = RQMessage(id: nextLocalId, senderId: currentUserId ?? "", text: text,
+                              createdAtRaw: ISO8601DateFormatter().string(from: Date()), sender: nil,
+                              attachments: attachments)
+        nextLocalId -= 1
+        messages.append(local)
+        draft = ""
+        pendingAttachments = []
         isSending = true
         error = nil
         do {
-            try await service.send(text, attachments: pendingAttachments, conversationId: conversation.id)
-            draft = ""
-            pendingAttachments = []
-            await refreshLatest()
+            try await service.send(text, attachments: attachments, conversationId: conversation.id)
+            isSending = false
+            for wait in confirmDelays {
+                try? await Task.sleep(for: wait)
+                await refreshLatest()
+                if !messages.contains(where: { $0.id == local.id }) { break }
+            }
         } catch {
+            messages.removeAll { $0.id == local.id }
+            draft = text
+            pendingAttachments = attachments
             self.error = error.localizedDescription
+            isSending = false
         }
-        isSending = false
     }
 
     /// Pages overlap — the backend's page is inclusive of its boundary timestamp — so messages
     /// are merged by id and kept oldest first (trm#155's duplicates came from appending).
+    /// A local message is dropped once the server has the same one: same sender and
+    /// text, sent within a couple of minutes of it.
     private func merge(_ page: [RQMessage]) {
         var byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for message in page { byId[message.id] = message }
+        let saved = byId.values.filter { !$0.isLocal }
+        for local in byId.values where local.isLocal {
+            let confirmed = saved.contains { s in
+                s.senderId == local.senderId && s.text == local.text
+                    && abs((s.createdAt ?? .distantPast).timeIntervalSince(local.createdAt ?? .distantPast)) < 120
+            }
+            if confirmed { byId[local.id] = nil }
+        }
         messages = byId.values.sorted { lhs, rhs in
             let left: Date = lhs.createdAt ?? .distantPast
             let right: Date = rhs.createdAt ?? .distantPast

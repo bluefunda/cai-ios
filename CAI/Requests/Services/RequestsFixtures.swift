@@ -280,3 +280,29 @@ struct FixtureReleaseService: ReleaseServicing {
     func customReleases() async throws -> [RQCustomRelease] { [] }
     func addCustomRelease(_ payload: CustomReleasePayload) async throws {}
 }
+
+struct FixtureInboxService: InboxServicing {
+    func page(before: Date?, limit: Int) async throws -> InboxPage {
+        let now = Date()
+        return InboxPage(
+            items: [
+                InboxItem(
+                    id: "n1", type: "cr.approval_requested", changeRequestId: 32,
+                    title: "CR-32 needs your approval: Finance review", summary: "Fix invoices",
+                    actorName: "Ada", createdAt: now.addingTimeInterval(-300), readAt: nil
+                ),
+                InboxItem(
+                    id: "n2", type: "comment.mentioned", changeRequestId: 31,
+                    title: "Bob mentioned you on CR-31", summary: "Can you check the transport?",
+                    actorName: "Bob", createdAt: now.addingTimeInterval(-7200), readAt: now
+                ),
+            ],
+            unreadCount: 1,
+            nextBefore: nil
+        )
+    }
+
+    func unreadCount() async throws -> Int { 1 }
+    func markRead(id: String) async throws {}
+    func markAllRead() async throws {}
+}

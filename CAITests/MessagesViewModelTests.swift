@@ -259,6 +259,7 @@ final class ConversationViewModelTests: XCTestCase {
         let service = RecordingMessagesService()
         await service.configure(failSendTimes: 1)
         let model = ConversationViewModel(conversation: conversation, service: service, currentUserId: "me")
+        model.confirmDelays = [.zero]
 
         model.draft = "Reply"
         await model.send()
@@ -269,6 +270,32 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(model.draft, "")
         let sent = await service.sent.map(\.text)
         XCTAssertEqual(sent, ["Reply"])
+    }
+
+    func test_send_showsTheMessageAtOnce_andTheSavedCopyReplacesIt() async {
+        let service = RecordingMessagesService()
+        let now = ISO8601DateFormatter().string(from: Date())
+        let saved = RQMessage(id: 10, senderId: "me", text: "hi", createdAtRaw: now, sender: nil)
+        await service.configure(pages: [[saved]])
+        let model = ConversationViewModel(conversation: conversation, service: service, currentUserId: "me")
+        model.confirmDelays = [.zero]
+
+        model.draft = "hi"
+        await model.send()
+        XCTAssertEqual(model.draft, "")
+        XCTAssertEqual(model.messages.map(\.id), [10], "the local copy is dropped once the server has it")
+        XCTAssertFalse(model.messages.contains { $0.isLocal })
+    }
+
+    func test_send_failureTakesTheLocalMessageBackOut() async {
+        let service = RecordingMessagesService()
+        await service.configure(failSendTimes: 1)
+        let model = ConversationViewModel(conversation: conversation, service: service, currentUserId: "me")
+        model.confirmDelays = [.zero]
+        model.draft = "oops"
+        await model.send()
+        XCTAssertTrue(model.messages.isEmpty)
+        XCTAssertEqual(model.draft, "oops")
     }
 
     func test_attachmentGoesWithTheNextMessage() async throws {

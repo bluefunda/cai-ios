@@ -103,6 +103,14 @@ struct ChangeRequest: Identifiable {
     /// a project's requests can be archived, deleted, and the project emptied (web #320).
     var canDelete: Bool { isAtFirstStage || isArchived }
 
+    /// Who may edit the request (as on the web, enforced by trm-backend-go): whoever
+    /// requested it, or an admin or super-admin.
+    func canEdit(userId: String?, roles: [String]) -> Bool {
+        if roles.contains(where: { ["admin", "super-admin"].contains($0) }) { return true }
+        guard let userId, let requester = requestedByUserId, !requester.isEmpty else { return false }
+        return userId.caseInsensitiveCompare(requester) == .orderedSame
+    }
+
     /// Prefers the real `createdAt` field; falls back to the earliest timeline entry only if
     /// that's ever absent (defensive — trm's frontend suggests it might not always be sent).
     var submittedAt: Date? {
@@ -1051,6 +1059,8 @@ struct ChangeRequestUpdatePayload: Encodable {
     var severity: String?
     var requestedBy: String?
     var ticketUrl: String?
+    /// A changed project; a number on the wire (trm-backend-go decodes it into an int).
+    var projectId: String?
     var status: String?
     var archive: Bool?
     /// Every stage, sent only when an owner changed.
@@ -1059,7 +1069,8 @@ struct ChangeRequestUpdatePayload: Encodable {
     let updatedBy: String
 
     private enum CodingKeys: String, CodingKey {
-        case id, shortDescription, description, requestType, severity, requestedBy, ticketUrl, status, archive, stage
+        case id, shortDescription, description, requestType, severity, requestedBy, ticketUrl, projectId
+        case status, archive, stage
         case createdBy = "CreatedBy"
         case updatedBy = "UpdatedBy"
     }
@@ -1076,6 +1087,7 @@ struct ChangeRequestUpdatePayload: Encodable {
         severity: String? = nil,
         requestedBy: String? = nil,
         ticketUrl: String? = nil,
+        projectId: String? = nil,
         status: String? = nil,
         archive: Bool? = nil,
         stage: [Stage]? = nil
@@ -1089,6 +1101,7 @@ struct ChangeRequestUpdatePayload: Encodable {
         self.severity = severity
         self.requestedBy = requestedBy
         self.ticketUrl = ticketUrl
+        self.projectId = projectId
         self.status = status
         self.archive = archive
         self.stage = stage
@@ -1111,6 +1124,9 @@ struct ChangeRequestUpdatePayload: Encodable {
         try container.encodeIfPresent(severity, forKey: .severity)
         try container.encodeIfPresent(requestedBy, forKey: .requestedBy)
         try container.encodeIfPresent(ticketUrl, forKey: .ticketUrl)
+        if let projectId, let numeric = Int(projectId) {
+            try container.encode(numeric, forKey: .projectId)
+        }
         try container.encodeIfPresent(status, forKey: .status)
         try container.encodeIfPresent(archive, forKey: .archive)
         try container.encodeIfPresent(stage, forKey: .stage)

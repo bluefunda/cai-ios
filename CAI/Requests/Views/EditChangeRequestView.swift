@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The create form (NewChangeRequestView), prefilled: Request, Project, Classification and
-/// each stage's owner. Project and the stages themselves are fixed once created; only who
-/// owns each stage changes (trm-backend-go's update applies a stage's owner and nothing
+/// each stage's owner. The stages themselves are fixed once created; only who owns each
+/// stage changes (trm-backend-go's update applies a stage's owner and nothing
 /// else). Status and Archive are separate, lightweight actions on the detail screen itself
 /// (see ChangeRequestDetailView), matching the web.
 struct EditChangeRequestView: View {
@@ -19,6 +19,7 @@ struct EditChangeRequestView: View {
     @State private var selectedRequestTypeId: String?
     @State private var selectedSeverityId: String?
     @State private var selectedOwnerId: String?
+    @State private var selectedProjectId: String?
     /// Stage order → owner id; a stage missing here is unassigned.
     @State private var stageOwners: [Int: String]
     @State private var selectedTeamId: String?
@@ -27,6 +28,7 @@ struct EditChangeRequestView: View {
     @State private var severities: [SeverityOption] = []
     @State private var users: [UserOption] = []
     @State private var teams: [RQAdminTeam] = []
+    @State private var projects: [RQProject] = []
     @State private var isLoadingOptions = false
     @State private var isSaving = false
     @State private var loadError: String?
@@ -38,6 +40,7 @@ struct EditChangeRequestView: View {
         _requestName = State(initialValue: changeRequest.title)
         _description = State(initialValue: changeRequest.description ?? "")
         _selectedOwnerId = State(initialValue: changeRequest.requestedByUserId)
+        _selectedProjectId = State(initialValue: changeRequest.projectId)
         _stageOwners = State(initialValue: Self.owners(of: changeRequest))
     }
 
@@ -49,6 +52,7 @@ struct EditChangeRequestView: View {
     /// The same required set as create.
     private var isValid: Bool {
         !requestName.trimmedValue.isEmpty && !description.trimmedValue.isEmpty
+            && selectedProjectId != nil
             && selectedRequestTypeId != nil && selectedSeverityId != nil && selectedOwnerId != nil
     }
 
@@ -57,6 +61,8 @@ struct EditChangeRequestView: View {
             Form {
                 Section {
                     TextField(required: "Request name", text: $requestName)
+                        // Return saves, as Enter does on the web.
+                        .onSubmit(save)
                     TextField(required: "Description", text: $description, axis: .vertical)
                         .lineLimit(3...8)
                         .formMultilineField()
@@ -65,8 +71,17 @@ struct EditChangeRequestView: View {
                 }
 
                 Section("Project") {
-                    Text(changeRequest.projectName ?? "—")
-                        .foregroundStyle(.secondary)
+                    if projects.isEmpty {
+                        Text(changeRequest.projectName ?? "—")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker(required: "Project", selection: $selectedProjectId) {
+                            Text("Select…").tag(String?.none)
+                            ForEach(projects) { project in
+                                Text(project.name).tag(String?.some(project.id))
+                            }
+                        }
+                    }
                 }
 
                 Section("Classification") {
@@ -114,24 +129,7 @@ struct EditChangeRequestView: View {
                         .bfPointerHover()
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task {
-                            isSaving = true
-                            await model.applyEdit(
-                                shortDescription: changed(requestName, from: changeRequest.title),
-                                description: changed(description, from: changeRequest.description ?? ""),
-                                requestType: selectedRequestTypeId,
-                                severity: selectedSeverityId,
-                                requestedBy: changed(selectedOwnerId, from: changeRequest.requestedByUserId),
-                                // The link isn't on the form any more (as on create); nil leaves it as it is.
-                                ticketUrl: nil,
-                                // Sent only when an owner changed, so a plain edit logs no stage activity.
-                                stageOwners: stageOwners == Self.owners(of: changeRequest) ? nil : stageOwners
-                            )
-                            isSaving = false
-                            dismiss()
-                        }
-                    } label: {
+                    Button(action: save) {
                         if isSaving { ProgressView() } else { Text("Save changes") }
                     }
                     .disabled(!isValid || isSaving)
@@ -196,6 +194,28 @@ struct EditChangeRequestView: View {
         let name: String
     }
 
+    private func save() {
+        guard isValid, !isSaving else { return }
+        Task {
+            isSaving = true
+            await model.applyEdit(
+                shortDescription: changed(requestName, from: changeRequest.title),
+                description: changed(description, from: changeRequest.description ?? ""),
+                requestType: selectedRequestTypeId,
+                severity: selectedSeverityId,
+                requestedBy: changed(selectedOwnerId, from: changeRequest.requestedByUserId),
+                // The link isn't on the form any more (as on create); nil leaves it as it is.
+                ticketUrl: nil,
+                // Sent only when the project changed (as on the web).
+                projectId: changed(selectedProjectId, from: changeRequest.projectId),
+                // Sent only when an owner changed, so a plain edit logs no stage activity.
+                stageOwners: stageOwners == Self.owners(of: changeRequest) ? nil : stageOwners
+            )
+            isSaving = false
+            dismiss()
+        }
+    }
+
     private func loadOptions() async {
         guard let services, requestTypes.isEmpty else { return }
         isLoadingOptions = true
@@ -206,8 +226,11 @@ struct EditChangeRequestView: View {
             async let us = services.referenceDataService.users(forceRefresh: false)
             // Teams only narrow the stage owners; the form works without them.
             async let tm = try? services.adminService.teams(search: "")
+            // Without projects the current one shows as text and isn't changed.
+            async let pj = try? services.projectService.listProjects(forceRefresh: false)
             (requestTypes, severities, users) = try await (rt, sv, us)
             teams = (await tm) ?? []
+            projects = (await pj) ?? []
             selectedSeverityId = severities.first { $0.type == changeRequest.severity }?.id
             selectedRequestTypeId = requestTypes.first { $0.type == changeRequest.requestTypeLabel }?.id
         } catch {

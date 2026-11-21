@@ -34,6 +34,7 @@ struct SidebarView: View {
     @EnvironmentObject var workspace: WorkspaceStore
     @EnvironmentObject var unreadPoller: UnreadCountPoller
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     let presentation: SidebarPresentation
     @ObservedObject var systemStore: SAPSystemStore
@@ -79,6 +80,23 @@ struct SidebarView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(BFColor.surfaceSidebar)
         .modifier(PresentationChrome(presentation: presentation))
+        // The Messages badge: re-read every 10 s while BlueRequests is available and the
+        // app is in the foreground (as on the web).
+        .task(id: workspace.isRequestsAvailable && scenePhase == .active) {
+            guard workspace.isRequestsAvailable && scenePhase == .active else { return }
+            while !Task.isCancelled {
+                await requestsState.refreshMessagesBadge()
+                try? await Task.sleep(for: .seconds(10))
+            }
+        }
+    }
+
+    private func badge(for destination: SidebarDestination) -> Int {
+        switch destination {
+        case .requests(.requests): return unreadCount
+        case .requests(.messages): return workspace.isRequestsAvailable ? requestsState.unreadConversations : 0
+        default: return 0
+        }
     }
 
     // MARK: - 1 Header
@@ -94,6 +112,17 @@ struct SidebarView: View {
                 .font(BFFont.sidebarHeader)
                 .foregroundStyle(.primary)
             Spacer()
+            if workspace.activeSpace == .requests && workspace.isRequestsAvailable {
+                InboxBellButton(onOpenRequest: { id in
+                    workspace.navigate(to: .requests(.requests))
+                    requestsState.openRequest(id: id)
+                    closeDrawer()
+                }, onOpenConversation: { id in
+                    workspace.navigate(to: .requests(.messages))
+                    requestsState.openConversation(id: id)
+                    closeDrawer()
+                })
+            }
             #if !targetEnvironment(macCatalyst)
             if case .split(let columnVisibility) = presentation {
                 SidebarToggleButton(columnVisibility: columnVisibility)
@@ -135,7 +164,7 @@ struct SidebarView: View {
                 SidebarDestinationRow(
                     destination: destination,
                     isSelected: workspace.currentDestination == destination,
-                    badge: destination == .requests(.requests) ? unreadCount : 0
+                    badge: badge(for: destination)
                 ) {
                     workspace.navigate(to: destination)
                     closeDrawer()
@@ -382,8 +411,8 @@ struct SidebarView: View {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: BFMotion.normal)) {
             workspace.activeSpace = space
         }
-        // Switching space goes straight to it: the iPhone drawer closes, as picking a destination does.
-        closeDrawer()
+        // The iPhone drawer stays open on a space switch, showing the new space's menu to pick
+        // from (as Slack and Teams do); picking a destination closes it.
     }
 
     /// Closes the iPhone drawer; a no-op for the persistent split-view column.

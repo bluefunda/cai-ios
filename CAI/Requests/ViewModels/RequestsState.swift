@@ -132,6 +132,41 @@ final class RequestsState: ObservableObject {
         requestsPath = [id]
     }
 
+    // MARK: Messages badge and opening a conversation
+
+    /// Conversations with unread messages, for the sidebar's Messages badge (as on the
+    /// web: three unread messages from one person count as 1).
+    /// Conversations with unread messages, as last read from the server.
+    @Published private(set) var unreadConversationIds: Set<String> = []
+    /// The conversation open on screen, which never counts: it's being read, so the badge
+    /// drops the moment it opens rather than once the server has recorded the read.
+    @Published var openConversationId: String?
+    var unreadConversations: Int {
+        unreadConversationIds.subtracting(openConversationId.map { [$0] } ?? []).count
+    }
+    /// A conversation to open on the Messages destination (from the notifications bell);
+    /// MessagesView opens it and clears this.
+    @Published var pendingConversationId: String?
+
+    /// Re-reads the conversation list for the badge. CAI's sidebar calls it on a timer
+    /// while BlueRequests is available and the app is in the foreground.
+    func refreshMessagesBadge() async {
+        guard let messages else {
+            unreadConversationIds = []
+            return
+        }
+        if messages.hasLoaded {
+            await messages.refreshQuietly()
+        } else {
+            await messages.loadIfNeeded()
+        }
+        unreadConversationIds = messages.unreadConversationIds
+    }
+
+    func openConversation(id: String) {
+        pendingConversationId = id
+    }
+
     /// After a request is deleted from its detail: it leaves recently viewed, and the
     /// lists reload. Back on the Requests list, an archived request's list opens on the
     /// Archive tab, where it was (web #320); a project's list just drops it.

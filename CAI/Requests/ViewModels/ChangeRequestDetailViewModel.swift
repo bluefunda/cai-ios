@@ -62,6 +62,33 @@ final class ChangeRequestDetailViewModel: ObservableObject {
         comments.flatMap(\.attachments)
     }
 
+    /// How often an open request re-reads itself (see `refreshQuietly`).
+    static let refreshInterval: Duration = .seconds(10)
+
+    /// Something here is being saved, posted, uploaded or decided.
+    var isBusy: Bool {
+        isLoading || isSaving || isPostingComment || isUploadingFile || isMovingStage || isDeciding
+    }
+
+    /// Re-reads the request, its comments and its workflow without a loading state, so
+    /// another user's approval, stage move or comment shows up while it's open (the next
+    /// approver's buttons appear without a reload). Skipped while anything is in flight;
+    /// a failure keeps what's shown.
+    func refreshQuietly() async {
+        guard hasLoaded, !isBusy else { return }
+        do {
+            async let cr = changeRequestService.changeRequest(id: changeRequestId)
+            async let commentList = commentService.comments(forChangeRequestId: changeRequestId)
+            let (fresh, freshComments) = try await (cr, commentList)
+            guard !isBusy else { return }
+            changeRequest = fresh
+            comments = freshComments
+        } catch {
+            return
+        }
+        if !isBusy { await loadWorkflow() }
+    }
+
     func load() async {
         isLoading = true
         error = nil
@@ -191,6 +218,7 @@ final class ChangeRequestDetailViewModel: ObservableObject {
         severity: String?,
         requestedBy: String?,
         ticketUrl: String?,
+        projectId: String? = nil,
         stageOwners: [Int: String]? = nil
     ) async {
         await performUpdate(ChangeRequestUpdatePayload(
@@ -203,6 +231,7 @@ final class ChangeRequestDetailViewModel: ObservableObject {
             severity: severity,
             requestedBy: requestedBy,
             ticketUrl: ticketUrl,
+            projectId: projectId,
             stage: stageOwners.map(stagesWithOwners)
         ))
     }

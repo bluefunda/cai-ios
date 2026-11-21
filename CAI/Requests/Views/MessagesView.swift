@@ -8,10 +8,29 @@ struct MessagesView: View {
     @ObservedObject var state: RequestsState
     var navigationControl: ShellNavigationControl = .none
 
+    /// The open conversation, so one can be opened by id (from the notifications bell).
+    @State private var path: [RQConversation] = []
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             if let model = state.messages {
                 MessagesListScreen(state: state, model: model, navigationControl: navigationControl)
+                    .task(id: state.pendingConversationId) {
+                        guard let id = state.pendingConversationId else { return }
+                        await model.loadIfNeeded()
+                        if model.conversations.first(where: { $0.id == id }) == nil {
+                            await model.load()
+                        }
+                        if let conversation = model.conversations.first(where: { $0.id == id }) {
+                            path = [conversation]
+                        }
+                        state.pendingConversationId = nil
+                    }
+                    // The open conversation stops counting at once, in the badge and its row.
+                    .onChange(of: path) { _, newPath in
+                        state.openConversationId = newPath.last?.id
+                        if let id = newPath.last?.id { model.clearUnread(conversationId: id) }
+                    }
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -50,7 +69,14 @@ private struct MessagesListScreen: View {
         .navigationDestination(for: RQConversation.self) { conversation in
             MessageThreadScreen(model: model.makeConversationModel(for: conversation))
         }
-        .task { await model.loadIfNeeded() }
+        .task {
+            await model.loadIfNeeded()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: MessagesListViewModel.refreshInterval)
+                guard !Task.isCancelled else { break }
+                await model.refreshQuietly()
+            }
+        }
         .refreshable { await model.load() }
         .sheet(isPresented: $isComposing) {
             if let newModel = state.makeNewConversationModel() {
@@ -163,6 +189,16 @@ private struct NewConversationView: View {
         self.onCreated = onCreated
     }
 
+    private func sendNew() {
+        guard model.canSend else { return }
+        Task {
+            if await model.send() != nil {
+                onCreated()
+                dismiss()
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -182,6 +218,10 @@ private struct NewConversationView: View {
                     TextField("Search people", text: $model.searchText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        // Return picks the top match (as Enter does on the web).
+                        .onSubmit {
+                            if let first = model.matches.first { model.add(first) }
+                        }
                     if model.isSearching && model.matches.isEmpty {
                         ProgressView()
                     }
@@ -202,6 +242,7 @@ private struct NewConversationView: View {
 
                 Section {
                     TextField("Topic (optional)", text: $model.topic)
+                        .onSubmit(sendNew)
                 } footer: {
                     Text("Add #123 to link change request 123.")
                 }
@@ -223,14 +264,7 @@ private struct NewConversationView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task {
-                            if await model.send() != nil {
-                                onCreated()
-                                dismiss()
-                            }
-                        }
-                    } label: {
+                    Button(action: sendNew) {
                         if model.isSending { ProgressView() } else { Text("Send") }
                     }
                     .disabled(!model.canSend)
@@ -446,6 +480,13 @@ private struct MessageThreadScreen: View {
                 .padding(.vertical, BFSpacing._2)
                 .background(BFColor.surfaceSunken, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .onSubmit { Task { await model.send() } }
+                // A hardware keyboard's Return sends; Shift+Return starts a new line (as on
+                // the web). The on-screen keyboard's Return still adds a line.
+                .onKeyPress(.return, phases: .down) { press in
+                    guard !press.modifiers.contains(.shift) else { return .ignored }
+                    Task { await model.send() }
+                    return .handled
+                }
             Button {
                 Task { await model.send() }
             } label: {
@@ -504,7 +545,11 @@ private struct MessageBubble: View {
                     .accessibilityIdentifier("requests.message.attachment")
                     .bfPointerHover()
                 }
-                if let date = message.createdAt {
+                if message.isLocal {
+                    Text("Sending…")
+                        .font(RQFont.meta)
+                        .foregroundStyle(.tertiary)
+                } else if let date = message.createdAt {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
                         .font(RQFont.meta)
                         .foregroundStyle(.tertiary)
@@ -512,6 +557,7 @@ private struct MessageBubble: View {
             }
             if !isMine { Spacer(minLength: 48) }
         }
+        .opacity(message.isLocal ? 0.6 : 1)
         .frame(maxWidth: .infinity, alignment: isMine ? .trailing : .leading)
     }
 }
