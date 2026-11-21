@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.25.0](https://github.com/bluefunda/cai-ios/compare/v2.24.0...v2.25.0) (2026-11-21)
+
+
+### Features
+
+* **requests:** notifications bell, messages, Return to send, edit permission (web parity) ([debc21c](https://github.com/bluefunda/cai-ios/commit/debc21c93ea855918b688e6af547abad062da471))
+* **requests:** notifications bell, messages, Return to send, edit permission (web parity) ([7738386](https://github.com/bluefunda/cai-ios/commit/7738386b0aa647eabfd919b569c9c179e5c2168e))
+* **shell:** keep the iPhone drawer open when switching space ([e4ca2d7](https://github.com/bluefunda/cai-ios/commit/e4ca2d75aed0071fb9a98f3607f642067b03504b))
+
+
+### Bug Fixes
+
+* **messages:** an open conversation stops counting in the Messages badge at once ([4939d23](https://github.com/bluefunda/cai-ios/commit/4939d232b8880b8ddef324e6529dca0d3a914d29))
+
 ## [2.24.0](https://github.com/bluefunda/cai-ios/compare/v2.23.0...v2.24.0) (2026-11-19)
 
 
