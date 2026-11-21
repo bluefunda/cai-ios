@@ -170,13 +170,13 @@ extension ChatManager {
             // from availableMCPServers, so filtering it out here is the single point that
             // covers both. nil (the field genuinely absent) still means available — only an
             // explicit false excludes.
-            let user = authManager?.currentUser
+            let currentUser = authManager?.currentUser
             availableMCPServers = Self.listableMCPServers(
                 all.filter { $0.enabled != false }.map { dto in
                     MCPServer(id: dto.id, name: dto.name, url: dto.resolvedURL, description: dto.description, label: dto.label)
                 },
-                organizations: user?.organizations ?? [],
-                email: user?.email ?? ""
+                organizations: currentUser?.organizations ?? [],
+                email: currentUser?.email ?? ""
             )
             // Seed the active selection from what's connected, but only when
             // nothing has explicitly tracked one yet for this conversation
