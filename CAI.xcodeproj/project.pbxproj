@@ -7,11 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F1A5E00000000000000000B1 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F1A5E00000000000000000D1 /* FirebaseCore */; };
-		F1A5E00000000000000000B2 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = F1A5E00000000000000000D2 /* FirebaseMessaging */; };
-		F1A5E00000000000000000B3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A3 /* GoogleService-Info.plist */; };
-		F1A5E00000000000000000B4 /* PushNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A4 /* PushNotifications.swift */; };
-		F1A5E00000000000000000B5 /* DeviceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A5 /* DeviceService.swift */; };
 		079B0E1C3A4A5D3B5E978ECF /* ChangeRequestListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212B570F645F96E9F0322F75 /* ChangeRequestListViewModel.swift */; };
 		090066C5390E9EAA68B0632E /* ProjectFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 593268497F92368C97B1390F /* ProjectFilterSheet.swift */; };
 		0C14C94A384CAD231AA7BC82 /* EditChangeRequestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF1FA00FF5C760D603E7914 /* EditChangeRequestView.swift */; };
@@ -211,6 +206,11 @@
 		EE2A9CDE00AA8DB357799E53 /* SidebarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 680ADF4E9FABCB5B4E137727 /* SidebarComponents.swift */; };
 		F1000019201BCDEF /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000009201BCDEF /* SafariView.swift */; };
 		F1780FC696F483769E65E7DD /* RequestsStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B22B2E7A67D655FE3CE4E6 /* RequestsStateTests.swift */; };
+		F1A5E00000000000000000B1 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F1A5E00000000000000000D1 /* FirebaseCore */; };
+		F1A5E00000000000000000B2 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = F1A5E00000000000000000D2 /* FirebaseMessaging */; };
+		F1A5E00000000000000000B3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A3 /* GoogleService-Info.plist */; };
+		F1A5E00000000000000000B4 /* PushNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A4 /* PushNotifications.swift */; };
+		F1A5E00000000000000000B5 /* DeviceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A5 /* DeviceService.swift */; };
 		F1E7DB0EF04EB9C7193515DD /* GitHubIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B95C3B39AC1997D6C09508 /* GitHubIntegrationTests.swift */; };
 		F2976FB859344743F0EEFB0C /* WorkspaceStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A4A87B32A195176885891F9 /* WorkspaceStoreTests.swift */; };
 		F2C381ACBE01446C3309AC96 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439C8A7B6C80C23E44DA7337 /* ProfileViewModel.swift */; };
@@ -256,9 +256,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F1A5E00000000000000000A3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		F1A5E00000000000000000A4 /* PushNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotifications.swift; sourceTree = "<group>"; };
-		F1A5E00000000000000000A5 /* DeviceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceService.swift; sourceTree = "<group>"; };
 		00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ST22PromptBuilderTests.swift; sourceTree = "<group>"; };
 		006D8933B8D9EDB01E1B8CF2 /* InboxView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
 		0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ST22DumpDetector.swift; sourceTree = "<group>"; };
@@ -466,6 +463,9 @@
 		EE177166945D78C0581D5026 /* ProfileService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProfileService.swift; sourceTree = "<group>"; };
 		F07C2D3DF9E143828530204D /* ABAPerConnectFormView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ABAPerConnectFormView.swift; sourceTree = "<group>"; };
 		F1000009201BCDEF /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
+		F1A5E00000000000000000A3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		F1A5E00000000000000000A4 /* PushNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotifications.swift; sourceTree = "<group>"; };
+		F1A5E00000000000000000A5 /* DeviceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceService.swift; sourceTree = "<group>"; };
 		F53BD50B8AB15877ACFB6D02 /* TipBannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipBannerView.swift; sourceTree = "<group>"; };
 		F5437D5AA184891A6C31857D /* GitHubViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitHubViews.swift; sourceTree = "<group>"; };
 		F7E7796035E2425B0009A209 /* ProjectsListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectsListView.swift; sourceTree = "<group>"; };
@@ -1457,7 +1457,7 @@
 				CODE_SIGN_ENTITLEMENTS = CAI/CAI.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 274;
+				CURRENT_PROJECT_VERSION = 278;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1489,7 +1489,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.25.1;
+				MARKETING_VERSION = 2.26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1509,7 +1509,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "CAI/CAI-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 274;
+				CURRENT_PROJECT_VERSION = 278;
 				DEVELOPMENT_TEAM = UR7HWT72SR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readonly;
@@ -1541,7 +1541,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.25.1;
+				MARKETING_VERSION = 2.26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai;
 				PRODUCT_MODULE_NAME = CAI;
 				PRODUCT_NAME = "BlueFunda AI";
@@ -1559,10 +1559,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 274;
+				CURRENT_PROJECT_VERSION = 278;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.25.1;
+				MARKETING_VERSION = 2.26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -1577,10 +1577,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 274;
+				CURRENT_PROJECT_VERSION = 278;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.25.1;
+				MARKETING_VERSION = 2.26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.bluefunda.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
