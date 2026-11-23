@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.26.0](https://github.com/bluefunda/cai-ios/compare/v2.25.1...v2.26.0) (2026-11-23)
+
+
+### Features
+
+* **push:** push notifications on iPhone, iPad and Mac ([c831f18](https://github.com/bluefunda/cai-ios/commit/c831f18ee700762462468597252137689d0ef470))
+* **push:** push notifications on iPhone, iPad and Mac ([a3d77bb](https://github.com/bluefunda/cai-ios/commit/a3d77bbc510bdadebefa6a566de0e55d5e8ccd22))
+
 ## [2.25.1](https://github.com/bluefunda/cai-ios/compare/v2.25.0...v2.25.1) (2026-11-21)
 
 
