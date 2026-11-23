@@ -22,6 +22,7 @@ struct RequestsServices {
     let messagesService: MessagesServicing
     let adminService: AdminServicing
     let githubService: GitHubServicing
+    let deviceService: DeviceServicing
 
     init(authManager: AuthManager, useFixtures: Bool = BFFeatureFlags.requestsFixtures) {
         if useFixtures {
@@ -40,6 +41,7 @@ struct RequestsServices {
             messagesService = FixtureMessagesService()
             adminService = FixtureAdminService()
             githubService = FixtureGitHubService()
+            deviceService = FixtureDeviceService()
             return
         }
 
@@ -68,6 +70,7 @@ struct RequestsServices {
         messagesService = MessagesService(client: client, currentUserProvider: currentUserProvider)
         adminService = AdminService(client: client)
         githubService = GitHubService(client: client)
+        deviceService = DeviceService(client: client)
     }
 }
 

@@ -232,6 +232,7 @@ struct SettingsView: View {
             Button("Sign Out", role: .destructive) {
                 Task {
                     await chatManager.disconnect()
+                    await PushCenter.shared.disable()
                     await authManager.logout()
                 }
             }

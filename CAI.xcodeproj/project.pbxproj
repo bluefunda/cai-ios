@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F1A5E00000000000000000B1 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F1A5E00000000000000000D1 /* FirebaseCore */; };
+		F1A5E00000000000000000B2 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = F1A5E00000000000000000D2 /* FirebaseMessaging */; };
+		F1A5E00000000000000000B3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A3 /* GoogleService-Info.plist */; };
+		F1A5E00000000000000000B4 /* PushNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A4 /* PushNotifications.swift */; };
+		F1A5E00000000000000000B5 /* DeviceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A5E00000000000000000A5 /* DeviceService.swift */; };
 		079B0E1C3A4A5D3B5E978ECF /* ChangeRequestListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212B570F645F96E9F0322F75 /* ChangeRequestListViewModel.swift */; };
 		090066C5390E9EAA68B0632E /* ProjectFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 593268497F92368C97B1390F /* ProjectFilterSheet.swift */; };
 		0C14C94A384CAD231AA7BC82 /* EditChangeRequestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF1FA00FF5C760D603E7914 /* EditChangeRequestView.swift */; };
@@ -251,6 +256,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		F1A5E00000000000000000A3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		F1A5E00000000000000000A4 /* PushNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotifications.swift; sourceTree = "<group>"; };
+		F1A5E00000000000000000A5 /* DeviceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceService.swift; sourceTree = "<group>"; };
 		00241A29A445D5FAC596CDFB /* ST22PromptBuilderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ST22PromptBuilderTests.swift; sourceTree = "<group>"; };
 		006D8933B8D9EDB01E1B8CF2 /* InboxView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
 		0088AFECCBC818D3FBE0CC0D /* ST22DumpDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ST22DumpDetector.swift; sourceTree = "<group>"; };
@@ -497,6 +505,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				E900FE732FFC198B00881287 /* StoreKit.framework in Frameworks */,
+				F1A5E00000000000000000B1 /* FirebaseCore in Frameworks */,
+				F1A5E00000000000000000B2 /* FirebaseMessaging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -602,6 +612,7 @@
 				A100001B201BCDEF /* Assets.xcassets */,
 				A100001C201BCDEF /* Info.plist */,
 				L1000001201BCDEF /* PrivacyInfo.xcprivacy */,
+				F1A5E00000000000000000A3 /* GoogleService-Info.plist */,
 				E2000001201BCDEF /* CAI.entitlements */,
 				E2000002201BCDEF /* CAI-macOS.entitlements */,
 				6D9FF8BE189F472F0A68448F /* Requests */,
@@ -688,6 +699,7 @@
 				A100001A201BCDEF /* AuthManager.swift */,
 				EE000002201BCDEF /* Environment.swift */,
 				008A38717FC655DC1EA3972B /* AppUpdateChecker.swift */,
+				F1A5E00000000000000000A4 /* PushNotifications.swift */,
 				B1000004201BCDEF /* BFFAPIService.swift */,
 				H1000003201BCDEF /* SAPSystemStore.swift */,
 				H1000004201BCDEF /* CodeAPIService.swift */,
@@ -894,6 +906,7 @@
 				A03763EC452F62B797C14DC9 /* CRFileService.swift */,
 				FCCE7652358337A022B84F10 /* NotificationsService.swift */,
 				964768E06D2ECBFAE6EDC9EE /* InboxService.swift */,
+				F1A5E00000000000000000A5 /* DeviceService.swift */,
 				EE177166945D78C0581D5026 /* ProfileService.swift */,
 				B62A6AB082C43BA17EA8D3E9 /* ProjectService.swift */,
 				46896EA3DF69AB1578B3A89A /* ReferenceDataService.swift */,
@@ -941,6 +954,10 @@
 			dependencies = (
 			);
 			name = CAI;
+			packageProductDependencies = (
+				F1A5E00000000000000000D1 /* FirebaseCore */,
+				F1A5E00000000000000000D2 /* FirebaseMessaging */,
+			);
 			productName = CAI;
 			productReference = A1000020201BCDEF /* BlueFunda AI.app */;
 			productType = "com.apple.product-type.application";
@@ -989,6 +1006,9 @@
 				Base,
 			);
 			mainGroup = A1000040201BCDEF;
+			packageReferences = (
+				F1A5E00000000000000000C1 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			productRefGroup = A1000050201BCDEF /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -1015,6 +1035,7 @@
 				A100000B201BCDEF /* Assets.xcassets in Resources */,
 				E900FE762FFC32F100881287 /* Products.storekit in Resources */,
 				L1000011201BCDEF /* PrivacyInfo.xcprivacy in Resources */,
+				F1A5E00000000000000000B3 /* GoogleService-Info.plist in Resources */,
 				CE8BCC2889F34F17ABD36F2D /* catalog_snapshot.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1045,6 +1066,7 @@
 				A100000A201BCDEF /* AuthManager.swift in Sources */,
 				EE000001201BCDEF /* Environment.swift in Sources */,
 				2F3BC7A303ABD71582AC9F1E /* AppUpdateChecker.swift in Sources */,
+				F1A5E00000000000000000B4 /* PushNotifications.swift in Sources */,
 				B1000011201BCDEF /* APIModels.swift in Sources */,
 				FF000002201BCDEF /* PersistedModels.swift in Sources */,
 				B1000012201BCDEF /* APIClient.swift in Sources */,
@@ -1149,6 +1171,7 @@
 				2F19191EB65555F883059BEF /* CRFileService.swift in Sources */,
 				C593760F41BD1CB6B2844EE1 /* NotificationsService.swift in Sources */,
 				70A23957B3EE1BD3513793FF /* InboxService.swift in Sources */,
+				F1A5E00000000000000000B5 /* DeviceService.swift in Sources */,
 				4D14FD181D6E3DBD4B56BFE9 /* ProfileService.swift in Sources */,
 				DD8BD418AB7221132066D9A9 /* ProjectService.swift in Sources */,
 				16441F7F47880166B4F7CF3A /* ReferenceDataService.swift in Sources */,
@@ -1607,6 +1630,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F1A5E00000000000000000C1 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F1A5E00000000000000000D1 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1A5E00000000000000000C1 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		F1A5E00000000000000000D2 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1A5E00000000000000000C1 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A1000080201BCDEF /* Project object */;
 }

@@ -131,6 +131,19 @@ struct AppShell: View {
         .sheet(isPresented: $showSystems) {
             SystemManagerView(store: systemStore).environmentObject(authManager)
         }
+        // A tapped push opens its request or conversation, as the bell does.
+        .onReceive(PushCenter.shared.$pendingTarget.compactMap { $0 }) { target in
+            PushCenter.shared.pendingTarget = nil
+            guard workspace.isRequestsAvailable else { return }
+            switch target {
+            case .request(let id):
+                workspace.navigate(to: .requests(.requests))
+                requestsState.openRequest(id: id)
+            case .conversation(let id):
+                workspace.navigate(to: .requests(.messages))
+                requestsState.openConversation(id: id)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .focusSearchRequested)) { _ in
             focusSidebarSearch()
         }

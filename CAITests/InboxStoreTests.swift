@@ -160,3 +160,19 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertNil(page.nextBefore)
     }
 }
+
+// MARK: - Push Notifications
+// What a tapped push opens, from its data.
+
+final class PushTargetTests: XCTestCase {
+    func test_requestWinsOverConversation_andNumbersAreAccepted() {
+        XCTAssertEqual(PushTarget(userInfo: ["changeRequestId": "7", "conversationId": "c1"]), .request(id: "7"))
+        XCTAssertEqual(PushTarget(userInfo: ["changeRequestId": NSNumber(value: 42)]), .request(id: "42"))
+        XCTAssertEqual(PushTarget(userInfo: ["conversationId": "c1"]), .conversation(id: "c1"))
+    }
+
+    func test_nothingToOpen() {
+        XCTAssertNil(PushTarget(userInfo: [:]))
+        XCTAssertNil(PushTarget(userInfo: ["changeRequestId": "", "type": "cr.approved"]))
+    }
+}
