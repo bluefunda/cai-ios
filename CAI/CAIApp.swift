@@ -4,6 +4,8 @@ import AuthenticationServices
 
 @main
 struct CAIApp: App {
+    /// Firebase and APNs registration for push notifications (PushCenter).
+    @UIApplicationDelegateAdaptor(PushAppDelegate.self) private var pushAppDelegate
     @StateObject private var authManager: AuthManager
     @StateObject private var chatManager = ChatManager(service: BFFChatService())
     @StateObject private var iapManager = IAPManager()
@@ -116,6 +118,11 @@ struct CAIApp: App {
                 .onChange(of: authManager.currentUser?.requestsRoles ?? [], initial: true) { _, roles in
                     workspaceStore.update(requestsRoles: roles)
                 }
+                // The app icon badge is the bell's unread count, re-read each time
+                // the bell polls (and so whenever the app is opened).
+                .onChange(of: inboxStore.unreadCount) { _, count in
+                    PushCenter.shared.setBadge(count)
+                }
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     case .active:
@@ -150,6 +157,7 @@ struct CAIApp: App {
                 )) { _ in
                     Task {
                         await chatManager.disconnect()
+                        await PushCenter.shared.disable()
                         await authManager.logout()
                     }
                 }
@@ -200,5 +208,10 @@ struct CAIApp: App {
         let isAppActive = (phase ?? scenePhase) == .active
         unreadPoller.update(isRequestsAvailable: isRequestsAvailable, isAppActive: isAppActive)
         inboxStore.update(isRequestsAvailable: isRequestsAvailable, isAppActive: isAppActive)
+        if isRequestsAvailable {
+            PushCenter.shared.enable(deviceService: requestsServices.deviceService)
+        } else if !authManager.isAuthenticated {
+            Task { await PushCenter.shared.disable() }
+        }
     }
 }
