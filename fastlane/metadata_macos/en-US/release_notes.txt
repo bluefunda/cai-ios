@@ -1,2 +1,2 @@
 New in this release:
-• Notifications bell in the Assistant space too
+• Read on one device, cleared on the others; presence from the app
