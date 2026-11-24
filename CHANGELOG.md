@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.27.0](https://github.com/bluefunda/cai-ios/compare/v2.26.0...v2.27.0) (2026-11-24)
+
+
+### Features
+
+* **shell:** notifications bell in the Assistant space too ([e89f754](https://github.com/bluefunda/cai-ios/commit/e89f7543170f29d47862df1dcd3d63b0e65cd3b0))
+* **shell:** notifications bell in the Assistant space too ([e667075](https://github.com/bluefunda/cai-ios/commit/e6670754983f6d3c78f4a10260d17a507f28dd17))
+
 ## [2.26.0](https://github.com/bluefunda/cai-ios/compare/v2.25.1...v2.26.0) (2026-11-23)
 
 
