@@ -1,2 +1,2 @@
 New in this release:
-• Push notifications on iPhone, iPad and Mac
+• Notifications bell in the Assistant space too
