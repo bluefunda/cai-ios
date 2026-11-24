@@ -57,6 +57,12 @@ final class PushCenter: NSObject, ObservableObject {
     private var registeredToken: String?
     /// The permission request and APNs registration of this session.
     private var enableTask: Task<Void, Never>?
+    /// Reports presence every minute while the app is in front.
+    private var presenceTask: Task<Void, Never>?
+
+    /// How often the app reports presence while in front; the backend skips
+    /// pushes to the user's other devices for two minutes after each report.
+    static let presenceInterval: Duration = .seconds(60)
 
     /// Whether Firebase is set up: false in builds without GoogleService-Info.plist
     /// (tests, previews), where every call here does nothing.
@@ -100,12 +106,45 @@ final class PushCenter: NSObject, ObservableObject {
         guard isConfigured else { return }
         let service = deviceService
         let token = registeredToken
+        setActive(false)
         deviceService = nil
         registeredToken = nil
         enableTask = nil
         setBadge(0)
         guard let service, let token else { return }
         try? await service.unregister(token: token)
+    }
+
+    /// The app came to the front (true) or left it (false). While in front it
+    /// reports presence every minute, so the user's other devices aren't pushed.
+    func setActive(_ active: Bool) {
+        presenceTask?.cancel()
+        presenceTask = nil
+        guard active, let service = deviceService else { return }
+        let platform = Self.platform
+        presenceTask = Task {
+            while !Task.isCancelled {
+                try? await service.reportPresence(platform: platform)
+                try? await Task.sleep(for: Self.presenceInterval)
+            }
+        }
+    }
+
+    /// Removes notifications read on another device (a silent push from the
+    /// backend): those named, or all of them. The badge comes with the push.
+    func clearDelivered(ids: Set<String>, all: Bool) async {
+        let center = UNUserNotificationCenter.current()
+        if all {
+            center.removeAllDeliveredNotifications()
+            return
+        }
+        guard !ids.isEmpty else { return }
+        let delivered = await center.deliveredNotifications()
+        let gone = delivered.map(\.request).filter { request in
+            ids.contains(request.identifier)
+                || (request.content.userInfo["notificationId"] as? String).map(ids.contains) == true
+        }.map(\.identifier)
+        center.removeDeliveredNotifications(withIdentifiers: gone)
     }
 
     func setBadge(_ count: Int) {
@@ -199,7 +238,31 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate {
         Messaging.messaging().apnsToken = deviceToken
     }
 
+    /// A silent push: notifications read on another device are cleared here.
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        guard userInfo["action"] as? String == "clear" else {
+            completionHandler(.noData)
+            return
+        }
+        let all = userInfo["all"] as? String == "true"
+        let ids = Set(((userInfo["notificationIds"] as? String) ?? "").split(separator: ",").map(String.init))
+        let finish = UncheckedFetchCompletion(run: completionHandler)
+        Task { @MainActor in
+            await PushCenter.shared.clearDelivered(ids: ids, all: all)
+            finish.run(.newData)
+        }
+    }
+
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         pushLog.error("APNs registration failed: \(error.localizedDescription, privacy: .public)")
     }
+}
+
+/// Carries UIKit's background-fetch completion handler into a Task.
+private struct UncheckedFetchCompletion: @unchecked Sendable {
+    let run: (UIBackgroundFetchResult) -> Void
 }
