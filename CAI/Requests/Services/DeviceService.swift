@@ -10,6 +10,9 @@ import Foundation
 protocol DeviceServicing {
     func register(token: String, platform: String, appVersion: String) async throws
     func unregister(token: String) async throws
+    /// The user is active in the app on this platform, so pushes to their other
+    /// devices are skipped while they are.
+    func reportPresence(platform: String) async throws
 }
 
 struct DeviceService: DeviceServicing {
@@ -26,6 +29,12 @@ struct DeviceService: DeviceServicing {
         try await client.postDiscardingResponse("/notifications/devices/remove", body: RemoveBody(token: token))
     }
 
+    func reportPresence(platform: String) async throws {
+        try await client.postDiscardingResponse("/notifications/presence", body: PresenceBody(platform: platform))
+    }
+
+    private struct PresenceBody: Encodable { let platform: String }
+
     private struct RegisterBody: Encodable {
         let token: String
         let platform: String
@@ -39,4 +48,5 @@ struct DeviceService: DeviceServicing {
 struct FixtureDeviceService: DeviceServicing {
     func register(token: String, platform: String, appVersion: String) async throws {}
     func unregister(token: String) async throws {}
+    func reportPresence(platform: String) async throws {}
 }

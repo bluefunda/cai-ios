@@ -210,6 +210,7 @@ struct CAIApp: App {
         inboxStore.update(isRequestsAvailable: isRequestsAvailable, isAppActive: isAppActive)
         if isRequestsAvailable {
             PushCenter.shared.enable(deviceService: requestsServices.deviceService)
+            PushCenter.shared.setActive(isAppActive)
         } else if !authManager.isAuthenticated {
             Task { await PushCenter.shared.disable() }
         }
