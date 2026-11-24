@@ -112,7 +112,8 @@ struct SidebarView: View {
                 .font(BFFont.sidebarHeader)
                 .foregroundStyle(.primary)
             Spacer()
-            if workspace.activeSpace == .requests && workspace.isRequestsAvailable {
+            // In both spaces whenever Requests is available; opening an entry switches to Requests.
+            if workspace.isRequestsAvailable {
                 InboxBellButton(onOpenRequest: { id in
                     workspace.navigate(to: .requests(.requests))
                     requestsState.openRequest(id: id)
