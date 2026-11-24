@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.28.0](https://github.com/bluefunda/cai-ios/compare/v2.27.0...v2.28.0) (2026-11-24)
+
+
+### Features
+
+* **push:** read on one device, cleared on the others; presence from the app ([9570197](https://github.com/bluefunda/cai-ios/commit/9570197c011c1d4f261201571a8ac4a104420ff7))
+* **push:** read on one device, cleared on the others; presence from the app ([031ab9b](https://github.com/bluefunda/cai-ios/commit/031ab9b0317adaea36de78719012527ec67589e3))
+
 ## [2.27.0](https://github.com/bluefunda/cai-ios/compare/v2.26.0...v2.27.0) (2026-11-24)
 
 
