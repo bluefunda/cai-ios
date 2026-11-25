@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.28.1](https://github.com/bluefunda/cai-ios/compare/v2.28.0...v2.28.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **push:** give Firebase the APNs token type explicitly ([f259cd0](https://github.com/bluefunda/cai-ios/commit/f259cd0403c17be01a7199469313be0a98185ac0))
+* **push:** Mac counts as present only when frontmost and in use ([14a4d56](https://github.com/bluefunda/cai-ios/commit/14a4d56994381b5358a26dd344c928f47d0e28d1))
+* **push:** Mac counts as present only when frontmost and in use ([3b63480](https://github.com/bluefunda/cai-ios/commit/3b63480dc4c992e0562bc7eba92bbd1a03f9b04a))
+
 ## [2.28.0](https://github.com/bluefunda/cai-ios/compare/v2.27.0...v2.28.0) (2026-11-24)
 
 
