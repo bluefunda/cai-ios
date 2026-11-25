@@ -59,10 +59,19 @@ final class PushCenter: NSObject, ObservableObject {
     private var enableTask: Task<Void, Never>?
     /// Reports presence every minute while the app is in front.
     private var presenceTask: Task<Void, Never>?
+    /// The scene is active (`setActive`).
+    private var sceneActive = false
+    /// The app is the frontmost app. Always true on iPhone and iPad; on the Mac
+    /// a window can be open (scene active) while another app is in front.
+    private var frontmost = true
+    private var frontmostObservers: [NSObjectProtocol] = []
 
-    /// How often the app reports presence while in front; the backend skips
-    /// pushes to the user's other devices for two minutes after each report.
+    /// How often the app reports presence while in front; for two minutes after
+    /// each report the backend pushes only to this platform's devices.
     static let presenceInterval: Duration = .seconds(60)
+    /// No keyboard or mouse input for this long on the Mac counts as away, so the
+    /// phone gets the push again.
+    static let idleAfter: TimeInterval = 10 * 60
 
     /// Whether Firebase is set up: false in builds without GoogleService-Info.plist
     /// (tests, previews), where every call here does nothing.
@@ -75,6 +84,7 @@ final class PushCenter: NSObject, ObservableObject {
         }
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
+        observeFrontmost()
         isConfigured = true
     }
 
@@ -115,19 +125,59 @@ final class PushCenter: NSObject, ObservableObject {
         try? await service.unregister(token: token)
     }
 
-    /// The app came to the front (true) or left it (false). While in front it
-    /// reports presence every minute, so the user's other devices aren't pushed.
+    /// The app came to the front (true) or left it (false). While in front (on
+    /// the Mac: the frontmost app, and not idle) it reports presence every
+    /// minute, so pushes go to this device only. Repeated calls with the same
+    /// state leave the running loop alone.
     func setActive(_ active: Bool) {
+        sceneActive = active
+        updatePresence()
+    }
+
+    private func updatePresence() {
+        let present = sceneActive && frontmost && deviceService != nil
+        guard present != (presenceTask != nil) else { return }
         presenceTask?.cancel()
         presenceTask = nil
-        guard active, let service = deviceService else { return }
+        guard present, let service = deviceService else { return }
         let platform = Self.platform
         presenceTask = Task {
             while !Task.isCancelled {
-                try? await service.reportPresence(platform: platform)
+                if !Self.isIdle {
+                    try? await service.reportPresence(platform: platform)
+                }
                 try? await Task.sleep(for: Self.presenceInterval)
             }
         }
+    }
+
+    /// On the Mac, follows whether the app is frontmost. Catalyst keeps the
+    /// scene active while another app is in front, so AppKit's own activation
+    /// notifications (posted in-process) are the signal.
+    private func observeFrontmost() {
+        #if targetEnvironment(macCatalyst)
+        let center = NotificationCenter.default
+        for (name, isFront) in [("NSApplicationDidBecomeActiveNotification", true),
+                                ("NSApplicationDidResignActiveNotification", false)] {
+            frontmostObservers.append(center.addObserver(forName: Notification.Name(name), object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated {
+                    self.frontmost = isFront
+                    self.updatePresence()
+                }
+            })
+        }
+        #endif
+    }
+
+    /// No keyboard, mouse or trackpad input on the Mac for `idleAfter`. Never on
+    /// iPhone and iPad, which lock and leave the app instead.
+    private static var isIdle: Bool {
+        #if targetEnvironment(macCatalyst)
+        let anyInput = CGEventType(rawValue: ~0)!
+        return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput) >= idleAfter
+        #else
+        return false
+        #endif
     }
 
     /// Removes notifications read on another device (a silent push from the
