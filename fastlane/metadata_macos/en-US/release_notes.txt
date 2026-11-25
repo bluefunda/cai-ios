@@ -1,2 +1,1 @@
-New in this release:
-• Read on one device, cleared on the others; presence from the app
+This release includes bug fixes and performance improvements.
