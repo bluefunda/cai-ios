@@ -285,7 +285,15 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         guard FirebaseApp.app() != nil else { return }
-        Messaging.messaging().apnsToken = deviceToken
+        // Debug builds from Xcode get development APNs tokens; TestFlight and App
+        // Store builds get production ones. Saying so explicitly keeps Firebase
+        // from guessing from the provisioning profile, which it can't read on
+        // the Mac.
+        #if DEBUG
+        Messaging.messaging().setAPNSToken(deviceToken, type: .sandbox)
+        #else
+        Messaging.messaging().setAPNSToken(deviceToken, type: .prod)
+        #endif
     }
 
     /// A silent push: notifications read on another device are cleared here.
