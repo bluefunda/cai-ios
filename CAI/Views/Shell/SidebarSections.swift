@@ -256,23 +256,3 @@ struct SidebarSectionHeader: View {
             .accessibilityAddTraits(.isHeader)
     }
 }
-
-// MARK: - Organization Chip
-
-/// The signed-in user's effective Keycloak org, beside their email in the profile row,
-/// so it's clear which workspace the app is acting in.
-struct OrganizationChip: View {
-    let alias: String
-
-    var body: some View {
-        Text(alias)
-            .font(BFFont.sidebarMeta.weight(.medium))
-            .foregroundStyle(BFColor.secondaryAdaptive)
-            .lineLimit(1)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(BFColor.statusBlueFill, in: Capsule())
-            .fixedSize()
-            .accessibilityLabel("Organization \(alias)")
-    }
-}

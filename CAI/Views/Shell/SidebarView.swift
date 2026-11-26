@@ -382,27 +382,18 @@ struct SidebarView: View {
                             .font(BFFont.sidebarItemMed).foregroundStyle(.white)
                     }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(authManager.currentUser?.name ?? "Account")
-                        .font(BFFont.sidebarItemMed)
-                        .foregroundStyle(.primary).lineLimit(1)
-                    if iapManager.hasActiveSubscription {
-                        Text("Pro")
-                            .font(BFFont.micro.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(BFColor.primary, in: Capsule())
-                    }
-                }
-                HStack(spacing: 6) {
-                    if let organization = authManager.currentUser?.organization {
-                        OrganizationChip(alias: organization)
-                    }
-                    if let email = authManager.currentUser?.email {
-                        Text(email).font(BFFont.sidebarMeta).foregroundStyle(.secondary).lineLimit(1)
-                    }
+            // Name and plan only: the organization and email are in Settings → Account.
+            HStack(spacing: 6) {
+                Text(authManager.currentUser?.name ?? "Account")
+                    .font(BFFont.sidebarItemMed)
+                    .foregroundStyle(.primary).lineLimit(1)
+                if iapManager.hasActiveSubscription {
+                    Text("Pro")
+                        .font(BFFont.micro.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(BFColor.primary, in: Capsule())
                 }
             }
             Spacer()
