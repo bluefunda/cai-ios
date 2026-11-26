@@ -1,1 +1,2 @@
-This release includes bug fixes and performance improvements.
+New in this release:
+• Profile photo in the Account card, Notifications tab with Save
