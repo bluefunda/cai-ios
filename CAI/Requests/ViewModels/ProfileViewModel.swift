@@ -1,5 +1,13 @@
 import Foundation
 
+/// The signed-in user's profile photo URL, shared so the sidebar's avatar follows
+/// changes made in Settings.
+@MainActor
+final class MyProfilePhoto: ObservableObject {
+    static let shared = MyProfilePhoto()
+    @Published var url: String?
+}
+
 @MainActor
 final class ProfileViewModel: ObservableObject {
     @Published private(set) var profile: UserProfile?
@@ -25,6 +33,7 @@ final class ProfileViewModel: ObservableObject {
             self.profile = profile
             notificationsEnabled = profile.notification ?? true
             profileImageURL = profile.profileImage.flatMap { $0.isEmpty ? nil : $0 }
+            MyProfilePhoto.shared.url = profileImageURL
         } catch {
             self.error = error.localizedDescription
         }
@@ -36,10 +45,13 @@ final class ProfileViewModel: ObservableObject {
         isSavingPhoto = true
         defer { isSavingPhoto = false }
         do {
+            // A new upload keeps the same file URL, so the saved one carries a version: without
+            // it, caches (the app's and the CDN's) keep serving the old photo after a reload.
             let url = try await service.uploadProfileImage(jpeg, userId: userId)
+                + "?t=\(Int(Date().timeIntervalSince1970))"
             try await service.setProfileImage(url, userId: userId)
-            // A new upload keeps the same URL; the query makes the image reload.
-            profileImageURL = url + "?t=\(Int(Date().timeIntervalSince1970))"
+            profileImageURL = url
+            MyProfilePhoto.shared.url = profileImageURL
         } catch {
             self.error = error.localizedDescription
         }
@@ -51,6 +63,7 @@ final class ProfileViewModel: ObservableObject {
         do {
             try await service.setProfileImage("", userId: userId)
             profileImageURL = nil
+            MyProfilePhoto.shared.url = nil
         } catch {
             self.error = error.localizedDescription
         }

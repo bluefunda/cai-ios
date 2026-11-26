@@ -25,6 +25,33 @@ struct UserProfile: Decodable {
     var profileImage: String? = nil
 }
 
+extension UserProfile {
+    private enum CodingKeys: String, CodingKey {
+        case id, name, email, department, role, teamName, notification, profileImage
+    }
+
+    /// Lenient per field: the server sends `teamName` as a list (["Tech"]) for users
+    /// in several teams, and one unexpected field must not fail the whole profile
+    /// (the photo and notification preference live here too).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.lenientString(.id)
+        name = c.lenient(.name) ?? ""
+        email = c.lenient(.email)
+        department = c.lenient(.department)
+        role = c.lenient(.role)
+        if let single: String = c.lenient(.teamName) {
+            teamName = single
+        } else if let names: [String] = c.lenient(.teamName), !names.isEmpty {
+            teamName = names.joined(separator: ", ")
+        } else {
+            teamName = nil
+        }
+        notification = c.lenient(.notification)
+        profileImage = c.lenient(.profileImage)
+    }
+}
+
 struct UserProfileListResponse: Decodable {
     let users: [UserProfile]
 }

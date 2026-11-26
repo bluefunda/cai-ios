@@ -34,6 +34,8 @@ struct SidebarView: View {
     @EnvironmentObject var workspace: WorkspaceStore
     @EnvironmentObject var unreadPoller: UnreadCountPoller
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.requestsServices) private var requestsServices
+    @ObservedObject private var myPhoto = MyProfilePhoto.shared
     @Environment(\.scenePhase) private var scenePhase
 
     let presentation: SidebarPresentation
@@ -82,6 +84,13 @@ struct SidebarView: View {
         .modifier(PresentationChrome(presentation: presentation))
         // The Messages badge: re-read every 10 s while BlueRequests is available and the
         // app is in the foreground (as on the web).
+        // The profile photo for the avatar below (it's stored on the Requests side).
+        .task(id: workspace.isRequestsAvailable ? authManager.currentUser?.id : nil) {
+            myPhoto.url = nil
+            guard workspace.isRequestsAvailable, let requestsServices,
+                  let userId = authManager.currentUser?.id else { return }
+            await ProfileViewModel(service: requestsServices.profileService, userId: userId).load()
+        }
         .task(id: workspace.isRequestsAvailable && scenePhase == .active) {
             guard workspace.isRequestsAvailable && scenePhase == .active else { return }
             while !Task.isCancelled {
@@ -362,13 +371,17 @@ struct SidebarView: View {
 
     private var profileTriggerLabel: some View {
         HStack(spacing: 10) {
-            Circle()
-                .fill(BFColor.primary.gradient)
-                .frame(width: 30, height: 30)
-                .overlay {
-                    Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
-                        .font(BFFont.sidebarItemMed).foregroundStyle(.white)
-                }
+            if workspace.isRequestsAvailable, let photo = myPhoto.url {
+                RQAvatar(urlString: photo, size: 30)
+            } else {
+                Circle()
+                    .fill(BFColor.primary.gradient)
+                    .frame(width: 30, height: 30)
+                    .overlay {
+                        Text(authManager.currentUser?.name.prefix(1).uppercased() ?? "U")
+                            .font(BFFont.sidebarItemMed).foregroundStyle(.white)
+                    }
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(authManager.currentUser?.name ?? "Account")
