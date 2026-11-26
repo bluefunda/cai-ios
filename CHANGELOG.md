@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.29.0](https://github.com/bluefunda/cai-ios/compare/v2.28.1...v2.29.0) (2026-11-26)
+
+
+### Features
+
+* **settings:** profile photo in the Account card, Notifications tab with Save ([b34a60f](https://github.com/bluefunda/cai-ios/commit/b34a60f96bb365f9bc543f5e0cc340e5a1db6d38))
+* **settings:** profile photo in the Account card, Notifications tab with Save ([22abbb1](https://github.com/bluefunda/cai-ios/commit/22abbb1bf12d8408c6a844de3b9ba1fa7ed59779))
+
 ## [2.28.1](https://github.com/bluefunda/cai-ios/compare/v2.28.0...v2.28.1) (2026-11-25)
 
 
