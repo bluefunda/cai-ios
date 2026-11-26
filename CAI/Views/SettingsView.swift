@@ -5,7 +5,7 @@ import AuthenticationServices
 // MARK: - Settings Category
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
-    case account, aiSettings, connectors, blueRequests, usage, subscription, legal, about
+    case account, aiSettings, connectors, notifications, usage, subscription, legal, about
 
     var id: String { rawValue }
 
@@ -14,7 +14,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .account: return "Account"
         case .aiSettings: return "AI Settings"
         case .connectors: return "Agents"
-        case .blueRequests: return "BlueRequests"
+        case .notifications: return "Notifications"
         case .usage: return "Usage"
         case .subscription: return "Subscription"
         case .legal: return "Legal"
@@ -27,7 +27,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .account: return "person.crop.circle"
         case .aiSettings: return "sparkles"
         case .connectors: return "brain.head.profile"
-        case .blueRequests: return "doc.text"
+        case .notifications: return "bell"
         case .usage: return "chart.bar"
         case .subscription: return "star.circle"
         case .legal: return "doc.text"
@@ -75,13 +75,13 @@ struct SettingsView: View {
         return "\(enabled.count) Selected"
     }
 
-    // Subscription is individual-realm only — trm accounts don't buy IAP. BlueRequests
+    // Subscription is individual-realm only — trm accounts don't buy IAP. Notifications
     // only for users who have the Requests space (feature flag + an organization).
     private var categories: [SettingsCategory] {
         SettingsCategory.allCases.filter { category in
             switch category {
             case .subscription: return isIndividualRealm
-            case .blueRequests: return isRequestsAvailable
+            case .notifications: return isRequestsAvailable
             default: return true
             }
         }
@@ -259,7 +259,7 @@ struct SettingsView: View {
         case .account: accountDetail
         case .aiSettings: aiSettingsDetail
         case .connectors: AgentsListView()
-        case .blueRequests: RequestsSettingsSection()
+        case .notifications: NotificationsSettingsView()
         case .usage: usageDetail
         case .subscription: subscriptionDetail
         case .legal: legalDetail
@@ -272,9 +272,14 @@ struct SettingsView: View {
     @ViewBuilder
     private var accountDetail: some View {
         List {
-            Section {
-                if let user = authManager.currentUser {
-                    UserInfoRow(user: user)
+            if let user = authManager.currentUser {
+                if isRequestsAvailable {
+                    // The avatar is the BlueRequests profile photo: tap it to change it.
+                    AccountProfileSection(user: user)
+                } else {
+                    Section {
+                        UserInfoRow(user: user)
+                    }
                 }
             }
 
@@ -652,8 +657,10 @@ extension SettingsView {
 
 struct UserInfoRow: View {
     let user: User
+    /// Replaces the initial-letter circle, e.g. with an editable profile photo.
+    var avatar: AnyView?
 
-    private var avatarSize: CGFloat {
+    static var avatarSize: CGFloat {
         #if targetEnvironment(macCatalyst)
         return 38
         #else
@@ -663,19 +670,11 @@ struct UserInfoRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(BFColor.primary.gradient)
-                .frame(width: avatarSize, height: avatarSize)
-                .overlay {
-                    Text(user.name.prefix(1).uppercased())
-                        #if targetEnvironment(macCatalyst)
-                        .font(MacSettingsFont.navTitle)
-                        #else
-                        .font(.title2)
-                        #endif
-                        .fontWeight(.semibold)
-                        .foregroundColor(BFColor.textInverse)
-                }
+            if let avatar {
+                avatar
+            } else {
+                UserInitialAvatar(name: user.name, size: Self.avatarSize)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.name)
@@ -710,6 +709,28 @@ struct UserInfoRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// The user's initial on a brand-coloured circle.
+struct UserInitialAvatar: View {
+    let name: String
+    let size: CGFloat
+
+    var body: some View {
+        Circle()
+            .fill(BFColor.primary.gradient)
+            .frame(width: size, height: size)
+            .overlay {
+                Text(name.prefix(1).uppercased())
+                    #if targetEnvironment(macCatalyst)
+                    .font(MacSettingsFont.navTitle)
+                    #else
+                    .font(.title2)
+                    #endif
+                    .fontWeight(.semibold)
+                    .foregroundColor(BFColor.textInverse)
+            }
     }
 }
 

@@ -189,6 +189,41 @@ final class RequestsAPIModelsTests: XCTestCase {
         XCTAssertEqual(counts.count(forChangeRequestId: "99"), 0)
     }
 
+    /// teamName arrives as a list for users in teams (seen live: "teamName":["Tech"]).
+    /// An SVG exported from a photo embeds it as base64; that photo is used.
+    func testProfilePhotoReadsTheImageInsideAnSVG() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let png = try XCTUnwrap(UIGraphicsImageRenderer(size: CGSize(width: 3, height: 2), format: format)
+            .image { ctx in UIColor.red.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 3, height: 2)) }
+            .pngData())
+        let svg = """
+        <svg xmlns="http://www.w3.org/2000/svg"><image width="3" height="2" href="data:image/png;base64,\(png.base64EncodedString())"/></svg>
+        """
+        let image = try XCTUnwrap(ProfilePhoto.image(from: Data(svg.utf8)))
+        XCTAssertEqual(image.size, CGSize(width: 3, height: 2))
+        XCTAssertNotNil(ProfilePhoto.image(from: png), "a plain PNG still reads")
+        XCTAssertNil(ProfilePhoto.image(from: Data("<svg><path d='M0 0'/></svg>".utf8)), "a vector-only SVG doesn't")
+    }
+
+    func testDecodeUserProfileWithTeamNameList() throws {
+        let json = Data("""
+        {"users":[{"id":"4ae24f18","name":"Nirmal","email":"n@example.com","department":"Engineering",
+          "role":"super-admin","team":["320342e6"],"teamName":["Tech","Ops"],"notification":true,
+          "profileImage":"https://s3.example.com/p.jpeg"}]}
+        """.utf8)
+        let profile = try XCTUnwrap(try RequestsAPIClient.makeDecoder().decode(UserProfileListResponse.self, from: json).users.first)
+        XCTAssertEqual(profile.teamName, "Tech, Ops")
+        XCTAssertEqual(profile.notification, true)
+        XCTAssertEqual(profile.profileImage, "https://s3.example.com/p.jpeg")
+
+        let single = try RequestsAPIClient.makeDecoder().decode(UserProfile.self, from: Data(#"{"name":"A","teamName":"Tech"}"#.utf8))
+        XCTAssertEqual(single.teamName, "Tech")
+        let odd = try RequestsAPIClient.makeDecoder().decode(UserProfile.self, from: Data(#"{"name":"A","teamName":7,"notification":"yes"}"#.utf8))
+        XCTAssertNil(odd.teamName, "an unexpected field type doesn't fail the profile")
+        XCTAssertNil(odd.notification)
+    }
+
     func testNewConversationLinksChangeRequestFromTopic() {
         XCTAssertEqual(RQNewConversation.changeRequestId(inTopic: "Question about #42 rollout"), 42)
         XCTAssertNil(RQNewConversation.changeRequestId(inTopic: "No link here"))

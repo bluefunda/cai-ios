@@ -111,21 +111,27 @@ extension View {
 struct RQAvatar: View {
     let urlString: String?
     let size: CGFloat
+    @State private var image: UIImage?
 
     var body: some View {
         Group {
-            if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    placeholder
-                }
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
                 placeholder
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
+        // A new upload keeps the same URL, so the cached copy is revalidated with the
+        // server each time rather than shown as is (AsyncImage would keep the old photo).
+        .task(id: urlString) {
+            image = nil
+            guard let urlString, let url = URL(string: urlString) else { return }
+            let request = URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData)
+            guard let (data, _) = try? await URLSession.shared.data(for: request) else { return }
+            image = UIImage(data: data)
+        }
     }
 
     private var placeholder: some View {
