@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.31.0](https://github.com/bluefunda/cai-ios/compare/v2.30.0...v2.31.0) (2026-11-27)
+
+
+### Features
+
+* **projects:** archive and unarchive a project ([9122646](https://github.com/bluefunda/cai-ios/commit/912264687734c2bd07e946227fbd748187870af2))
+* **projects:** archive and unarchive a project ([7f15cff](https://github.com/bluefunda/cai-ios/commit/7f15cff4b8f18bfd6ad1898f850f98eb87d19db3))
+
 ## [2.30.0](https://github.com/bluefunda/cai-ios/compare/v2.29.0...v2.30.0) (2026-11-27)
 
 
