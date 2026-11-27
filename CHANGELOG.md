@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.30.0](https://github.com/bluefunda/cai-ios/compare/v2.29.0...v2.30.0) (2026-11-27)
+
+
+### Features
+
+* **agents:** BlueFunda KB is included, not Connect ([4310a40](https://github.com/bluefunda/cai-ios/commit/4310a406804c0d6cb73708654a2d622e772b137f))
+* **agents:** BlueFunda KB is included, not Connect ([fae986b](https://github.com/bluefunda/cai-ios/commit/fae986b2b6948223ec4742ee052c740cf9274127))
+
 ## [2.29.0](https://github.com/bluefunda/cai-ios/compare/v2.28.1...v2.29.0) (2026-11-26)
 
 
