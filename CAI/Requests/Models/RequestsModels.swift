@@ -853,6 +853,8 @@ struct ProjectDetail: Identifiable, Hashable {
     var projectTypeId: String? = nil
     /// Who created it: with the owner and admins, who may delete it.
     var createdById: String? = nil
+    /// Archived projects are listed under Projects' Archived tab.
+    var archived = false
 }
 
 /// `projectUsers` entries — confirmed against trm-backend-go's `projectUser` struct
@@ -873,7 +875,7 @@ struct ProjectTeamMember: Identifiable, Decodable, Hashable {
 extension ProjectDetail: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, name, description, jira, projectTypeData, ownerUser, requestCount, projectUsers, repos
-        case owner, projectType, createdBy
+        case owner, projectType, createdBy, archived
     }
     private enum LabelKeys: String, CodingKey { case description }
     private enum UserKeys: String, CodingKey { case name }
@@ -895,6 +897,7 @@ extension ProjectDetail: Decodable {
         ownerId = ((try? container.decodeIfPresent(String.self, forKey: .owner)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
         projectTypeId = ((try? container.decodeIfPresent(String.self, forKey: .projectType)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
         createdById = ((try? container.decodeIfPresent(String.self, forKey: .createdBy)) ?? nil).flatMap { $0.isEmpty ? nil : $0 }
+        archived = ((try? container.decodeIfPresent(Bool.self, forKey: .archived)) ?? nil) ?? false
 
         if let typeContainer = try? container.nestedContainer(keyedBy: LabelKeys.self, forKey: .projectTypeData) {
             projectTypeLabel = (try? typeContainer.decodeIfPresent(String.self, forKey: .description)) ?? nil

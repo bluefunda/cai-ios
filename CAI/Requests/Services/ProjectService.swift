@@ -34,6 +34,8 @@ protocol ProjectServicing {
     func projectDetail(id: String, forceRefresh: Bool) async throws -> ProjectDetail
     func createProject(_ payload: NewProjectPayload) async throws
     func updateProject(_ payload: ProjectUpdatePayload) async throws
+    /// PUT /projects with only the archive flag: archives or unarchives the project.
+    func setProjectArchived(_ payload: ProjectArchivePayload) async throws
     /// DELETE /projects/{id}: refused (409, with how many) while live requests belong to it.
     func deleteProject(id: String) async throws
 }
@@ -85,6 +87,14 @@ struct ProjectUpdatePayload: Encodable, Equatable {
     let updatedBy: String
 }
 
+/// PUT /projects with the id and the archive flag only. trm-backend-go writes the flag
+/// whenever the body sends it, so `false` unarchives (other fields skip empty values).
+struct ProjectArchivePayload: Encodable, Equatable {
+    let id: Int
+    let archive: Bool
+    let updatedBy: String
+}
+
 struct ProjectService: ProjectServicing {
     let client: RequestsAPIClient
     /// Shared across every caller — the Projects list, Project Detail's own lookup, a change
@@ -112,6 +122,10 @@ struct ProjectService: ProjectServicing {
     }
 
     func updateProject(_ payload: ProjectUpdatePayload) async throws {
+        try await client.putDiscardingResponse("/projects", body: payload)
+    }
+
+    func setProjectArchived(_ payload: ProjectArchivePayload) async throws {
         try await client.putDiscardingResponse("/projects", body: payload)
     }
 

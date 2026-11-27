@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - Projects Destination
 // Ported from trm-ios. The view model lives in RequestsState (see its doc comment).
-// Toolbar: filter, and New project (the web's CreateUpdateProjectForm).
+// Toolbar: filter, and New project (the web's CreateUpdateProjectForm). Under the search
+// field, Active | Archived, as Requests has.
 
 struct ProjectsListView: View {
     @ObservedObject var state: RequestsState
@@ -42,7 +43,20 @@ private struct ProjectsListScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ListScreenHeader(searchText: $model.searchText, searchPrompt: "Search projects")
+            ListScreenHeader(
+                searchText: $model.searchText,
+                searchPrompt: "Search projects",
+                secondaryRowLeading: {
+                    Picker("Active or archived", selection: $model.showsArchived) {
+                        Text("Active").tag(false)
+                        Text("Archived").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .accessibilityIdentifier("projects.archiveTab")
+                },
+                secondaryRowTrailing: { EmptyView() }
+            )
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -104,7 +118,8 @@ private struct ProjectsListScreen: View {
                         .bfPointerHover()
                 }
             } else {
-                ContentUnavailableView("No projects yet", systemImage: "folder")
+                ContentUnavailableView(
+                    model.showsArchived ? "No archived projects" : "No projects yet", systemImage: "folder")
             }
         } else {
             List {

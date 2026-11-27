@@ -844,3 +844,83 @@ extension RequestsViewModelTests {
         XCTAssertEqual(stages?.first?.updatedBy, "u-1")
     }
 }
+
+// MARK: - Project archive
+
+private final class ArchivingProjectService: ProjectServicing {
+    var archived = false
+    var sent: [ProjectArchivePayload] = []
+    var failure: Error?
+
+    private func project(_ id: String) -> ProjectDetail {
+        ProjectDetail(id: id, name: "Billing", description: nil, jira: nil, projectTypeLabel: nil,
+                      ownerName: nil, requestCount: 0, team: [], archived: archived)
+    }
+
+    func listProjects(forceRefresh: Bool) async throws -> [RQProject] { [] }
+    func listProjectDetails(forceRefresh: Bool) async throws -> [ProjectDetail] {
+        [project("7"), ProjectDetail(id: "8", name: "Old", description: nil, jira: nil, projectTypeLabel: nil,
+                                     ownerName: nil, requestCount: 0, team: [], archived: true)]
+    }
+    func projectDetail(id: String, forceRefresh: Bool) async throws -> ProjectDetail { project(id) }
+    func createProject(_ payload: NewProjectPayload) async throws {}
+    func updateProject(_ payload: ProjectUpdatePayload) async throws {}
+    func setProjectArchived(_ payload: ProjectArchivePayload) async throws {
+        if let failure { throw failure }
+        sent.append(payload)
+        archived = payload.archive
+    }
+    func deleteProject(id: String) async throws {}
+}
+
+extension RequestsViewModelTests {
+    func test_projectArchive_sendsOnlyTheFlagAndReloads() async throws {
+        let service = ArchivingProjectService()
+        let model = ProjectDetailViewModel(
+            projectId: "7", projectService: service,
+            changeRequestService: FixtureChangeRequestService(), currentUserId: "u-me")
+        await model.load()
+
+        let archived = await model.setArchived(true)
+        XCTAssertTrue(archived)
+        XCTAssertEqual(model.project?.archived, true)
+        let unarchived = await model.setArchived(false)
+        XCTAssertTrue(unarchived)
+        XCTAssertEqual(model.project?.archived, false)
+        XCTAssertEqual(service.sent, [
+            ProjectArchivePayload(id: 7, archive: true, updatedBy: "u-me"),
+            ProjectArchivePayload(id: 7, archive: false, updatedBy: "u-me"),
+        ])
+
+        let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(service.sent[1])) as? [String: Any]
+        XCTAssertEqual(body?["archive"] as? Bool, false, "false is sent, so the backend unarchives")
+    }
+
+    func test_projectArchive_failureKeepsTheProjectAndSaysWhy() async {
+        let service = ArchivingProjectService()
+        service.failure = RequestsAPIError.serverError(500, "Insert failed for id 7")
+        let model = ProjectDetailViewModel(
+            projectId: "7", projectService: service,
+            changeRequestService: FixtureChangeRequestService(), currentUserId: "u-me")
+        await model.load()
+
+        let saved = await model.setArchived(true)
+        XCTAssertFalse(saved)
+        XCTAssertEqual(model.project?.archived, false)
+        XCTAssertNotNil(model.archiveError)
+    }
+
+    func test_projectsList_splitsActiveAndArchived() async {
+        let model = ProjectsListViewModel(service: ArchivingProjectService())
+        await model.load()
+        XCTAssertEqual(model.filteredProjects.map(\.id), ["7"])
+        model.showsArchived = true
+        XCTAssertEqual(model.filteredProjects.map(\.id), ["8"])
+    }
+
+    func test_projectDetail_decodesArchived() throws {
+        let json = #"[{"id":7,"name":"A","archived":true},{"id":8,"name":"B"}]"#
+        let projects = try JSONDecoder().decode([ProjectDetail].self, from: Data(json.utf8))
+        XCTAssertEqual(projects.map(\.archived), [true, false])
+    }
+}
