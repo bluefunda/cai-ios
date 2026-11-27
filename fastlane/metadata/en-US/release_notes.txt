@@ -1,2 +1,2 @@
 New in this release:
-• BlueFunda KB is included, not Connect
+• Archive and unarchive a project
