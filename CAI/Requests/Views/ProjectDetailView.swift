@@ -58,6 +58,7 @@ private struct ProjectDetailBody: View {
     @State private var showFilterSheet = false
     @State private var showCreateSheet = false
     @State private var showEditSheet = false
+    @State private var confirmArchive = false
     /// A request just created here: pushed over the project, so its back returns here.
     @State private var createdRequestId: String?
 
@@ -97,6 +98,20 @@ private struct ProjectDetailBody: View {
                 if sizeClass != .compact {
                     ViewModeToolbarPicker(viewMode: $state.viewMode)
                 }
+                if let project = model.project,
+                   model.canDelete(userId: state.currentUserId, roles: workspace.requestsRoles) {
+                    // Archiving asks first, as a request's Archive does; unarchiving doesn't.
+                    Button {
+                        if project.archived { setArchived(false) } else { confirmArchive = true }
+                    } label: {
+                        Label(project.archived ? "Unarchive project" : "Archive project",
+                              systemImage: project.archived ? "tray.and.arrow.up" : "archivebox")
+                    }
+                    .disabled(model.isArchiving)
+                    .help(project.archived ? "Unarchive project" : "Archive project")
+                    .bfPointerHover()
+                    .accessibilityIdentifier("projects.archive")
+                }
                 if model.project != nil {
                     Button { showEditSheet = true } label: {
                         Label("Edit project", systemImage: "pencil")
@@ -130,6 +145,19 @@ private struct ProjectDetailBody: View {
                 } : nil)
             }
         }
+        .confirmationDialog("Archive this project?", isPresented: $confirmArchive, titleVisibility: .visible) {
+            Button("Archive") { setArchived(true) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It moves to Archived on the Projects page. You can unarchive it from there.")
+        }
+        .alert("Couldn't save", isPresented: Binding(
+            get: { model.archiveError != nil }, set: { if !$0 { model.archiveError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.archiveError ?? "")
+        }
         .refreshable {
             await model.load(forceRefresh: true)
             await reposModel?.load()
@@ -161,6 +189,14 @@ private struct ProjectDetailBody: View {
         }
     }
 
+    /// Saves the flag, then refreshes Projects so the project shows under the right tab.
+    private func setArchived(_ archived: Bool) {
+        Task {
+            guard await model.setArchived(archived) else { return }
+            await state.projects?.load(forceRefresh: true)
+        }
+    }
+
     // MARK: Header
 
     private func header(_ project: ProjectDetail) -> some View {
@@ -176,6 +212,12 @@ private struct ProjectDetailBody: View {
                 }
                 if !project.team.isEmpty {
                     TeamStack(members: project.team)
+                }
+                if project.archived {
+                    Text("Archived")
+                        .font(RQFont.label)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("projects.archivedLabel")
                 }
                 Spacer(minLength: 0)
             }

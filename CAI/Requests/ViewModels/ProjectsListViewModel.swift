@@ -15,6 +15,8 @@ final class ProjectsListViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var searchText: String = ""
     @Published var filters = ProjectFilters()
+    /// Active or Archived: `/projects` answers both, so this narrows on the client too.
+    @Published var showsArchived = false
     @Published var error: String?
 
     private let service: ProjectServicing
@@ -34,7 +36,7 @@ final class ProjectsListViewModel: ObservableObject {
     }
 
     var filteredProjects: [ProjectDetail] {
-        var result = projects
+        var result = projects.filter { $0.archived == showsArchived }
         if let projectType = filters.projectType {
             result = result.filter { $0.projectTypeLabel == projectType }
         }

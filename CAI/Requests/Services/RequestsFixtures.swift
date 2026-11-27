@@ -235,6 +235,7 @@ struct FixtureProfileService: ProfileServicing {
 struct FixtureProjectService: ProjectServicing {
     func createProject(_ payload: NewProjectPayload) async throws {}
     func updateProject(_ payload: ProjectUpdatePayload) async throws {}
+    func setProjectArchived(_ payload: ProjectArchivePayload) async throws {}
 
     func deleteProject(id: String) async throws {}
 

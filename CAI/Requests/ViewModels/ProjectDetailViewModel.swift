@@ -8,6 +8,9 @@ final class ProjectDetailViewModel: ObservableObject {
     @Published private(set) var isDeleting = false
     /// Why the delete didn't happen, for the confirmation's alert.
     @Published var deleteError: String?
+    @Published private(set) var isArchiving = false
+    /// Why an archive or unarchive didn't happen, for its alert.
+    @Published var archiveError: String?
 
     let projectId: String
     /// The embedded change-request section reuses the exact same view model the top-level
@@ -58,7 +61,25 @@ final class ProjectDetailViewModel: ObservableObject {
         }
     }
 
-    /// Admins, the owner and the creator may delete a project, as the backend allows.
+    /// Archives (or brings back) the project, then reloads it; false (with
+    /// `archiveError`) when the save fails.
+    func setArchived(_ archived: Bool) async -> Bool {
+        guard let id = Int(projectId), let currentUserId else { return false }
+        isArchiving = true
+        defer { isArchiving = false }
+        do {
+            try await projectService.setProjectArchived(
+                ProjectArchivePayload(id: id, archive: archived, updatedBy: currentUserId))
+        } catch {
+            archiveError = error.localizedDescription
+            return false
+        }
+        await load(forceRefresh: true)
+        return true
+    }
+
+    /// Admins, the owner and the creator may delete a project, as the backend allows; the
+    /// same people archive and unarchive it.
     func canDelete(userId: String?, roles: [String]) -> Bool {
         if roles.contains(where: { ["admin", "super-admin"].contains($0) }) { return true }
         guard let userId, let project else { return false }
