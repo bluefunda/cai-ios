@@ -219,4 +219,19 @@ final class ChatManagerMCPTests: XCTestCase {
         chatManager.resetConnectorConnections()
         XCTAssertTrue(chatManager.connectedOneTapNames.isEmpty, "sign-out clears it")
     }
+
+    func test_kb_isIncludedWithoutAnyConnection() {
+        let chatManager = ChatManager(service: MockChatService())
+        let kb = MCPServer(id: "10", name: "kb-mcp", url: "http://kb-mcp:8010/mcp", description: nil, label: "BlueFunda KB")
+        XCTAssertTrue(kb.isKB)
+        XCTAssertEqual(kb.connectorIconName, "book")
+        XCTAssertFalse(MCPServer(id: "x", name: "other", url: "http://x/mcp", description: nil, label: "BlueFunda KB").isKB)
+
+        let saved = chatManager.locallyConnectedServerIDs
+        defer { chatManager.locallyConnectedServerIDs = saved }
+        chatManager.locallyConnectedServerIDs = []
+        chatManager.availableMCPServers = [kb]
+        XCTAssertTrue(chatManager.connectedMCPServers.contains(where: { $0.id == "10" }), "connected with nothing to connect")
+        XCTAssertTrue(chatManager.defaultConnectedMCPServerIDs.contains("10"), "on in a new chat")
+    }
 }
