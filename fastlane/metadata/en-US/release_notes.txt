@@ -1,2 +1,2 @@
 New in this release:
-• Profile photo in the Account card, Notifications tab with Save
+• BlueFunda KB is included, not Connect
