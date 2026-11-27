@@ -1270,6 +1270,11 @@ struct MCPServer: Identifiable, Hashable {
     /// cai-bff (`ChatManager.connectedOneTapNames`) like the other connectors.
     var isApollo: Bool { name == "apollo-mcp" }
 
+    /// BlueFunda KB (kb-mcp): the knowledge base, with nothing of the user's own to connect.
+    /// cai-mcp-go lists it only for organization members, so when it's listed it's included:
+    /// always connected, on in a new chat and still switchable off per chat (as on the web).
+    var isKB: Bool { name == "kb-mcp" }
+
     var isABAPer: Bool { displayName.lowercased() == "abaper" }
     var isSAPAnalytics: Bool { displayName.lowercased() == "sap analytics" }
     /// odata-mcp (labelled "SAP Analytics"): connected with its own host/credentials form.
@@ -1287,6 +1292,7 @@ struct MCPServer: Identifiable, Hashable {
         if isOData || isSAPAnalytics { return "chart.bar.doc.horizontal" }
         if isSalesTracker { return "chart.line.uptrend.xyaxis" }
         if isApollo { return "person.fill.viewfinder" }
+        if isKB { return "book" }
         return "brain.head.profile"
     }
 }

@@ -29,6 +29,7 @@ extension ChatManager {
     /// rather than ids — what the composer's per-chat Connectors toggle lists.
     var connectedMCPServers: [MCPServer] {
         visibleMCPServers.filter { server in
+            if server.isKB { return true }
             if server.isGitHub { return connectedGitHub }
             if server.isFigma { return connectedFigma }
             if server.isABAPer { return connectedSAP }

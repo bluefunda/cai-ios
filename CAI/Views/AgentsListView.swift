@@ -32,7 +32,10 @@ struct AgentsListView: View {
         List {
             Section {
                 ForEach(chatManager.availableMCPServers) { server in
-                    if server.isGitHub {
+                    if server.isKB {
+                        // Nothing to connect: included for everyone it's listed for.
+                        connectorRow(server, connected: false, included: true)
+                    } else if server.isGitHub {
                         if chatManager.connectedGitHub {
                             // Already connected — push straight to the
                             // Disconnect detail screen, no re-auth prompt.
@@ -231,14 +234,16 @@ struct AgentsListView: View {
     }
 
     @ViewBuilder
-    private func connectorRow(_ server: MCPServer, connected: Bool, isBusy: Bool = false) -> some View {
+    private func connectorRow(
+        _ server: MCPServer, connected: Bool, isBusy: Bool = false, included: Bool = false
+    ) -> some View {
         HStack(spacing: 14) {
             ConnectorLabel(server: server)
             Spacer()
             if isBusy {
                 ProgressView()
-            } else if connected {
-                Text("Connected")
+            } else if connected || included {
+                Text(included ? "Included" : "Connected")
                     #if targetEnvironment(macCatalyst)
                     .font(MacSettingsFont.row)
                     #else
